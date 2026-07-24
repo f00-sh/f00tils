@@ -16,9 +16,9 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 
 ## Product laws (non-negotiable)
 
-1. **Clone first (`--core`).** Every covered GNU tool (`coreutils` / `grep` / `findutils` / `diffutils`) has a `f00-*` counterpart. Under **`--core`**, flags, I/O shape, and exit codes target script drop-in vs the GNU tool.
+1. **Clone first (`--core`).** Every covered GNU tool (`coreutils` / `grep` / `findutils` / `diffutils`) has a `f00-*` counterpart. Under **`--core`**, match the GNU tool for scripts: flags, exit codes, and **byte-identical stdout/stderr** for the same inputs (same bytes, same newlines — not “close enough”).
 2. **`--core` must win on resources.** On the core path, f00 must beat the GNU tool on **wall time and CPU** (user+sys). Correct-but-slower is **not done**. Benches and speed-gates enforce this.
-3. **Modern is amazing (default).** Non-`--core` is never a pale GNU subset: themed chrome, better layout, icons where relevant, `--json`/`--csv`, and extra functionality that would be wrong to force on scripts. Modern may be richer even if slightly heavier than `--core`; it must still feel instant and best-in-class (fd/rg/delta tier where applicable).
+3. **Modern is amazing (default).** Non-`--core` is never a pale GNU subset: themed chrome, better layout, icons where relevant, `--json`/`--csv`, and extra functionality that would be wrong to force on scripts. Modern may differ freely from GNU output. It must still feel instant and best-in-class (fd/rg/delta tier where applicable).
 4. **One binary.** Multicall by `argv0` (`f00-grep`, `grep`, …).
 
 ## Layout

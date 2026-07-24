@@ -43,9 +43,9 @@ Coreutils are correct and portable. They are not the speed or UX ceiling.
 
 ## Product laws
 
-1. **Clone first (`--core`).** Covered GNU tools (coreutils, grep, findutils, diffutils) have `f00-*` names. Under **`--core`**, behavior targets script drop-in vs GNU.
+1. **Clone first (`--core`).** Covered GNU tools (coreutils, grep, findutils, diffutils) have `f00-*` names. Under **`--core`**, output is **byte-identical** to GNU for the same inputs (stdout/stderr + exit code) — scripts must not care which binary ran.
 2. **`--core` must win on resources.** The core path must beat GNU on **wall time and CPU** (user+sys). Correct but slower is unfinished.
-3. **Modern is amazing (default).** Non-`--core` is not a pale GNU subset: theme tokens, chrome, icons, rich `--json`/`--csv`, and extra power (fd/rg/delta-class where it fits). Scripts stay on `--core`; humans get the good mode.
+3. **Modern is amazing (default).** Non-`--core` is not a pale GNU subset: theme tokens, chrome, icons, rich `--json`/`--csv`, and extra power (fd/rg/delta-class where it fits). Output may differ freely from GNU. Scripts stay on `--core`; humans get the good mode.
 4. **One binary.** Multicall by `argv0` (`f00-ls`, `ls`, `f00-grep`, …).
 
 ---
