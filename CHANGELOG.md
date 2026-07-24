@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.14] - 2026-07-24
+
+### Changed
+- **`f00-cat` syntax paint** on modern TTY: comments, strings, numbers, keywords, `$()` vars, make targets
+  - dialects: make, nix, sh, asm, c, md, py, rs, js/ts, toml, yaml, json
+  - always token-scan body when color on (not only line-prefix)
+
 ## [0.15.13] - 2026-07-24
 
 ### Changed

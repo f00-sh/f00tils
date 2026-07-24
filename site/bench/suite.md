@@ -99,7 +99,7 @@ Tools timed: 91 · wins: 90 · median 2.61× · total-time 2.941×
 | `cp` | `f00-cp --core fixture.txt cp.out` | 1.198 | **0.411** | **2.91×** | `` |
 | `dd` | `f00-dd --core if=fixture of=dd.out bs=4k count=1` | 0.924 | **0.438** | **2.11×** | `` |
 | `install` | `f00-install --core -m 644 fixture inst.out` | 1.230 | **0.432** | **2.84×** | `` |
-| `yes` | `f00-yes --core --version` | 0.826 | **0.247** | **3.35×** | `f00-yes (f00) 0.15.13 License: MIT · https://f00.sh` |
+| `yes` | `f00-yes --core --version` | 0.826 | **0.247** | **3.35×** | `f00-yes (f00) 0.15.14 License: MIT · https://f00.sh` |
 | `[` | `f00-[ --core -f fixture.txt` | 0.802 | **0.309** | **2.60×** | `` |
 
 Full machine-readable data: [suite.json](suite.json)

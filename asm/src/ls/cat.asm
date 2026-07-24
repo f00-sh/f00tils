@@ -6,7 +6,7 @@ DEFAULT REL
 
 global cat_main
 extern arena_init, out_init, out_flush, out_str, out_byte, out_strn, out_u64
-extern is_tty, exit_code, strlen, strcmp, memcpy
+extern is_tty, exit_code, strlen, strcmp, memcpy, memcmp
 extern g_exit, g_tty, g_color, g_opts2, g_json_core, g_cols
 extern json_meta_open, json_meta_close, json_key_u64, json_key_bool, json_comma_nl
 extern ui_file_header
@@ -35,6 +35,12 @@ extern human_size, icon_for_path, icon_enabled
 %define P_C     4
 %define P_JSON  5
 %define P_MAKE  6
+%define P_NIX   7
+%define P_PY    8
+%define P_RS    9
+%define P_JS    10
+%define P_TOML  11
+%define P_YAML  12
 
 section .bss
 alignb 8
@@ -66,8 +72,22 @@ ext_bash: db "bash", 0
 ext_c:   db "c", 0
 ext_h:   db "h", 0
 ext_json: db "json", 0
+ext_nix: db "nix", 0
+ext_py:  db "py", 0
+ext_rs:  db "rs", 0
+ext_js:  db "js", 0
+ext_ts:  db "ts", 0
+ext_toml: db "toml", 0
+ext_yml: db "yml", 0
+ext_yaml: db "yaml", 0
 bn_make: db "Makefile", 0
 bn_make2: db "makefile", 0
+ty_nix:  db "nix", 0
+ty_py:   db "python", 0
+ty_rs:   db "rust", 0
+ty_js:   db "js", 0
+ty_toml: db "toml", 0
+ty_yaml: db "yaml", 0
 
 cat_help:
     db "Usage: f00-cat [OPTION]... [FILE]...", 10
@@ -103,7 +123,7 @@ cat_help:
 cat_help_len equ $-cat_help
 
 cat_version:
-    db "f00-cat (f00) 0.15.13", 10
+    db "f00-cat (f00) 0.15.14", 10
     db "GNU coreutils cat drop-in + modern chrome — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 cat_version_len equ $-cat_version
@@ -149,7 +169,7 @@ ty_make:  db "make", 0
 stdin_nm: db "stdin", 0
 
 csv_hdr:    db "util,version,files,lines_out,bytes_out", 10, 0
-csv_util:   db "cat,0.15.13,", 0
+csv_util:   db "cat,0.15.14,", 0
 
 section .text
 
@@ -624,8 +644,32 @@ cat_emit_banner:
     lea rsi, [ty_json]
     jmp .tout
 .t5: cmp al, P_MAKE
-    jne .tout
+    jne .t6
     lea rsi, [ty_make]
+    jmp .tout
+.t6: cmp al, P_NIX
+    jne .t7
+    lea rsi, [ty_nix]
+    jmp .tout
+.t7: cmp al, P_PY
+    jne .t8
+    lea rsi, [ty_py]
+    jmp .tout
+.t8: cmp al, P_RS
+    jne .t9
+    lea rsi, [ty_rs]
+    jmp .tout
+.t9: cmp al, P_JS
+    jne .t10
+    lea rsi, [ty_js]
+    jmp .tout
+.t10: cmp al, P_TOML
+    jne .t11
+    lea rsi, [ty_toml]
+    jmp .tout
+.t11: cmp al, P_YAML
+    jne .tout
+    lea rsi, [ty_yaml]
 .tout:
     push rsi
     cmp byte [g_color], 0
@@ -781,6 +825,62 @@ cat_detect_paint:
     test eax, eax
     pop rsi
     jz .json
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_nix]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .nix
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_py]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .py
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_rs]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .rs
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_js]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .js
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_ts]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .js
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_toml]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .toml
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_yml]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .yaml
+    push rsi
+    mov rdi, rsi
+    lea rsi, [ext_yaml]
+    call strcmp
+    test eax, eax
+    pop rsi
+    jz .yaml
     jmp .r2
 .md: mov byte [cat_paint], P_MD
     jmp .r2
@@ -790,9 +890,521 @@ cat_detect_paint:
     jmp .r2
 .json:
     mov byte [cat_paint], P_JSON
+    jmp .r2
+.nix: mov byte [cat_paint], P_NIX
+    jmp .r2
+.py:  mov byte [cat_paint], P_PY
+    jmp .r2
+.rs:  mov byte [cat_paint], P_RS
+    jmp .r2
+.js:  mov byte [cat_paint], P_JS
+    jmp .r2
+.toml: mov byte [cat_paint], P_TOML
+    jmp .r2
+.yaml: mov byte [cat_paint], P_YAML
 .r2: pop r12
     pop rbx
 .r:  ret
+
+;; ── syntax token paint (modern TTY) ─────────────────────────
+; emit_body_syntax: r12=line ptr, r13=len  (no newline)
+; Theme: dim=comments ok=strings num=numbers hdr=keywords/targets path=vars
+emit_body_syntax:
+    push rbx
+    push r14
+    push r15
+    push r12
+    push r13
+    test r13, r13
+    jz .done
+    call syn_line_is_comment
+    test eax, eax
+    jz .notcmt
+    call color_dim
+    mov rsi, r12
+    mov rdx, r13
+    call out_strn
+    call color_reset
+    jmp .done
+.notcmt:
+    cmp byte [cat_paint], P_MD
+    jne .notmd
+    cmp byte [r12], '#'
+    jne .notmd
+    call color_hdr
+    mov rsi, r12
+    mov rdx, r13
+    call out_strn
+    call color_reset
+    jmp .done
+.notmd:
+    ; make target line (non-recipe)
+    cmp byte [cat_paint], P_MAKE
+    jne .scan
+    cmp byte [r12], 9
+    je .scan
+    call syn_make_target
+    test eax, eax
+    jz .scan
+    mov r15d, eax                   ; span through :
+    call color_hdr
+    mov rsi, r12
+    mov rdx, r15
+    call out_strn
+    call color_reset
+    add r12, r15
+    sub r13, r15
+.scan:
+    xor ebx, ebx
+.lp:
+    cmp rbx, r13
+    jae .done
+    movzx r15d, byte [r12 + rbx]    ; char in r15b
+    ; space/tab
+    cmp r15b, ' '
+    je .pl
+    cmp r15b, 9
+    je .pl
+    ; comment rest-of-line?
+    mov eax, r15d
+    call syn_comment_at             ; uses al + cat_paint + rbx context via r12
+    test eax, eax
+    jz .trystr
+    call color_dim
+    lea rsi, [r12 + rbx]
+    mov rdx, r13
+    sub rdx, rbx
+    call out_strn
+    call color_reset
+    jmp .done
+.trystr:
+    cmp r15b, '"'
+    je .str
+    cmp r15b, "'"
+    je .str
+    cmp r15b, '`'
+    je .str
+    cmp r15b, '$'
+    je .var
+    ; number?
+    cmp r15b, '0'
+    jb .tryid
+    cmp r15b, '9'
+    jbe .num
+.tryid:
+    mov al, r15b
+    call syn_is_ident_start
+    test eax, eax
+    jz .pl
+    call syn_ident_span             ; r14 = len from rbx
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call syn_is_keyword
+    test eax, eax
+    jz .idplain
+    call color_hdr
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call out_strn
+    call color_reset
+    add rbx, r14
+    jmp .lp
+.idplain:
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call out_strn
+    add rbx, r14
+    jmp .lp
+.num:
+    call syn_num_span
+    call color_num
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call out_strn
+    call color_reset
+    add rbx, r14
+    jmp .lp
+.str:
+    mov al, r15b
+    call syn_string_span_al         ; r14 len, al=quote
+    call color_ok
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call out_strn
+    call color_reset
+    add rbx, r14
+    jmp .lp
+.var:
+    call syn_var_span
+    test r14, r14
+    jz .pl
+    call color_path
+    lea rsi, [r12 + rbx]
+    mov rdx, r14
+    call out_strn
+    call color_reset
+    add rbx, r14
+    jmp .lp
+.pl:
+    mov dil, r15b
+    call out_byte
+    inc rbx
+    jmp .lp
+.done:
+    pop r13
+    pop r12
+    pop r15
+    pop r14
+    pop rbx
+    ret
+
+; al=char at rbx → eax=1 if comment start for dialect
+syn_comment_at:
+    movzx edx, byte [cat_paint]
+    cmp al, '#'
+    jne .semi
+    cmp dl, P_ASM
+    je .no
+    cmp dl, P_C
+    je .no
+    cmp dl, P_JSON
+    je .no
+    cmp dl, P_MD
+    je .no
+    mov eax, 1
+    ret
+.semi:
+    cmp al, ';'
+    jne .slash
+    cmp dl, P_ASM
+    jne .no
+    mov eax, 1
+    ret
+.slash:
+    cmp al, '/'
+    jne .no
+    mov rcx, r13
+    sub rcx, rbx
+    cmp rcx, 2
+    jb .no
+    cmp byte [r12 + rbx + 1], '/'
+    jne .no
+    cmp dl, P_C
+    je .yes
+    cmp dl, P_RS
+    je .yes
+    cmp dl, P_JS
+    je .yes
+.no:
+    xor eax, eax
+    ret
+.yes:
+    mov eax, 1
+    ret
+
+syn_line_is_comment:
+    push rbx
+    mov rcx, r13
+    mov rsi, r12
+.lsk:
+    test rcx, rcx
+    jz .lno
+    mov al, [rsi]
+    cmp al, ' '
+    je .ls
+    cmp al, 9
+    je .ls
+    jmp .lch
+.ls: inc rsi
+    dec rcx
+    jmp .lsk
+.lch:
+    ; offset of first non-space
+    mov rbx, rsi
+    sub rbx, r12
+    call syn_comment_at
+    pop rbx
+    ret
+.lno:
+    xor eax, eax
+    pop rbx
+    ret
+
+syn_make_target:
+    push rbx
+    xor ebx, ebx
+.lp:
+    cmp rbx, r13
+    jae .no
+    mov al, [r12 + rbx]
+    cmp al, '='
+    je .no
+    cmp al, ':'
+    je .got
+    cmp al, '#'
+    je .no
+    inc rbx
+    jmp .lp
+.got:
+    lea eax, [ebx+1]
+    pop rbx
+    ret
+.no:
+    xor eax, eax
+    pop rbx
+    ret
+
+; al=quote char; r14=span
+syn_string_span_al:
+    mov r14, 1
+.lp:
+    mov rcx, rbx
+    add rcx, r14
+    cmp rcx, r13
+    jae .d
+    mov dl, [r12 + rcx]
+    cmp dl, al
+    je .eq
+    cmp dl, '\'
+    jne .n
+    inc r14
+    mov rcx, rbx
+    add rcx, r14
+    cmp rcx, r13
+    jae .d
+.n: inc r14
+    jmp .lp
+.eq:
+    inc r14
+.d: ret
+
+syn_var_span:
+    mov r14, 1
+    lea rcx, [rbx+1]
+    cmp rcx, r13
+    jae .d
+    mov al, [r12 + rcx]
+    cmp al, '('
+    je .paren
+    cmp al, '{'
+    je .brace
+.nm:
+    cmp rcx, r13
+    jae .fin
+    mov al, [r12 + rcx]
+    call syn_is_idchar
+    test eax, eax
+    jz .fin
+    inc rcx
+    jmp .nm
+.paren:
+    inc rcx
+.p: cmp rcx, r13
+    jae .fin
+    mov al, [r12 + rcx]
+    inc rcx
+    cmp al, ')'
+    jne .p
+    jmp .fin
+.brace:
+    inc rcx
+.b: cmp rcx, r13
+    jae .fin
+    mov al, [r12 + rcx]
+    inc rcx
+    cmp al, '}'
+    jne .b
+.fin:
+    mov r14, rcx
+    sub r14, rbx
+.d: ret
+
+syn_is_idchar:
+    cmp al, '_'
+    je .y
+    cmp al, 'A'
+    jb .d0
+    cmp al, 'Z'
+    jbe .y
+    cmp al, 'a'
+    jb .d0
+    cmp al, 'z'
+    jbe .y
+.d0:
+    cmp al, '0'
+    jb .n
+    cmp al, '9'
+    jbe .y
+.n: xor eax, eax
+    ret
+.y: mov eax, 1
+    ret
+
+syn_num_span:
+    xor r14, r14
+.lp:
+    lea rcx, [rbx+r14]
+    cmp rcx, r13
+    jae .d
+    mov al, [r12 + rcx]
+    cmp al, '0'
+    jb .dot
+    cmp al, '9'
+    jbe .ok
+.dot:
+    cmp al, '.'
+    jne .d
+.ok: inc r14
+    jmp .lp
+.d: ret
+
+syn_is_ident_start:
+    cmp al, '_'
+    je .y
+    cmp al, 'A'
+    jb .n
+    cmp al, 'Z'
+    jbe .y
+    cmp al, 'a'
+    jb .n
+    cmp al, 'z'
+    jbe .y
+.n: xor eax, eax
+    ret
+.y: mov eax, 1
+    ret
+
+syn_ident_span:
+    xor r14, r14
+.lp:
+    lea rcx, [rbx+r14]
+    cmp rcx, r13
+    jae .d
+    mov al, [r12 + rcx]
+    cmp al, '_'
+    je .ok
+    cmp al, '-'
+    je .ok
+    cmp al, 'A'
+    jb .dg
+    cmp al, 'Z'
+    jbe .ok
+    cmp al, 'a'
+    jb .dg
+    cmp al, 'z'
+    jbe .ok
+.dg:
+    cmp al, '0'
+    jb .d
+    cmp al, '9'
+    ja .d
+.ok: inc r14
+    jmp .lp
+.d: ret
+
+; rsi=ident rdx=len → eax
+syn_is_keyword:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rsi
+    mov r13, rdx
+    test r13, r13
+    jz .no
+    movzx eax, byte [cat_paint]
+    lea rbx, [kw_generic]
+    cmp al, P_MAKE
+    jne .a
+    lea rbx, [kw_make]
+    jmp .g
+.a: cmp al, P_NIX
+    jne .b
+    lea rbx, [kw_nix]
+    jmp .g
+.b: cmp al, P_SH
+    jne .c
+    lea rbx, [kw_sh]
+    jmp .g
+.c: cmp al, P_PY
+    jne .d
+    lea rbx, [kw_py]
+    jmp .g
+.d: cmp al, P_RS
+    jne .e
+    lea rbx, [kw_rs]
+    jmp .g
+.e: cmp al, P_JS
+    jne .f
+    lea rbx, [kw_js]
+    jmp .g
+.f: cmp al, P_C
+    jne .g
+    lea rbx, [kw_c]
+.g:
+.item:
+    cmp byte [rbx], 0
+    je .no
+    mov rdi, rbx
+    call strlen
+    cmp rax, r13
+    jne .nxt
+    mov rdi, rbx
+    mov rsi, r12
+    mov rdx, r13
+    call memcmp
+    test eax, eax
+    jz .yes
+.nxt:
+    mov rdi, rbx
+    call strlen
+    lea rbx, [rbx+rax+1]
+    jmp .item
+.yes:
+    mov eax, 1
+    jmp .o
+.no:
+    xor eax, eax
+.o:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+section .rodata
+kw_generic: db "true",0,"false",0,"null",0,0
+kw_make:
+    db "PHONY",0,"all",0,"clean",0,"install",0,"test",0
+    db "export",0,"include",0,"ifeq",0,"ifneq",0,"else",0,"endif",0
+    db "define",0,"endef",0,"override",0,"unexport",0,"vpath",0,0
+kw_nix:
+    db "let",0,"in",0,"with",0,"import",0,"inherit",0,"if",0,"then",0,"else",0
+    db "assert",0,"rec",0,"or",0,"and",0,"true",0,"false",0,"null",0
+    db "throw",0,"abort",0,"builtins",0,"derivation",0,"self",0,0
+kw_sh:
+    db "if",0,"then",0,"else",0,"elif",0,"fi",0,"for",0,"while",0,"do",0,"done",0
+    db "case",0,"esac",0,"function",0,"return",0,"export",0,"local",0
+    db "readonly",0,"select",0,"until",0,"in",0,0
+kw_py:
+    db "def",0,"class",0,"return",0,"import",0,"from",0,"as",0,"if",0,"elif",0
+    db "else",0,"for",0,"while",0,"with",0,"try",0,"except",0,"finally",0
+    db "raise",0,"yield",0,"lambda",0,"pass",0,"break",0,"continue",0
+    db "True",0,"False",0,"None",0,"and",0,"or",0,"not",0,"in",0,"is",0,0
+kw_rs:
+    db "fn",0,"let",0,"mut",0,"const",0,"struct",0,"enum",0,"impl",0,"trait",0
+    db "pub",0,"use",0,"mod",0,"if",0,"else",0,"match",0,"loop",0,"while",0
+    db "for",0,"in",0,"return",0,"true",0,"false",0,"self",0,"Self",0,0
+kw_js:
+    db "const",0,"let",0,"var",0,"function",0,"return",0,"if",0,"else",0
+    db "for",0,"while",0,"class",0,"import",0,"export",0,"from",0,"async",0
+    db "await",0,"true",0,"false",0,"null",0,"undefined",0,"new",0,"this",0,0
+kw_c:
+    db "int",0,"char",0,"void",0,"if",0,"else",0,"for",0,"while",0,"return",0
+    db "struct",0,"const",0,"static",0,"sizeof",0,"typedef",0,"enum",0
+    db "include",0,"define",0,"ifdef",0,"endif",0,0
+
+section .text
 
 ; paint_line_prefix(r12=line, r13=len) — set color for line content
 paint_line_start:
@@ -1005,7 +1617,7 @@ cat_one_path:
     dec rcx
     jmp .cnt
 .emit_body:
-    ; Fast path: plain cat (no -n/-b/-s/-v/-E/-T/-A, no content paint) → bulk write.
+    ; Fast path: plain cat only when no chrome and no syntax paint.
     mov eax, [cat_opts]
     test eax, C_NUMBER | C_NUMBER_NB | C_SHOW_ENDS | C_SHOW_TABS | C_SHOW_NONP | C_SQUEEZE
     jnz .slow_body
@@ -1013,8 +1625,8 @@ cat_one_path:
     je .bulk
     test eax, C_CORE
     jnz .bulk
-    cmp byte [cat_paint], 0
-    jne .slow_body
+    ; modern TTY with color: always token-paint body
+    jmp .slow_body
 .bulk:
     mov rsi, r9
     mov rdx, r8
@@ -1151,8 +1763,16 @@ emit_line:
     mov dil, 9
     call out_byte
 .body:
+    ; modern syntax paint (unless --core or show-* transforms need emit_char)
+    mov eax, [cat_opts]
+    test eax, C_CORE | C_SHOW_ENDS | C_SHOW_TABS | C_SHOW_NONP
+    jnz .legacy_body
+    cmp byte [g_color], 0
+    je .legacy_body
+    call emit_body_syntax
+    jmp .ends
+.legacy_body:
     call paint_line_start
-    ; emit content with transforms
     xor ebx, ebx
 .b:
     cmp rbx, r13
