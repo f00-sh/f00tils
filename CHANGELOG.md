@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.19] - 2026-07-24
+
+### Fixed
+- **`ls` themes**: named themes remap file-type colors so listings match cat/stat (`colors_apply_theme`)
+- **Suite-wide `color=` / `NO_COLOR`**: suite init no longer re-forces `g_color` from TTY alone (stat, hash, text, path, id, misc, cat)
+- **XDG config**: when `XDG_CONFIG_HOME` is set, load only that config (no longer overridden by `~/.config/f00/config`)
+
+### Changed
+- **Settings dashboard**: focused row shows plain-English **About this setting** description
+- Docs: how every util picks up theme + options via `suite_runtime_init`
+
 ## [0.15.18] - 2026-07-24
 
 ### Changed

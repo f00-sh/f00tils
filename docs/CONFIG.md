@@ -6,10 +6,12 @@ There is **no** `~/.f00` user config directory.
 
 ## Search order
 
-1. `$XDG_CONFIG_HOME/f00/config` (if `XDG_CONFIG_HOME` is set)
-2. `$HOME/.config/f00/config`
+**Exclusive** (not merged):
 
-Later files override earlier ones. Missing files are ignored.
+1. If `XDG_CONFIG_HOME` is set → **only** `$XDG_CONFIG_HOME/f00/config`
+2. Else → `$HOME/.config/f00/config`
+
+Missing files are ignored (defaults apply).
 
 ### Related paths (same tree)
 
@@ -95,7 +97,7 @@ Run **`f00`** (or `f00-config`) on a TTY. That is the full configuration UI:
 | Page | What you do |
 |------|-------------|
 | **Themes** | Browse built-in palettes, live preview, **Enter** writes `theme = …` |
-| **Settings** | Plain-English toggles for replace, core, color, icons, animations, spinner, git — each change **writes** `~/.config/f00/config` immediately |
+| **Settings** | Plain-English toggles for replace, core, color, icons, animations, spinner, git — each change **writes** `~/.config/f00/config` immediately. Focus a row to see an **About this setting** description |
 | **Plugins** | Where local plugins live (`~/.config/f00/plugins/`) |
 
 There is **no network theme store**. `i` on Themes seeds builtin `.theme` files under `~/.config/f00/themes/` so you can copy/edit them offline.
@@ -140,7 +142,20 @@ f00-config init                # seed ~/.config/f00 + all theme files
 F00_THEME=nord f00-ls
 ```
 
-**ls file-type colors** still absorb **`LS_COLORS`** / `dircolors` (orthogonal to suite chrome tokens).
+**How every f00tils util picks up theme + options**
+
+```text
+tiny_init / util_ls_ok
+  → suite_runtime_init
+       config_load → theme_init → theme_apply_name(g_cfg_theme)
+       → theme_apply_env (F00_THEME) → color_init_default → config_apply
+  → util work uses color_* helpers on semantic tokens (c_path, c_num, …)
+```
+
+- **`color` / `core` / `NO_COLOR`**: decided once in `suite_runtime_init`. Utils must not re-force `g_color` from TTY alone.
+- **Named themes** (`tokyo-night`, `dracula`, …): truecolor bodies in suite tokens; **`ls` also remaps type colors** (`di`/`ex`/`fi`/…) via `colors_apply_theme` so listings match cat/stat chrome.
+- **`terminal` / `f00`**: suite tokens stay ANSI 16-color; **`ls` keeps classic `LS_COLORS`/dircolors** type colors (your palette / dircolors own file types).
+- **CLI** (`--core`, `--color=always`, …) still wins after config.
 
 ## Environment overrides
 
@@ -184,6 +199,6 @@ CLI always wins (e.g. explicit `--core` or `--icons=always`).
 | Config under **XDG** `~/.config/f00` | Never random files under bare `$HOME`. Install and `init` only touch this tree. |
 | No auto-write on `f00-ls` | Tools stay pure; config is created by **install** / **`f00-config init`** / **`theme set`**. |
 | No network from the binary | Freestanding ASM does not download themes. Catalog is **builtin** + files under `~/.config/f00/themes/` (seeded by init/install). |
-| `LS_COLORS` separate | File-type colors for `ls` stay dircolors; suite chrome (path/num/ok/…) is the theme. Two systems, both under your control. |
+| `LS_COLORS` + named themes | Default `terminal` theme: `ls` still uses dircolors/`LS_COLORS`. Named themes: `colors_apply_theme` remaps type slots from suite tokens so `ls` matches the rest of the suite. |
 | One CLI: `f00-config` | Themes are settings, not a second multicall product (`f00-themes`). Use `theme list|pick|set`. |
 

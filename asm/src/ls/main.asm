@@ -17,7 +17,7 @@ extern g_entries, g_entry_count
 extern strlen, strcmp, memcpy
 extern tui_browse
 extern do_update, do_check_update
-extern names_init, colors_init, meta_init
+extern names_init, colors_init, colors_apply_theme, meta_init
 extern ignore_init, ignore_add_pattern
 extern generate_completions
 extern plugins_init, plugins_list
@@ -55,7 +55,7 @@ extern chroot_main, stty_main, stdbuf_main, runcon_main, chcon_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.15.18", 10
+    db "f00-ls (f00) 0.15.19", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg
@@ -561,8 +561,6 @@ util_ls_ok:
     call ignore_init
     call names_init
     mov rdi, r14
-    call colors_init
-    mov rdi, r14
     call meta_init
     mov rdi, r14
     call plugins_init
@@ -589,11 +587,16 @@ util_ls_ok:
     call get_winsize
     mov [g_cols], eax
 
-    ; suite runtime: cwd/ids + XDG config + color defaults
+    ; suite runtime FIRST: XDG config + theme tokens (before LS_COLORS)
     mov rdi, rbx
     mov rsi, r12
     mov rdx, r15
     call suite_runtime_init
+
+    ; file-type colors: LS_COLORS base, then named theme remaps types
+    mov rdi, r14
+    call colors_init
+    call colors_apply_theme
 
     ; modern TTY defaults: git on unless config forced off/core
     test dword [g_opts2], OPT2_CORE | OPT2_NO_GIT

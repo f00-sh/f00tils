@@ -89,6 +89,27 @@ lbl_s4:     db "Animations", 0
 lbl_s5:     db "Progress spinners", 0
 lbl_s6:     db "Git status in ls", 0
 hint_set:   db "Changes save immediately to ~/.config/f00/config", 0
+; plain-English detail for the focused setting
+desc_s0:    db "When yes, bare names (ls, cat, …) on PATH run f00tils via", 10
+            db "  /usr/lib/f00/bin. When no, system coreutils keep those names;", 10
+            db "  use f00-ls / f00-cat explicitly. Needs a new shell after change.", 0
+desc_s1:    db "When yes, tools prefer GNU-compatible plain output (like --core):", 10
+            db "  less chrome, no modern colors/spinners by default. Use for scripts", 10
+            db "  that parse tool output. Individual --core flags still work either way.", 0
+desc_s2:    db "Controls ANSI color for suite chrome and listings:", 10
+            db "  auto (TTY) = color only when stdout is a terminal", 10
+            db "  always = force color  ·  never = no color (respects NO_COLOR too).", 0
+desc_s3:    db "Icons before names in ls and similar (modern mode):", 10
+            db "  auto = nerd icons on color TTY, ascii fallback on plain consoles", 10
+            db "  nerd/emoji/glyphs/ascii = force a style  ·  never = off.", 0
+desc_s4:    db "Master switch for motion in the suite (spinners, animated progress).", 10
+            db "  Off freezes motion globally even if spinner is on.", 0
+desc_s5:    db "Show progress spinners on long work (sort, multi-file copy, hash, …).", 10
+            db "  Requires Animations = yes. Off for quieter terminals/scripts.", 0
+desc_s6:    db "Show git status marks in modern ls (modified/added/… colors).", 10
+            db "  auto = on for TTY listings  ·  always/never force on or off.", 10
+            db "  Only affects ls-family tools, not cat/hash/etc.", 0
+desc_hdr:   db "About this setting", 0
 lbl_on:     db "yes", 0
 lbl_off:    db "no", 0
 lbl_auto:   db "auto (TTY)", 0
@@ -1079,6 +1100,26 @@ draw_settings:
 .done:
     mov dil, 10
     call out_byte
+    ; description for focused setting
+    call color_hdr
+    lea rsi, [desc_hdr]
+    call out_str
+    call color_reset
+    lea rsi, [ansi_el]
+    call out_str
+    mov dil, 10
+    call out_byte
+    call color_dim
+    mov eax, [set_sel]
+    call settings_desc_str          ; rsi = long help
+    call out_str
+    call color_reset
+    lea rsi, [ansi_el]
+    call out_str
+    mov dil, 10
+    call out_byte
+    mov dil, 10
+    call out_byte
     call color_dim
     lea rsi, [plug3]
     call out_str
@@ -1087,6 +1128,35 @@ draw_settings:
     call out_byte
     pop r12
     pop rbx
+    ret
+
+; eax = row → rsi = description cstr
+settings_desc_str:
+    cmp eax, S_REPLACE
+    je .d0
+    cmp eax, S_CORE
+    je .d1
+    cmp eax, S_COLOR
+    je .d2
+    cmp eax, S_ICONS
+    je .d3
+    cmp eax, S_ANIM
+    je .d4
+    cmp eax, S_SPIN
+    je .d5
+    lea rsi, [desc_s6]
+    ret
+.d0: lea rsi, [desc_s0]
+    ret
+.d1: lea rsi, [desc_s1]
+    ret
+.d2: lea rsi, [desc_s2]
+    ret
+.d3: lea rsi, [desc_s3]
+    ret
+.d4: lea rsi, [desc_s4]
+    ret
+.d5: lea rsi, [desc_s5]
     ret
 
 ; eax = row → rsi = value cstr

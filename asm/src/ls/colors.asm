@@ -4,8 +4,10 @@ BITS 64
 DEFAULT REL
 %include "syscalls.inc"
 
-global colors_init, color_seq_for_entry, color_reset_seq
-extern arena_alloc, memcpy, strlen
+global colors_init, color_seq_for_entry, color_reset_seq, colors_apply_theme
+extern arena_alloc, memcpy, strlen, strcmp
+extern c_path, c_num, c_ok, c_err, c_hdr, c_dim
+extern g_theme_name
 
 section .bss
 alignb 8
@@ -99,6 +101,113 @@ copy_sgr:
     pop rcx
     pop rbx
     ret
+
+; colors_apply_theme — when a named suite theme is active, map LS type
+; colors to suite semantic tokens so `ls` matches cat/stat chrome.
+; terminal/f00/empty → leave LS_COLORS / classic defaults alone.
+colors_apply_theme:
+    push rbx
+    lea rsi, [g_theme_name]
+    cmp byte [rsi], 0
+    je .skip
+    ; terminal?
+    lea rdi, [nm_term]
+    call strcmp
+    test eax, eax
+    jz .skip
+    lea rdi, [nm_f00]
+    lea rsi, [g_theme_name]
+    call strcmp
+    test eax, eax
+    jz .skip
+    ; path → di, ln
+    lea rsi, [c_path]
+    lea rdi, [c_di]
+    call body_from_seq
+    lea rsi, [c_path]
+    lea rdi, [c_ln]
+    call body_from_seq
+    ; ok → ex
+    lea rsi, [c_ok]
+    lea rdi, [c_ex]
+    call body_from_seq
+    ; hdr → so
+    lea rsi, [c_hdr]
+    lea rdi, [c_so]
+    call body_from_seq
+    ; num → pi, bd, cd
+    lea rsi, [c_num]
+    lea rdi, [c_pi]
+    call body_from_seq
+    lea rsi, [c_num]
+    lea rdi, [c_bd]
+    call body_from_seq
+    lea rsi, [c_num]
+    lea rdi, [c_cd]
+    call body_from_seq
+    ; dim → fi (regular files stay subtle)
+    lea rsi, [c_dim]
+    lea rdi, [c_fi]
+    call body_from_seq
+.skip:
+    pop rbx
+    ret
+
+; body_from_seq(rsi=full SGR "ESC[…m", rdi=dest body buf 24)
+body_from_seq:
+    push rbx
+    push r12
+    mov r12, rdi
+    test rsi, rsi
+    jz .empty
+    cmp byte [rsi], 27
+    jne .raw
+    cmp byte [rsi+1], '['
+    jne .raw
+    add rsi, 2
+.raw:
+    xor ebx, ebx
+.lp:
+    cmp ebx, 23
+    jae .force
+    mov al, [rsi + rbx]
+    test al, al
+    jz .nul
+    cmp al, 'm'
+    je .nul
+    ; keep digits and ;
+    cmp al, '0'
+    jb .stop
+    cmp al, '9'
+    jbe .put
+    cmp al, ';'
+    jne .stop
+.put:
+    mov [r12 + rbx], al
+    inc ebx
+    jmp .lp
+.stop:
+    test ebx, ebx
+    jnz .nul
+.empty:
+    mov byte [r12], '0'
+    mov ebx, 1
+.nul:
+    mov byte [r12 + rbx], 0
+    pop r12
+    pop rbx
+    ret
+.force:
+    mov byte [r12 + 23], 0
+    pop r12
+    pop rbx
+    ret
+
+section .rodata
+nm_term: db "terminal", 0
+nm_f00:  db "f00", 0
+
+section .text
 
 colors_init:
     push rbx

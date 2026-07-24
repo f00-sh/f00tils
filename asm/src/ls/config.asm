@@ -1,8 +1,8 @@
 ; f00tils — XDG user configuration
-; Paths (first existing wins, then merged low→high? We apply in order:
-;   1) $XDG_CONFIG_HOME/f00/config
-;   2) $HOME/.config/f00/config
-; Later file overrides earlier. Within a file, later keys override.
+; Paths (exclusive):
+;   if XDG_CONFIG_HOME set → $XDG_CONFIG_HOME/f00/config only
+;   else → $HOME/.config/f00/config
+; Within a file, later keys override earlier.
 ; Sections: bare keys = [global]; [util] for util-specific (ls, cat, sha256sum, …).
 ; Env overrides (after files): F00_CORE, F00_COLOR, F00_ICONS, F00_ANIMATIONS, F00_SPINNER
 BITS 64
@@ -91,7 +91,9 @@ config_load:
     mov byte [g_cfg_theme], 0
     mov byte [sec_name], 0          ; current section = global
 
-    ; 1) XDG_CONFIG_HOME/f00/config
+    ; XDG: if XDG_CONFIG_HOME is set, use only $XDG_CONFIG_HOME/f00/config
+    ; (do not also load ~/.config — later-wins was overriding XDG tests/users).
+    ; Otherwise load $HOME/.config/f00/config.
     call env_get_xdg
     test rax, rax
     jz .home
@@ -103,8 +105,8 @@ config_load:
     call strcat_c
     lea rdi, [cfg_path]
     call load_file
+    jmp .env
 .home:
-    ; 2) $HOME/.config/f00/config
     call env_get_home
     test rax, rax
     jz .env
