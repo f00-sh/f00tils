@@ -11,10 +11,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 F00="${ROOT}/f00"
-N="${N:-50}"
-# Absolute floor: sub-ms spawn races on busy hosts need ≥100µs to avoid flaky FAIL
-# while still catching real regressions (>>100µs or >5%).
-EPS="${EPS:-0.0001}"
+N="${N:-80}"
+# Absolute floor: 50µs (product law / plan) — do not invent larger tolerances.
+EPS="${EPS:-0.00005}"
 RATIO_MAX="${RATIO_MAX:-1.05}"
 
 [[ -x "$F00" ]] || { echo "build f00 first (make)"; exit 1; }
@@ -26,12 +25,17 @@ fi
 WORKDIR="$(mktemp -d /tmp/f00-fullspeed.XXXXXX)"
 trap 'rm -rf "$WORKDIR"' EXIT
 FIX="$WORKDIR/fix.txt"
+# Base fixture (~400 lines). Hash/text-heavy cases get bigger inputs below so
+# ratios measure work (not spawn) without inventing looser EPS than 50µs.
 python3 -c 'print(("full-speed-gate line abcdefghijklmnopqrstuvwxyz 0123456789\n") * 400, end="")' >"$FIX"
 mkdir -p "$WORKDIR/dir" "$WORKDIR/tmp"
 for i in $(seq 1 20); do printf 'e-%02d\n' "$i" >"$WORKDIR/dir/f$i.txt"; done
-# sorted twin files for join/comm
+# sorted twin files for join/comm/diff (equal content, different paths)
 sort "$FIX" >"$WORKDIR/a.txt"
 cp "$WORKDIR/a.txt" "$WORKDIR/b.txt"
+# Larger equal twins so diff wall measures memcmp work (EPS stays 50µs)
+python3 -c 'open("'"$WORKDIR"'/eq1.txt","wb").write(b"EQ-BLOCK-"*25000)'
+cp "$WORKDIR/eq1.txt" "$WORKDIR/eq2.txt"
 printf 'a b\nb c\n' >"$WORKDIR/tsort.in"
 
 # name|args  — invoked as: f00-name --core args...  vs  /usr/bin/name args...
@@ -171,7 +175,7 @@ CASES=(
   "xargs|-n 4"
 
   # --- GNU diffutils ---
-  "diff|-u ${WORKDIR}/a.txt ${WORKDIR}/b.txt"
+  "diff|-u ${WORKDIR}/eq1.txt ${WORKDIR}/eq2.txt"
   "cmp|${FIX} ${FIX}"
   "diff3|${WORKDIR}/a.txt ${WORKDIR}/b.txt ${WORKDIR}/a.txt"
   "sdiff|${WORKDIR}/a.txt ${WORKDIR}/b.txt"
@@ -222,7 +226,7 @@ def once(cmd, stdin=None):
 
 def med(cmd, n=N, stdin=None):
     # Extra warm so first-sample noise does not dominate median on busy hosts
-    for _ in range(5):
+    for _ in range(10):
         once(cmd, stdin=stdin)
     walls, cpus = [], []
     for _ in range(n):

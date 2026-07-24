@@ -27,7 +27,8 @@ extern err_str
 
 %define LINE_CAP     65536
 %define MAX_LINES    4096
-%define POOL_CAP     (2*1024*1024)
+; 8MiB/pool: multi-MiB single-line files must fully load for --core -u drop-in
+%define POOL_CAP     (8*1024*1024)
 %define LCS_MAX      512
 %define CTX_DEFAULT  3
 %define STAT_SIZE_OFF 48
@@ -1052,6 +1053,11 @@ diff_main:
     mov rax, SYS_exit
     syscall
 
+; Decision table:
+;   bulk_equal → exit 0 empty
+;   bulk_differ + DF_BRIEF → brief message exit 1
+;   bulk_differ + format → full load + LCS (never brief, never equal-on-prefix)
+;   bulk_error → exit 2
 diff_files:
     push rbx
     push r12
@@ -1063,25 +1069,22 @@ diff_files:
     mov qword [pool_a_n], 0
     mov qword [pool_b_n], 0
     mov byte [bulk_diff], 0
-    ; Fast path: same path string → identical (GNU)
     mov rdi, [diff_a]
     mov rsi, [diff_b]
     call strcmp
     test eax, eax
     jz .same
-    ; Same inode (via bulk's open/fstat) + stream byte compare any size
     call bulk_equal_ab
     cmp eax, 1
     je .same
-    cmp eax, 0
-    je .differ_maybe_brief
-    ; eax=2 → open error already set g_exit
-    jmp .out
-.differ_maybe_brief:
-    ; bulk is authoritative: files differ (never allow later truncated load to claim equal)
+    cmp eax, 2
+    je .out
+    ; bulk_differ
     mov byte [bulk_diff], 1
     test dword [g_flags], DF_BRIEF
-    jz .need_lines
+    jnz .emit_brief
+    jmp .need_lines
+.emit_brief:
     lea rsi, [files_pre]
     call out_str
     mov rsi, [diff_a]
@@ -1131,40 +1134,19 @@ diff_files:
     mov [eol_b], al
     mov rax, [load_pool_n]
     mov [pool_b_n], rax
-    ; Pool equality only when bulk did not already prove a byte differ.
-    ; Truncated POOL_CAP loads share a common prefix and must not override bulk=0.
+    ; Never re-claim equal after bulk_differ (pools may still be truncated >POOL_CAP)
     cmp byte [bulk_diff], 0
-    je .maybe_pool_eq
-    call files_equal_ab
-    test al, al
-    jz .force_differ                 ; differ visible in loaded prefix → LCS path
-    ; bulk differed but loaded prefix equal → real delta past pool; still exit 1
-    jmp .brief_differ
-.maybe_pool_eq:
+    jne .marks
     call files_equal_ab
     test al, al
     jnz .same
-.force_differ:
+.marks:
     call compute_marks_ab
     test dword [g_flags], DF_CONTEXT
     jnz .ctx
     test dword [g_flags], DF_UNIFIED
     jnz .uni
-    ; normal (default under --core)
     call emit_normal_from_marks
-    mov dword [g_exit], 1
-    jmp .out
-.brief_differ:
-    lea rsi, [files_pre]
-    call out_str
-    mov rsi, [diff_a]
-    call out_str
-    lea rsi, [files_and]
-    call out_str
-    mov rsi, [diff_b]
-    call out_str
-    lea rsi, [files_differ]
-    call out_str
     mov dword [g_exit], 1
     jmp .out
 .ctx:
@@ -1630,7 +1612,10 @@ emit_normal_block:
 .body_del:
     mov rbx, r12
 .dl:
-    cmp rbx, r10
+    ; a1 exclusive = r12+r14 (r10 clobbered by out_*)
+    mov rax, r12
+    add rax, r14
+    cmp rbx, rax
     jae .after_del
     mov dil, '<'
     call out_byte
@@ -1652,7 +1637,10 @@ emit_normal_block:
 .body_add_only:
     mov rbp, r13
 .al:
-    cmp rbp, r11
+    ; b1 exclusive = r13+r15 (r11 clobbered by out_*)
+    mov rax, r13
+    add rax, r15
+    cmp rbp, rax
     jae .nb_done
     mov dil, '>'
     call out_byte

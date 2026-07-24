@@ -127,9 +127,14 @@ parity: $(TARGET) links
 
 # Speed gates: representative + full suite wall/CPU (all four GNU packages)
 speed: $(TARGET) links
-	@chmod +x benches/speed-gate.sh benches/full-speed-gate.sh
+	@chmod +x benches/speed-gate.sh benches/full-speed-gate.sh benches/speed-stress.sh
 	./benches/speed-gate.sh
 	./benches/full-speed-gate.sh
+
+# Structural law-2 proof: ≥5 consecutive full-speed-gate passes at EPS=50µs
+speed-stress: $(TARGET) links
+	@chmod +x benches/speed-stress.sh benches/full-speed-gate.sh
+	./benches/speed-stress.sh
 
 # Speed gate + full parity battery when present
 ux-check: $(TARGET) links
