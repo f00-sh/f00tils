@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.13] - 2026-07-24
+
+### Changed
+- **`f00-cat` modern TTY (not `--core`)**: bat-class chrome by default
+  - title block: icon · basename · size · language
+  - line-number gutter + colored fringe `│`
+  - content paint retained; `--no-number` / `--no-headers` / `--core` opt out
+
 ## [0.15.12] - 2026-07-24
 
 ### Fixed

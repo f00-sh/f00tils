@@ -60,7 +60,7 @@ usage:
     db "ls file colors still use LS_COLORS (orthogonal to suite theme).", 10
     db 10
     db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
-v_cfg: db "f00-config (f00) 0.15.12", 10, "License: MIT · https://f00.sh", 10, 0
+v_cfg: db "f00-config (f00) 0.15.13", 10, "License: MIT · https://f00.sh", 10, 0
 s_theme: db "theme", 0
 s_themes: db "themes", 0
 s_show: db "show", 0

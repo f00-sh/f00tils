@@ -7,10 +7,11 @@ DEFAULT REL
 global cat_main
 extern arena_init, out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern is_tty, exit_code, strlen, strcmp, memcpy
-extern g_exit, g_tty, g_color, g_opts2, g_json_core
+extern g_exit, g_tty, g_color, g_opts2, g_json_core, g_cols
 extern json_meta_open, json_meta_close, json_key_u64, json_key_bool, json_comma_nl
 extern ui_file_header
-extern color_dim, color_hdr, color_num, color_reset
+extern color_dim, color_hdr, color_num, color_path, color_ok, color_reset
+extern human_size, icon_for_path, icon_enabled
 
 ; local option bits in cat_opts
 %define C_NUMBER       1
@@ -23,6 +24,8 @@ extern color_dim, color_hdr, color_num, color_reset
 %define C_CSV          128
 %define C_CORE         256
 %define C_HEADERS      512
+%define C_NO_NUMBER    1024         ; --no-number: suppress modern auto line numbers
+%define C_STAT_SIZE    2048         ; internal: size known
 
 ; content paint modes
 %define P_NONE  0
@@ -38,9 +41,10 @@ alignb 8
 cat_opts:     resd 1
 cat_line_no:  resq 1
 cat_prev_blank: resb 1
-cat_multi:    resb 1              ; 1 when ≥2 file operands (headers)
+cat_multi:    resb 1              ; 1 when ≥2 file operands
 cat_paint:    resb 1              ; content color mode
               resb 5
+cat_fsize:    resq 1              ; st_size for current file (header)
 read_buf:     resb 65536
 path_arg:     resq 1
 ; json/csv accum
@@ -48,6 +52,8 @@ j_files:      resq 1
 j_lines:      resq 1
 j_bytes:      resq 1
 name_tmp:     resb 32
+hum_buf:      resb 32
+stat_buf:     resb 256
 
 section .rodata
 ; syntax/gutter chrome uses suite theme tokens (c_dim/c_hdr/c_num/c_ok/c_reset)
@@ -85,23 +91,43 @@ cat_help:
     db 10
     db "Modern flags:", 10
     db "      --core               strict coreutils-compatible output", 10
-    db "      --headers            print file headers when multiple files (default on TTY)", 10
-    db "      --no-headers         never print file headers", 10
+    db "      --headers            force file title banner (default on TTY)", 10
+    db "      --no-headers         never print file title banner", 10
+    db "      --no-number          no line-number gutter (modern still colors)", 10
     db "  -j, --json               detailed JSON result (pretty + color on TTY)", 10
     db "      --csv                detailed CSV result", 10
     db 10
-    db "Modern TTY uses bat-class chrome (colored headers, type gutter, gutters).", 10
+    db "Modern TTY (not --core): bat-class chrome — title block, line gutter,", 10
+    db "colored fringe, content paint. Use --core for plain GNU cat.", 10
     db "f00tils · pure assembly · MIT · https://f00.sh", 10
 cat_help_len equ $-cat_help
 
 cat_version:
-    db "f00-cat (f00) 0.15.12", 10
+    db "f00-cat (f00) 0.15.13", 10
     db "GNU coreutils cat drop-in + modern chrome — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 cat_version_len equ $-cat_version
 
-; bat-class gutter: dim vertical bar + space (UTF-8 BOX DRAWINGS LIGHT VERTICAL)
+; bat-class gutter: light vertical bar + space
 pipe_mark: db 0xe2, 0x94, 0x82, ' ', 0
+; banner pieces
+bn_pre:   db 0xe2, 0x95, 0xad, 0xe2, 0x94, 0x80, ' ', 0   ; ╭─
+bn_mid:   db ' ', 0xe2, 0x94, 0x80, ' ', 0                 ;  ─ 
+bn_dot:   db ' ', 0xc2, 0xb7, ' ', 0                       ;  · 
+bn_rule:  db 0xe2, 0x95, 0xb0                               ; ╰
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80, 0xe2, 0x94, 0x80
+          db 10, 0
 dash:     db "-", 0
 nl:       db 10, 0
 nm_cat:   db "cat", 0
@@ -113,9 +139,17 @@ jk_squeeze: db "squeeze_blank", 0
 jk_show_ends: db "show_ends", 0
 jk_show_tabs: db "show_tabs", 0
 jk_show_np: db "show_nonprinting", 0
+ty_text:  db "text", 0
+ty_asm:   db "asm", 0
+ty_md:    db "markdown", 0
+ty_sh:    db "shell", 0
+ty_c:     db "c", 0
+ty_json:  db "json", 0
+ty_make:  db "make", 0
+stdin_nm: db "stdin", 0
 
 csv_hdr:    db "util,version,files,lines_out,bytes_out", 10, 0
-csv_util:   db "cat,0.15.12,", 0
+csv_util:   db "cat,0.15.13,", 0
 
 section .text
 
@@ -176,8 +210,15 @@ cat_main:
     jmp .cf
 .cf_done:
     cmp r15, 2
-    jb .parse
+    jb .mod_defaults
     mov byte [cat_multi], 1
+
+.mod_defaults:
+    ; Modern TTY defaults before any file work (not --core — applied after flags too)
+    ; First pass: provisional chrome on TTY; --core later clears color/headers.
+    cmp byte [g_tty], 0
+    je .parse
+    or dword [cat_opts], C_HEADERS
 
 .parse:
     mov r14, 1                      ; arg index
@@ -361,8 +402,24 @@ cat_main:
     call strcmp
     pop rdi
     test eax, eax
-    jnz .next
+    jnz .l12
     and dword [cat_opts], ~C_HEADERS
+    jmp .next
+.l12: push rdi
+    lea rsi, [l_no_number]
+    call strcmp
+    pop rdi
+    test eax, eax
+    jz .no_num
+    push rdi
+    lea rsi, [l_no_numbers]
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .next
+.no_num:
+    or dword [cat_opts], C_NO_NUMBER
+    and dword [cat_opts], ~(C_NUMBER | C_NUMBER_NB)
     jmp .next
 
 .file_arg:
@@ -447,8 +504,151 @@ l_csv: db "csv", 0
 l_core: db "core", 0
 l_headers: db "headers", 0
 l_no_headers: db "no-headers", 0
+l_no_number: db "no-number", 0
+l_no_numbers: db "no-numbers", 0
 
 section .text
+
+; cat_emit_banner(rsi=path) — bat-class title block
+; ╭─ [icon] path · size · type
+; ╰────────────────────────
+cat_emit_banner:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi                    ; path
+    ; ╭─
+    cmp byte [g_color], 0
+    je .p0
+    call color_dim
+.p0:
+    lea rsi, [bn_pre]
+    call out_str
+    call color_reset
+    ; icon
+    cmp byte [g_color], 0
+    je .noico
+    mov rdi, r12
+    call icon_enabled
+    test al, al
+    jz .noico
+    mov rdi, r12
+    call icon_for_path
+    cmp byte [rsi], 0
+    je .noico
+    push rsi
+    call color_hdr
+    pop rsi
+    call out_str
+    mov dil, ' '
+    call out_byte
+    call color_reset
+.noico:
+    ; path (or "stdin")
+    cmp byte [g_color], 0
+    je .pp
+    call color_path
+.pp:
+    cmp byte [r12], '-'
+    jne .pname
+    cmp byte [r12+1], 0
+    jne .pname
+    lea rsi, [stdin_nm]
+    jmp .pout
+.pname:
+    ; basename for cleaner bat-style title
+    mov rsi, r12
+    mov rdi, r12
+.bn:
+    cmp byte [rdi], 0
+    je .pout
+    cmp byte [rdi], '/'
+    jne .bn1
+    lea rsi, [rdi+1]
+.bn1:
+    inc rdi
+    jmp .bn
+.pout:
+    call out_str
+    call color_reset
+    ; · size
+    test dword [cat_opts], C_STAT_SIZE
+    jz .ptype
+    cmp byte [g_color], 0
+    je .ds0
+    call color_dim
+.ds0:
+    lea rsi, [bn_dot]
+    call out_str
+    call color_reset
+    mov rdi, [cat_fsize]
+    lea rsi, [hum_buf]
+    xor edx, edx
+    call human_size
+    cmp byte [g_color], 0
+    je .hs
+    call color_num
+.hs:
+    lea rsi, [hum_buf]
+    call out_str
+    call color_reset
+.ptype:
+    ; · language
+    cmp byte [g_color], 0
+    je .dt0
+    call color_dim
+.dt0:
+    lea rsi, [bn_dot]
+    call out_str
+    call color_reset
+    movzx eax, byte [cat_paint]
+    lea rsi, [ty_text]
+    cmp al, P_ASM
+    jne .t1
+    lea rsi, [ty_asm]
+    jmp .tout
+.t1: cmp al, P_MD
+    jne .t2
+    lea rsi, [ty_md]
+    jmp .tout
+.t2: cmp al, P_SH
+    jne .t3
+    lea rsi, [ty_sh]
+    jmp .tout
+.t3: cmp al, P_C
+    jne .t4
+    lea rsi, [ty_c]
+    jmp .tout
+.t4: cmp al, P_JSON
+    jne .t5
+    lea rsi, [ty_json]
+    jmp .tout
+.t5: cmp al, P_MAKE
+    jne .tout
+    lea rsi, [ty_make]
+.tout:
+    push rsi
+    cmp byte [g_color], 0
+    je .tp
+    call color_ok
+.tp:
+    pop rsi
+    call out_str
+    call color_reset
+    mov dil, 10
+    call out_byte
+    ; ╰──── rule
+    cmp byte [g_color], 0
+    je .rl
+    call color_dim
+.rl:
+    lea rsi, [bn_rule]
+    call out_str
+    call color_reset
+    pop r13
+    pop r12
+    pop rbx
+    ret
 
 ; cat_detect_paint(rdi=path) → sets cat_paint
 cat_detect_paint:
@@ -714,20 +914,25 @@ cat_one_path:
     mov r12, rdi
     inc qword [j_files]
     mov byte [cat_paint], P_NONE
+    mov qword [cat_fsize], 0
+    and dword [cat_opts], ~C_STAT_SIZE
+    ; modern TTY: bat-class line gutter by default
+    mov eax, [cat_opts]
+    test eax, C_CORE | C_JSON | C_CSV | C_NO_NUMBER
+    jnz .det
+    cmp byte [g_tty], 0
+    je .det
+    test eax, C_NUMBER | C_NUMBER_NB
+    jnz .det
+    or dword [cat_opts], C_NUMBER
+.det:
     mov rdi, r12
     call cat_detect_paint
 
-    ; modern multi-file headers (bat-class) — never under --core
-    mov eax, [cat_opts]
-    test eax, C_HEADERS
-    jz .open
-    test eax, C_CORE
+    ; modern: reset line numbers per file (bat); --core keeps cumulative -n
+    test dword [cat_opts], C_CORE
     jnz .open
-    cmp byte [cat_multi], 0
-    je .open
-.hdr:
-    mov rsi, r12
-    call ui_file_header
+    mov qword [cat_line_no], 0
 
 .open:
     ; open file or use fd 0
@@ -736,7 +941,7 @@ cat_one_path:
     cmp byte [r12+1], 0
     jne .openf
     mov r13, 0                      ; stdin
-    jmp .readloop
+    jmp .after_open
 .openf:
     mov rax, SYS_openat
     mov rdi, AT_FDCWD
@@ -747,6 +952,28 @@ cat_one_path:
     cmp rax, -4096
     jae .err
     mov r13, rax
+    ; fstat for banner size
+    mov rax, SYS_fstat
+    mov rdi, r13
+    lea rsi, [stat_buf]
+    syscall
+    cmp rax, -4096
+    jae .after_open
+    mov rax, [stat_buf + 48]        ; st_size x86-64
+    mov [cat_fsize], rax
+    or dword [cat_opts], C_STAT_SIZE
+
+.after_open:
+    ; bat-class title banner — every file on modern TTY
+    mov eax, [cat_opts]
+    test eax, C_HEADERS
+    jz .readloop
+    test eax, C_CORE | C_JSON | C_CSV
+    jnz .readloop
+    cmp byte [g_tty], 0
+    je .readloop
+    mov rsi, r12
+    call cat_emit_banner
 
 .readloop:
     mov rax, SYS_read
@@ -905,12 +1132,14 @@ emit_line:
     jnz .nplain
     cmp byte [g_color], 0
     je .nplain
-    ; modern bat-class: themed dim numbers + pipe marker
+    ; modern bat-class: dim line no + colored fringe " │ "
     call color_dim
     mov rdi, [cat_line_no]
     call out_u64_pad6
     call color_reset
-    call color_dim
+    call color_hdr
+    mov dil, ' '
+    call out_byte
     lea rsi, [pipe_mark]
     call out_str
     call color_reset
