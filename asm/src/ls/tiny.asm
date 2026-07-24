@@ -39,21 +39,21 @@ tmp_u64:      resq 1
 %define T_SILENT 64
 
 section .rodata
-v_true:  db "f00-true (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_true:  db "f00-true (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_true_len equ $-v_true
-v_false: db "f00-false (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_false: db "f00-false (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_false_len equ $-v_false
-v_yes:   db "f00-yes (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_yes:   db "f00-yes (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_yes_len equ $-v_yes
-v_nproc: db "f00-nproc (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_nproc: db "f00-nproc (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_nproc_len equ $-v_nproc
-v_tty:   db "f00-tty (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_tty:   db "f00-tty (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_tty_len equ $-v_tty
-v_who:   db "f00-whoami (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_who:   db "f00-whoami (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_who_len equ $-v_who
-v_base:  db "f00-basename (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_base:  db "f00-basename (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_base_len equ $-v_base
-v_dir:   db "f00-dirname (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10
+v_dir:   db "f00-dirname (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10
 v_dir_len equ $-v_dir
 
 y_default: db "y", 0

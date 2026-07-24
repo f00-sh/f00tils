@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.17] - 2026-07-24
+
+### Changed
+- **Bare `f00` is the suite hub** → same as `f00-config` (TUI on TTY, CLI with args)
+  - `f00` / `f00 theme set …` / `f00 tui`
+  - Directory listing remains **`f00-ls`** / **`ls`** (not bare `f00`)
+  - `f00 --list-utils` still lists multicall names
+
 ## [0.15.16] - 2026-07-24
 
 ### Fixed

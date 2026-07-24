@@ -33,13 +33,10 @@ tok_save:   resb 32*6               ; path num ok err hdr dim
 
 section .rodata
 usage:
-    db "Usage: f00-config [COMMAND]", 10
+    db "Usage: f00 [COMMAND]   or   f00-config [COMMAND]", 10
     db 10
-    db "f00tils uses your terminal palette by default; run", 10
-    db "  f00-config theme list", 10
-    db "then", 10
-    db "  f00-config theme set <name>", 10
-    db "to lock a look into ~/.config/f00/config — or F00_THEME=… for one shot.", 10
+    db "Bare `f00` is the suite hub → configuration (TUI on a TTY).", 10
+    db "f00-config is the same entry point. Listing is f00-ls / ls.", 10
     db 10
     db "Commands:", 10
     db "  (none)              Interactive config TUI on a TTY; else show", 10
@@ -60,7 +57,7 @@ usage:
     db "Default theme 'terminal' = ANSI 16 colors (your palette).", 10
     db 10
     db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
-v_cfg: db "f00-config (f00) 0.15.16", 10, "License: MIT · https://f00.sh", 10, 0
+v_cfg: db "f00-config (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10, 0
 s_theme: db "theme", 0
 s_themes: db "themes", 0
 s_show: db "show", 0

@@ -55,7 +55,7 @@ extern chroot_main, stty_main, stdbuf_main, runcon_main, chcon_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.15.16", 10
+    db "f00-ls (f00) 0.15.17", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg
@@ -122,7 +122,9 @@ help_msg:
     db "      --list-plugins         list discovered plugins", 10
     db "      --update               update helper", 10
     db 10
-    db "Suite meta (argv0 must be f00):", 10
+    db "Suite hub (argv0 = f00):", 10
+    db "  f00                        configuration TUI (or f00-config)", 10
+    db "  f00 theme set NAME         same as f00-config theme set", 10
     db "      --list-utils           list all multicall utility names", 10
     db 10
     db "f00 suite · pure assembly · MIT · https://f00.sh", 10
@@ -130,7 +132,7 @@ help_len equ $-help_msg
 
 msg_unknown_util:
     db "f00: unknown utility (suite multicall)", 10
-    db "Try: f00 --list-utils   or   f00-ls --help", 10
+    db "Try: f00 --list-utils   or   f00-ls --help   or   f00", 10
 msg_unknown_util_len equ $-msg_unknown_util
 
 opt_list_utils: db "--list-utils", 0
@@ -412,12 +414,13 @@ _start:
     mov rdi, [r12]
     call util_basename
     mov r15, rax                    ; basename ptr
-    ; ls / f00 / f00-ls → full ls path (f00 alone is ls)
+    ; bare `f00` → config hub (TUI / f00-config CLI)
+    ; `f00-ls` / `ls` → directory listing
     mov rdi, r15
     lea rsi, [name_f00]
     call strcmp
     test eax, eax
-    jz .f00_meta_or_ls
+    jz .f00_hub
     mov rdi, r15
     lea rsi, [name_f00ls]
     call strcmp
@@ -460,20 +463,35 @@ _start:
     mov rax, SYS_exit
     syscall
 
-; f00 argv0: optional suite meta flags, else ls
-; only `f00 --list-utils` (argc>=2); bare `f00` remains ls
-.f00_meta_or_ls:
+; f00 argv0: suite hub → config (TUI on TTY), plus meta flags
+;   f00                  → f00-config (TUI if TTY)
+;   f00 theme set …      → config CLI
+;   f00 --list-utils     → util list
+;   f00-ls / ls          → listing (not here)
+.f00_hub:
     cmp rbx, 2
-    jl util_ls_ok
+    jl .f00_config
     mov rdi, [r12 + 8]              ; argv[1]
     test rdi, rdi
-    jz util_ls_ok
+    jz .f00_config
     lea rsi, [opt_list_utils]
     call strcmp
     test eax, eax
-    jnz util_ls_ok
+    jnz .f00_config
     call do_list_utils
     xor edi, edi
+    mov rax, SYS_exit
+    syscall
+.f00_config:
+    lea r15, [name_config]          ; util basename for runtime/config sections
+    lea rax, [config_main]
+    push rax
+    call tiny_init
+    mov rdi, rbx
+    mov rsi, r12
+    pop rax
+    call rax
+    mov edi, [g_exit]
     mov rax, SYS_exit
     syscall
 
