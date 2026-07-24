@@ -89,6 +89,8 @@ unset _f00_libbin
 unset -f _f00_replace_enabled 2>/dev/null || true
 EOS
   fi
+  # Full multicall surface: coreutils + grep + findutils + diffutils (+ hub)
+  # Keep in sync with scripts/tools-all.txt and asm/Makefile UTILS.
   local u
   for u in ls cat true false yes nproc tty whoami basename dirname \\
            head tail wc tee seq echo pwd sleep \\
@@ -100,10 +102,12 @@ EOS
            id groups uname arch date users who pinky uptime hostname \\
            nice nohup timeout kill test printf \\
            md5sum sha1sum sha256sum sha224sum sha384sum sha512sum b2sum cksum sum \\
-           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config; do
+           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \\
+           grep egrep fgrep find xargs diff cmp diff3 sdiff; do
     ln -s f00 "\${pkgdir}/usr/bin/f00-\${u}"
     ln -s ../../../bin/f00 "\${pkgdir}/usr/lib/f00/bin/\${u}"
   done
+  ln -s f00 "\${pkgdir}/usr/bin/f00-["
   ln -s ../../../bin/f00 "\${pkgdir}/usr/lib/f00/bin/["
   if [[ -f "\${root}/LICENSE" ]]; then
     install -Dm644 "\${root}/LICENSE" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"

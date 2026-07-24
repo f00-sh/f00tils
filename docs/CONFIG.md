@@ -67,7 +67,7 @@ spinner = false
 
 | Key | Values | Effect |
 |-----|--------|--------|
-| `replace` | `true`/`false` (also `yes`/`no`/`1`/`0`/`none`) | **Default true.** Shell integration prepends bare-name dir (`/usr/lib/f00/bin` or curl `INSTALL_DIR`). `false` → GNU keeps bare names; use `f00-*` |
+| `replace` | `true`/`false` (also `yes`/`no`/`1`/`0`/`none`) | **Default true.** Shell integration prepends bare-name dirs (`~/.local/bin` then `/usr/lib/f00/bin`) for **all** tools (coreutils · grep · findutils · diffutils). `false` → GNU keeps bare names; use `f00-*` |
 | `core` | `true`/`false`, `yes`/`no`, `1`/`0` | Force `--core` presentation |
 | `color` | `auto`, `always`, `never` (also `on`/`off`) | Color when |
 | `theme` | `terminal` / `dracula` / `tokyo-night` / … | Semantic chrome palette (see Themes) |

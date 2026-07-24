@@ -50,11 +50,24 @@ clean:
 	rm -rf $(BUILD) $(TARGET) f00-* $(UTILS) '[' 'f00-[' 2>/dev/null || true
 	rm -f f00-ls f00-cat
 
+# Install multicall + f00-* + bare names (PATH supersede) into ~/.local/bin.
+# Opt out of bare names: F00_SUPERSEDE=0 make install
 install: $(TARGET) links
 	install -Dm755 f00 $(DESTDIR)$(HOME)/.local/bin/f00
 	@for u in $(UTILS); do \
-		ln -sf f00 $(DESTDIR)$(HOME)/.local/bin/f00-$$u; \
+		ln -sfn f00 $(DESTDIR)$(HOME)/.local/bin/f00-$$u; \
+		if [ "$${F00_SUPERSEDE:-1}" = "1" ]; then \
+			ln -sfn f00 $(DESTDIR)$(HOME)/.local/bin/$$u; \
+		fi; \
 	done
+	@if [ "$${F00_SUPERSEDE:-1}" = "1" ]; then \
+		ln -sfn f00 $(DESTDIR)$(HOME)/.local/bin/'['; \
+		ln -sfn f00 $(DESTDIR)$(HOME)/.local/bin/'f00-['; \
+		echo "install: f00 + f00-* + bare names → $(DESTDIR)$(HOME)/.local/bin (F00_SUPERSEDE=0 to skip bare)"; \
+	else \
+		ln -sfn f00 $(DESTDIR)$(HOME)/.local/bin/'f00-['; \
+		echo "install: f00 + f00-* only → $(DESTDIR)$(HOME)/.local/bin"; \
+	fi
 	@mkdir -p $(DESTDIR)$(HOME)/.local/share/man/man1
 	@if [ -d man/man1 ]; then \
 		for m in man/man1/f00*.1; do \

@@ -1,16 +1,19 @@
-# f00tils — default coreutils replacement via PATH
-# Bare names (ls, cat, …) live in /usr/lib/f00/bin → f00 multicall.
-# They never overwrite /usr/bin/cat from the coreutils package.
+# f00tils — default GNU userland replacement via PATH
+# Bare names (ls, cat, grep, find, diff, …) live in supersede dirs → f00 multicall.
+# They never overwrite /usr/bin/* package files (no file conflicts).
 #
-# Default: ON (prepend supersede dir). Toggle in XDG config:
+# Covers coreutils + grep + findutils + diffutils (full TOOLS_ALL).
+#
+# Default: ON. Toggle in XDG config:
 #   replace = false
-# or:
-#   f00-config replace off
-#   f00-config replace on
+# or: f00-config replace off | on
+#
+# Search order (first wins):
+#   1. ~/.local/bin   — curl / make install (full tool set when present)
+#   2. /usr/lib/f00/bin — distro package bare names
 #
 # Requires a new shell (or: source /etc/profile.d/f00.sh).
-
-_f00_libbin="/usr/lib/f00/bin"
+# zsh interactive: source from ~/.zshrc if login profile is not used.
 
 _f00_replace_enabled() {
   # default ON when config missing / no explicit false
@@ -23,12 +26,22 @@ _f00_replace_enabled() {
   return 0
 }
 
-if [ -d "$_f00_libbin" ] && _f00_replace_enabled; then
+_f00_path_prepend() {
+  local d="$1"
+  [ -n "$d" ] && [ -d "$d" ] || return 0
   case ":${PATH:-}:" in
-    *":${_f00_libbin}:"*) ;;
-    *) PATH="${_f00_libbin}${PATH:+:}${PATH:-}"; export PATH ;;
+    *":${d}:"*) ;;
+    *) PATH="${d}${PATH:+:}${PATH:-}"; export PATH ;;
   esac
+}
+
+if _f00_replace_enabled; then
+  # User install first (make install / curl → full 115 bare names)
+  if [ -n "${HOME:-}" ] && [ -x "${HOME}/.local/bin/f00" ]; then
+    _f00_path_prepend "${HOME}/.local/bin"
+  fi
+  # Distro package supersede dir (may lag releases — user install wins)
+  _f00_path_prepend "/usr/lib/f00/bin"
 fi
 
-unset _f00_libbin
-unset -f _f00_replace_enabled 2>/dev/null || true
+unset -f _f00_replace_enabled _f00_path_prepend 2>/dev/null || true

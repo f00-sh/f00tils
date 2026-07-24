@@ -471,7 +471,19 @@ install.sh           curl installer
 
 ---
 
-## Current gaps (honest)
+## Completeness (no spin)
+
+| Question | Status |
+|----------|--------|
+| Install **all 115** + bare PATH names? | **Yes** (`F00_TOOLS=all`, `F00_SUPERSEDE=1` / `make install`). Rebuild distro packages if links predate userland. |
+| `--core` **byte-identical** for all 115? | **Not yet** — userland **4 full / 5 partial**; coreutils full on common track |
+| `--core` **faster wall + CPU** for all 115? | **Not yet** — per-package geos win; some individual races still lose |
+| **Modern +/+** for all 115? | **Not yet** — ls/cat/grep deepest; others thinner |
+| **Theme** suite-wide? | **Init path yes** — every tool loads config theme |
+
+Full write-up: [docs/COMPLETENESS.md](docs/COMPLETENESS.md).
+
+### Remaining gaps
 
 | Area | Gap |
 |------|-----|
@@ -481,9 +493,10 @@ install.sh           curl installer
 | **grep** | No `-A/-B/-C` context yet; no PCRE; multi-MB emit still optimizing |
 | **Bench coverage** | ~90/106 coreutils have safe timed races; destructive/privileged tools use light entry races or scoreboard-only |
 | **Modern depth** | fd/rg/delta-class extras vary by tool — some deep, some still rising |
+| **Distro packages** | Must ship bare + `f00-*` for **all** TOOLS_ALL (fixed in tree; reinstall after upgrade) |
 | **Platform** | Product path is **Linux x86-64** release assets |
 
-Depth scoreboard: [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · flags: [GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md).
+Depth: [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · flags: [GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md) · config: [CONFIG.md](docs/CONFIG.md).
 
 ## Documentation
 

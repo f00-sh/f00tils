@@ -9,11 +9,11 @@ section: utils
 priority: optional
 maintainer: William Theesfeld <william@theesfeld.net>
 description: |
-  f00tils (f00) is a complete GNU coreutils replacement suite.
+  f00tils (f00) replaces GNU coreutils + grep + findutils + diffutils (115 tools).
   One freestanding x86-64 assembly multicall binary (no libc).
-  Default: bare names (ls/cat/…) via /usr/lib/f00/bin on PATH.
+  Default: bare names (ls/cat/grep/find/diff/…) via /usr/lib/f00/bin on PATH.
   Toggle: replace = false in ~/.config/f00/config, or f00-config replace off.
-  --core for script-safe coreutils presentation.
+  --core for script-safe GNU-identical presentation.
 homepage: https://f00.sh
 license: MIT
 contents:

@@ -77,9 +77,6 @@ pick_dir() {
 
 ensure_path() {
   local dir="$1"
-  case ":$PATH:" in
-    *":${dir}:"*) return 0 ;;
-  esac
   [[ "${ADD_PATH:-1}" == "1" ]] || return 0
   # Only auto-edit shell rc for installs under $HOME (avoid /tmp pollution).
   case "$dir" in
@@ -90,21 +87,30 @@ ensure_path() {
       ;;
   esac
   local rc marker="# f00 installer: PATH (${dir})"
-  for rc in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
-    [[ -f "$rc" ]] || continue
+  local block
+  block=$(cat <<EOF
+
+${marker}
+# Prefer f00 bare names (ls/grep/find/diff/…) over GNU when replace=true
+export PATH="${dir}:\$PATH"
+[[ -r /etc/profile.d/f00.sh ]] && source /etc/profile.d/f00.sh
+EOF
+)
+  local edited=0
+  for rc in "${HOME}/.zshrc" "${HOME}/.bashrc"; do
+    [[ -f "$rc" ]] || touch "$rc"
     if grep -Fq "$marker" "$rc" 2>/dev/null; then
       ok "PATH already configured in $rc"
-      return 0
+      edited=1
+      continue
     fi
-    {
-      echo ""
-      echo "$marker"
-      echo "export PATH=\"${dir}:\$PATH\""
-    } >>"$rc"
-    ok "added ${dir} to PATH in $rc"
-    return 0
+    printf '%s\n' "$block" >>"$rc"
+    ok "added ${dir} first on PATH in $rc"
+    edited=1
   done
-  log "${DIM}add to PATH: export PATH=\"${dir}:\$PATH\"${RESET}"
+  if [[ "$edited" -eq 0 ]]; then
+    log "${DIM}add to PATH: export PATH=\"${dir}:\$PATH\"${RESET}"
+  fi
 }
 
 normalize_tool() {
@@ -298,10 +304,11 @@ main() {
   seed_xdg_config "$dir"
 
   ensure_path "$dir"
-  printf "\n${BOLD}done${RESET}. try: ${BOLD}cat --version${RESET} · ${BOLD}ls --help${RESET} · ${BOLD}f00-config replace status${RESET}\n" >&2
-  printf "${DIM}default: bare names replace coreutils when INSTALL_DIR wins on PATH${RESET}\n" >&2
+  printf "\n${BOLD}done${RESET}. try: ${BOLD}which find grep ls${RESET} · ${BOLD}find --version${RESET} · ${BOLD}f00-config replace status${RESET}\n" >&2
+  printf "${DIM}installed ${#SELECTED[@]} tools as f00-* + bare names (coreutils·grep·findutils·diffutils)${RESET}\n" >&2
+  printf "${DIM}default: bare names win on PATH when INSTALL_DIR is first${RESET}\n" >&2
   printf "${DIM}opt-out: F00_SUPERSEDE=0  or  f00-config replace off  (replace = false)${RESET}\n" >&2
-  printf "${DIM}knobs: F00_TOOLS=all|ls,cat,…  F00_SUPERSEDE=0  F00_LOCAL=asm  F00_VERSION=v0.16.3${RESET}\n" >&2
+  printf "${DIM}knobs: F00_TOOLS=all|ls,cat,find,…  F00_SUPERSEDE=0  F00_LOCAL=asm  F00_VERSION=v0.16.3${RESET}\n" >&2
   printf "${DIM}config: ~/.config/f00  ·  themes: f00-config theme list|set|pick${RESET}\n" >&2
 }
 
