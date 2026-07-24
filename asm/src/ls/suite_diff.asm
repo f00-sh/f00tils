@@ -76,6 +76,7 @@ eol_b:          resb 1
 eol_c:          resb 1
 load_eol:       resb 1              ; set by load_lines
 load_pool_n:    resq 1              ; bytes stored in pool by last load_lines
+bulk_diff:      resb 1              ; 1 if bulk_equal_ab confirmed content differ
 ; LCS / edit script
 lcs_pred:       resb (LCS_MAX+1)*(LCS_MAX+1)
 ; mark array per line of a/b: 0=common 1=changed
@@ -1061,6 +1062,7 @@ diff_files:
     mov qword [diff_nb], 0
     mov qword [pool_a_n], 0
     mov qword [pool_b_n], 0
+    mov byte [bulk_diff], 0
     ; Fast path: same path string → identical (GNU)
     mov rdi, [diff_a]
     mov rsi, [diff_b]
@@ -1076,6 +1078,8 @@ diff_files:
     ; eax=2 → open error already set g_exit
     jmp .out
 .differ_maybe_brief:
+    ; bulk is authoritative: files differ (never allow later truncated load to claim equal)
+    mov byte [bulk_diff], 1
     test dword [g_flags], DF_BRIEF
     jz .need_lines
     lea rsi, [files_pre]
@@ -1127,10 +1131,20 @@ diff_files:
     mov [eol_b], al
     mov rax, [load_pool_n]
     mov [pool_b_n], rax
-    ; Post-load equality (pool bytes): never emit empty differ for equal inputs
+    ; Pool equality only when bulk did not already prove a byte differ.
+    ; Truncated POOL_CAP loads share a common prefix and must not override bulk=0.
+    cmp byte [bulk_diff], 0
+    je .maybe_pool_eq
+    call files_equal_ab
+    test al, al
+    jz .force_differ                 ; differ visible in loaded prefix → LCS path
+    ; bulk differed but loaded prefix equal → real delta past pool; still exit 1
+    jmp .brief_differ
+.maybe_pool_eq:
     call files_equal_ab
     test al, al
     jnz .same
+.force_differ:
     call compute_marks_ab
     test dword [g_flags], DF_CONTEXT
     jnz .ctx
@@ -1138,6 +1152,19 @@ diff_files:
     jnz .uni
     ; normal (default under --core)
     call emit_normal_from_marks
+    mov dword [g_exit], 1
+    jmp .out
+.brief_differ:
+    lea rsi, [files_pre]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [files_and]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [files_differ]
+    call out_str
     mov dword [g_exit], 1
     jmp .out
 .ctx:

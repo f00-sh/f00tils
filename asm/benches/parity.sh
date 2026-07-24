@@ -720,6 +720,18 @@ if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
   co=$("$CORE/diff" -u "$WORKDIR/big1" "$WORKDIR/big2" 2>/dev/null); cr=$?
   set -e
   if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff -u multi-MiB equal"; else bad "diff -u multi-MiB f00($fr) gnu($cr)"; fi
+  # Multi-MiB files that differ past 2MiB must exit 1 (not false equal)
+  python3 -c 'p=bytearray(b"Z"*(3*1024*1024)); open("'"$WORKDIR"'/bigd1","wb").write(p); p[int(2.5*1024*1024)]=89; open("'"$WORKDIR"'/bigd2","wb").write(p)'
+  set +e
+  fo=$("$ROOT/f00-diff" --core -q "$WORKDIR/bigd1" "$WORKDIR/bigd2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -q "$WORKDIR/bigd1" "$WORKDIR/bigd2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 1 && "$cr" -eq 1 ]]; then ok "diff -q multi-MiB differ"; else bad "diff -q multi-MiB differ f00=$fr gnu=$cr"; fi
+  set +e
+  fo=$("$ROOT/f00-diff" --core -u "$WORKDIR/bigd1" "$WORKDIR/bigd2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -u "$WORKDIR/bigd1" "$WORKDIR/bigd2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 1 && "$cr" -eq 1 ]]; then ok "diff -u multi-MiB differ exit"; else bad "diff -u multi-MiB differ exit f00=$fr gnu=$cr outlen=${#fo}"; fi
 fi
 if [[ -x "$ROOT/f00-sdiff" ]]; then
   printf 'a\n' > "$WORKDIR/s1"

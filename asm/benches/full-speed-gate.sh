@@ -12,7 +12,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 F00="${ROOT}/f00"
 N="${N:-50}"
-EPS="${EPS:-0.00005}"
+# Absolute floor: sub-ms spawn races on busy hosts need ≥100µs to avoid flaky FAIL
+# while still catching real regressions (>>100µs or >5%).
+EPS="${EPS:-0.0001}"
 RATIO_MAX="${RATIO_MAX:-1.05}"
 
 [[ -x "$F00" ]] || { echo "build f00 first (make)"; exit 1; }
@@ -219,7 +221,8 @@ def once(cmd, stdin=None):
     return wall, cpu
 
 def med(cmd, n=N, stdin=None):
-    for _ in range(3):
+    # Extra warm so first-sample noise does not dominate median on busy hosts
+    for _ in range(5):
         once(cmd, stdin=stdin)
     walls, cpus = [], []
     for _ in range(n):
