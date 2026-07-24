@@ -11,7 +11,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 F00="${ROOT}/f00"
-N="${N:-40}"
+N="${N:-50}"
 EPS="${EPS:-0.00005}"
 RATIO_MAX="${RATIO_MAX:-1.05}"
 

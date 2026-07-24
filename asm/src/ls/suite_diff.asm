@@ -594,13 +594,61 @@ bulk_equal_ab:
     test rax, rax
     jnz .errstat
     mov r15, [rsp+144+48]
+    ; same device+inode → identical without reading
+    mov rax, [rsp]                  ; st_dev A
+    cmp rax, [rsp+144]
+    jne .sizes
+    mov rax, [rsp+8]                ; st_ino A
+    cmp rax, [rsp+152]
+    je .eq_inode
+.sizes:
     add rsp, 288
     cmp r14, r15
     jne .diffsz
-    ; stream compare in chunks (works for empty, small, and multi-MiB)
-    ; r14 = remaining (or total size); use fixed CHUNK <= POOL_CAP/2 conceptually
+    test r14, r14
+    jz .eq                          ; both empty
+    ; Prefer single-shot read+memcmp when both fit in pool (typical gate payloads)
+    cmp r14, POOL_CAP
+    jae .stream
+    xor r8, r8
+.rda:
+    cmp r8, r14
+    jae .rdb0
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [pool_a+r8]
+    mov rdx, r14
+    sub rdx, r8
+    syscall
+    test rax, rax
+    jle .erra_rd
+    add r8, rax
+    jmp .rda
+.rdb0:
+    xor r8, r8
+.rdb:
+    cmp r8, r15
+    jae .oneshot_cmp
+    mov rax, SYS_read
+    mov rdi, r13
+    lea rsi, [pool_b+r8]
+    mov rdx, r15
+    sub rdx, r8
+    syscall
+    test rax, rax
+    jle .erra_rd
+    add r8, rax
+    jmp .rdb
+.oneshot_cmp:
+    lea rdi, [pool_a]
+    lea rsi, [pool_b]
+    mov rdx, r14
+    call memcmp_n
+    test eax, eax
+    jnz .diffsz
+    jmp .eq
+    ; stream compare in chunks for multi-POOL sizes
 .stream:
-    ; read up to 65536 into pool_a / pool_b
     mov rax, SYS_read
     mov rdi, r12
     lea rsi, [pool_a]
@@ -628,6 +676,8 @@ bulk_equal_ab:
     test eax, eax
     jnz .diffsz
     jmp .stream
+.eq_inode:
+    add rsp, 288
 .eq:
     mov rax, SYS_close
     mov rdi, r12
@@ -1011,16 +1061,13 @@ diff_files:
     mov qword [diff_nb], 0
     mov qword [pool_a_n], 0
     mov qword [pool_b_n], 0
-    ; Fast path: same path string or same device+inode → identical (GNU does this)
+    ; Fast path: same path string → identical (GNU)
     mov rdi, [diff_a]
     mov rsi, [diff_b]
     call strcmp
     test eax, eax
     jz .same
-    call same_file_ab
-    test al, al
-    jnz .same
-    ; Fast path: bulk-read both files and memcmp without line split
+    ; Same inode (via bulk's open/fstat) + stream byte compare any size
     call bulk_equal_ab
     cmp eax, 1
     je .same
