@@ -714,6 +714,26 @@ if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
   else
     bad "diff multi-MiB battery"
   fi
+  # Missing paths: exit 2 + "No such file" on stderr (bulk open path)
+  set +e
+  fe=$("$ROOT/f00-diff" --core /no/such/f00-a /no/such/f00-b 2>&1 >/dev/null); fr=$?
+  ge=$("$CORE/diff" /no/such/f00-a /no/such/f00-b 2>&1 >/dev/null); gr=$?
+  set -e
+  if [[ "$fr" -eq 2 && "$gr" -eq 2 && "$fe" == *"No such file"* && "$ge" == *"No such file"* && "$fe" == *"/no/such/f00-a"* && "$fe" == *"/no/such/f00-b"* ]]; then
+    ok "diff missing both paths"
+  else
+    bad "diff missing both f00($fr)=[$fe] gnu($gr)=[$ge]"
+  fi
+  printf 'x\n' > "$WORKDIR/exists-one"
+  set +e
+  fe=$("$ROOT/f00-diff" --core "$WORKDIR/exists-one" /no/such/f00-only-b 2>&1 >/dev/null); fr=$?
+  ge=$("$CORE/diff" "$WORKDIR/exists-one" /no/such/f00-only-b 2>&1 >/dev/null); gr=$?
+  set -e
+  if [[ "$fr" -eq 2 && "$gr" -eq 2 && "$fe" == *"No such file"* && "$fe" == *"/no/such/f00-only-b"* ]]; then
+    ok "diff missing second path"
+  else
+    bad "diff missing second f00($fr)=[$fe] gnu($gr)=[$ge]"
+  fi
   set +e
   set -e
   set +e

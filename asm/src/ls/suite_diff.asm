@@ -716,6 +716,11 @@ bulk_equal_ab:
     mov rax, SYS_close
     mov rdi, r12
     syscall
+    ; generic I/O error on path A (stat failed after open)
+    mov eax, 5                      ; EIO
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
     mov eax, 2
     mov dword [g_exit], 2
     pop r15
@@ -731,6 +736,10 @@ bulk_equal_ab:
     mov rax, SYS_close
     mov rdi, r12
     syscall
+    mov eax, 5
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
     mov eax, 2
     mov dword [g_exit], 2
     pop r15
@@ -740,10 +749,60 @@ bulk_equal_ab:
     pop rbx
     ret
 .errb:
+    ; rax = -errno for B; r12 = fd A
+    mov r14, rax                    ; save -errno B
     mov rax, SYS_close
     mov rdi, r12
     syscall
+    mov rax, r14
+    neg rax                         ; positive errno
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_b]
+    call emit_tool_path_err
+    mov eax, 2
+    mov dword [g_exit], 2
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
 .erra:
+    ; open A failed: rax = -errno. Also try B so both missing paths are reported (GNU).
+    mov r14, rax                    ; -errno A
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, [diff_b]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .erra_both
+    ; B opened OK — close and only report A
+    mov r12, rax
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov rax, r14
+    neg rax
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
+    jmp .erra_done
+.erra_both:
+    ; B also failed
+    mov r15, rax                    ; -errno B
+    mov rax, r14
+    neg rax
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
+    mov rax, r15
+    neg rax
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_b]
+    call emit_tool_path_err
+.erra_done:
     mov eax, 2
     mov dword [g_exit], 2
     pop r15
