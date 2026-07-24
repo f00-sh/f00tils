@@ -708,6 +708,18 @@ if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
   co=$("$CORE/diff" -u "$WORKDIR/d1" "$WORKDIR/d2" 2>/dev/null); cr=$?
   set -e
   if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff identical"; else bad "diff identical f00($fr)=[$fo] gnu($cr)=[$co]"; fi
+  # Multi-MiB identical files (must not false-differ / brief-exit-1)
+  python3 -c 'open("'"$WORKDIR"'/big1","wb").write(b"Z"*(3*1024*1024)); open("'"$WORKDIR"'/big2","wb").write(b"Z"*(3*1024*1024))'
+  set +e
+  fo=$("$ROOT/f00-diff" --core -q "$WORKDIR/big1" "$WORKDIR/big2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -q "$WORKDIR/big1" "$WORKDIR/big2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff -q multi-MiB equal"; else bad "diff -q multi-MiB f00($fr)=[$fo] gnu($cr)=[$co]"; fi
+  set +e
+  fo=$("$ROOT/f00-diff" --core -u "$WORKDIR/big1" "$WORKDIR/big2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -u "$WORKDIR/big1" "$WORKDIR/big2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff -u multi-MiB equal"; else bad "diff -u multi-MiB f00($fr) gnu($cr)"; fi
 fi
 if [[ -x "$ROOT/f00-sdiff" ]]; then
   printf 'a\n' > "$WORKDIR/s1"

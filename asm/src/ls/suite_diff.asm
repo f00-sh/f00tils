@@ -550,8 +550,8 @@ emit_tool_path_err:
     pop rbx
     ret
 
-; bulk_equal_ab → eax: 1 equal, 0 differ, 2 open error (g_exit=2 set)
-; Reads full files into pool_a/pool_b without line indexing.
+; bulk_equal_ab → eax: 1 equal, 0 content/size differ, 2 open/stat error
+; Stream-compares any size (chunks into pool_a/pool_b). Never false-negates equal files.
 bulk_equal_ab:
     push rbx
     push r12
@@ -578,7 +578,7 @@ bulk_equal_ab:
     cmp rax, -4096
     jae .errb
     mov r13, rax
-    ; fstat A size
+    ; fstat sizes — different size ⇒ differ without reading
     sub rsp, 288
     mov rax, SYS_fstat
     mov rdi, r12
@@ -586,7 +586,7 @@ bulk_equal_ab:
     syscall
     test rax, rax
     jnz .errstat
-    mov r14, [rsp+48]              ; st_size offset 48 on x86-64 Linux
+    mov r14, [rsp+48]              ; st_size
     mov rax, SYS_fstat
     mov rdi, r13
     lea rsi, [rsp+144]
@@ -597,56 +597,44 @@ bulk_equal_ab:
     add rsp, 288
     cmp r14, r15
     jne .diffsz
-    cmp r14, POOL_CAP
-    jae .diffsz                     ; too big — line path after return 0
-    ; size equal: read both fully (r8 = offset)
-    xor r8, r8
-.rda:
-    cmp r8, r14
-    jae .rdb0
+    ; stream compare in chunks (works for empty, small, and multi-MiB)
+    ; r14 = remaining (or total size); use fixed CHUNK <= POOL_CAP/2 conceptually
+.stream:
+    ; read up to 65536 into pool_a / pool_b
     mov rax, SYS_read
     mov rdi, r12
-    lea rsi, [pool_a+r8]
-    mov rdx, r14
-    sub rdx, r8
+    lea rsi, [pool_a]
+    mov rdx, 65536
     syscall
-    test rax, rax
-    jle .erra_rd
-    add r8, rax
-    jmp .rda
-.rdb0:
-    xor r8, r8
-.rdb:
-    cmp r8, r15
-    jae .cmp
+    cmp rax, -4096
+    jae .erra_rd
+    mov r14, rax                    ; nA
     mov rax, SYS_read
     mov rdi, r13
-    lea rsi, [pool_b+r8]
-    mov rdx, r15
-    sub rdx, r8
+    lea rsi, [pool_b]
+    mov rdx, 65536
     syscall
-    test rax, rax
-    jle .erra_rd
-    add r8, rax
-    jmp .rdb
-.cmp:
-    mov rax, SYS_close
-    mov rdi, r12
-    syscall
-    mov rax, SYS_close
-    mov rdi, r13
-    syscall
-    mov [pool_a_n], r14
-    mov [pool_b_n], r15
+    cmp rax, -4096
+    jae .erra_rd
+    mov r15, rax                    ; nB
+    cmp r14, r15
+    jne .diffsz
     test r14, r14
-    jz .eq
+    jz .eq                          ; both EOF
     lea rdi, [pool_a]
     lea rsi, [pool_b]
     mov rdx, r14
     call memcmp_n
     test eax, eax
-    jnz .ne
+    jnz .diffsz
+    jmp .stream
 .eq:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
     mov eax, 1
     pop r15
     pop r14
@@ -654,7 +642,6 @@ bulk_equal_ab:
     pop r12
     pop rbx
     ret
-.ne:
 .diffsz:
     mov rax, SYS_close
     mov rdi, r12
@@ -662,7 +649,7 @@ bulk_equal_ab:
     mov rax, SYS_close
     mov rdi, r13
     syscall
-    xor eax, eax                    ; 0 = differ (or size differ → will line-diff)
+    xor eax, eax                    ; confirmed differ
     pop r15
     pop r14
     pop r13
@@ -692,7 +679,8 @@ bulk_equal_ab:
     mov rax, SYS_close
     mov rdi, r12
     syscall
-    xor eax, eax
+    mov eax, 2
+    mov dword [g_exit], 2
     pop r15
     pop r14
     pop r13
@@ -1092,6 +1080,10 @@ diff_files:
     mov [eol_b], al
     mov rax, [load_pool_n]
     mov [pool_b_n], rax
+    ; Post-load equality (pool bytes): never emit empty differ for equal inputs
+    call files_equal_ab
+    test al, al
+    jnz .same
     call compute_marks_ab
     test dword [g_flags], DF_CONTEXT
     jnz .ctx

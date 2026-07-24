@@ -3824,7 +3824,7 @@ hex_val:
     mov al, 0xff
     ret
 
-; base32 encode (RFC 4648)
+; base32 encode (RFC 4648) — large reads, shift-based quintets (no imul per char)
 b32_encode_fd:
     push rbx
     push r12
@@ -3833,23 +3833,28 @@ b32_encode_fd:
     push r15
     mov r12, rdi
     mov dword [col_count], 0
-    ; process 5-byte groups
+    mov rsi, [alpha_ptr]
+    test rsi, rsi
+    jnz .b32al
+    lea rsi, [b32alpha]
+.b32al:
+    mov [alpha_ptr], rsi
 .b32r:
     mov rax, SYS_read
     mov rdi, r12
     lea rsi, [readbuf]
-    mov rdx, 5120
+    mov rdx, 65536
     syscall
     test rax, rax
     jle .b32d
-    mov r13, rax
-    xor r14, r14
+    mov r13, rax                    ; nbytes in buffer
+    xor r14, r14                    ; offset
 .b32lp:
     cmp r14, r13
     jge .b32r
-    ; load up to 5 bytes into rax (big-endian bit stream)
+    ; load up to 5 bytes into r15 (MSB-first bit stream)
     xor r15, r15
-    xor ebx, ebx                  ; nbytes
+    xor ebx, ebx                    ; nbytes this group
 .b32g:
     cmp ebx, 5
     jge .b32e
@@ -3862,23 +3867,21 @@ b32_encode_fd:
     inc ebx
     jmp .b32g
 .b32e:
-    ; shift so 5 bytes occupy top of 40 bits
+    ; left-align into 40-bit field
     mov ecx, 5
     sub ecx, ebx
     shl ecx, 3
     shl r15, cl
-    ; output (nbytes*8+4)/5 chars, then pad to 8
+    ; nchars = (nbytes*8 + 4) / 5
     mov eax, ebx
-    shl eax, 3                    ; bits
-    add eax, 4
+    lea eax, [rax*8+4]
     mov ecx, 5
     xor edx, edx
-    div ecx                       ; eax = nchars
-    mov r8d, eax                  ; nchars
+    div ecx
+    mov r8d, eax                    ; nchars 1..8
     mov r9d, 8
-    sub r9d, r8d                  ; npad
-    ; extract 8 quintets from top
-    mov ecx, 35
+    sub r9d, r8d                    ; pad count
+    ; emit from top: repeatedly take top 5 bits
     mov r10d, 8
 .b32o:
     test r10d, r10d
@@ -3886,26 +3889,10 @@ b32_encode_fd:
     cmp r10d, r9d
     jle .b32pad
     mov rax, r15
-    mov cl, r10b
-    dec cl
-    imul ecx, 5
-    ; actually extract from bit positions 35,30,25,20,15,10,5,0
-    ; use counter: first char bits 35-39
-    ; simplify: shift from top
-    ; recompute: for i in 0..7: quintet = (val >> (35-5*i)) & 31
-    mov eax, 8
-    sub eax, r10d                 ; i
-    imul eax, 5
-    mov ecx, 35
-    sub ecx, eax
-    mov rax, r15
-    shr rax, cl
+    shr rax, 35
     and eax, 31
+    shl r15, 5
     mov rsi, [alpha_ptr]
-    test rsi, rsi
-    jnz .b32a
-    lea rsi, [b32alpha]
-.b32a:
     mov dil, [rsi+rax]
     call b64_outc
     dec r10d

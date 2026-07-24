@@ -327,15 +327,18 @@ for c in cases:
         continue
 
     wall_r = tf / tg if tg > 0 else 0.0
-    cpu_r = cf / cg if cg > 0 else 0.0
+    cpu_r = (cf / cg) if cg > 0 else (0.0 if cf <= eps else float("inf"))
     wall_ok = (tg < eps and tf < eps) or tf <= tg * rmax or (tf - tg) <= eps
-    # CPU: only enforce when both sides report measurable CPU (>eps)
+    # CPU limb of product law 2: never silently disable with `or True`.
     if cg <= eps and cf <= eps:
         cpu_ok = True
         cpu_r_disp = 1.0
     elif cg <= eps:
-        cpu_ok = cf <= eps * 4 or True  # gnu unmeasurable; don't fail
-        cpu_r_disp = cpu_r if cg > 0 else 0.0
+        # GNU CPU under noise floor: require f00 CPU also near-noise or ≤ wall+eps.
+        # If f00 burns clearly measurable CPU while GNU does not, fail.
+        floor = max(eps * 20.0, (tg if tg > eps else eps) * 1.05)
+        cpu_ok = cf <= floor
+        cpu_r_disp = 0.0 if cf <= eps else (cf / max(eps, tg))
     else:
         cpu_ok = cf <= cg * rmax or (cf - cg) <= eps
         cpu_r_disp = cpu_r
