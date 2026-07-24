@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate per-tool bench data for the website: tool, command, output, times.
 
-Also records per-run CPU (user+sys) and peak RSS via wait4 rusage, so CI can
-answer “are we beating coreutils on CPU/memory too?”.
+Totals are **per GNU package set** (coreutils / grep / findutils / diffutils),
+not one blended 115-tool average. Also records CPU (user+sys) + peak RSS.
 
 Writes:
   site/bench/suite.json
@@ -48,9 +48,13 @@ README_TOOLS = (
     "sha256sum",
     "sort",
     "ls",
+    "grep",
+    "find",
+    "diff",
+    "cmp",
 )
 
-# Showcase race-bar cards on the website (Bun-style)
+# Showcase race-bar cards on the website (mix of package sets)
 SHOWCASE_TOOLS = (
     "true",
     "whoami",
@@ -60,8 +64,10 @@ SHOWCASE_TOOLS = (
     "sha256sum",
     "sort",
     "ls",
-    "wc",
-    "nproc",
+    "grep",
+    "find",
+    "diff",
+    "cmp",
 )
 
 # Cold process spawn series (lightweight entry races)
@@ -82,6 +88,30 @@ BENCH_START = "<!-- bench-table:start -->"
 BENCH_END = "<!-- bench-table:end -->"
 HEADLINE_START = "<!-- bench-headline:start -->"
 HEADLINE_END = "<!-- bench-headline:end -->"
+
+# GNU package sets f00tils replaces (separate scoreboards + bench totals)
+PACKAGES = ("coreutils", "grep", "findutils", "diffutils")
+
+GREP_TOOLS = frozenset({"grep", "egrep", "fgrep"})
+FINDUTILS_TOOLS = frozenset({"find", "xargs"})
+DIFFUTILS_TOOLS = frozenset({"diff", "cmp", "diff3", "sdiff"})
+
+PACKAGE_LABELS = {
+    "coreutils": "GNU coreutils",
+    "grep": "GNU grep",
+    "findutils": "GNU findutils",
+    "diffutils": "GNU diffutils",
+}
+
+
+def tool_package(name: str) -> str:
+    if name in GREP_TOOLS:
+        return "grep"
+    if name in FINDUTILS_TOOLS:
+        return "findutils"
+    if name in DIFFUTILS_TOOLS:
+        return "diffutils"
+    return "coreutils"
 
 
 def find_gnu(name: str) -> str | None:
@@ -206,8 +236,9 @@ def _geo_mean(vals: list[float]) -> float | None:
     return math.exp(sum(math.log(v) for v in vals) / len(vals))
 
 
-def compute_summary(rows: list[dict]) -> dict:
-    """Overall wall/CPU/memory vs GNU coreutils (ok tools with positive ratios)."""
+def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
+    """Wall/CPU/memory totals for one GNU package set (not a cross-set blend)."""
+    label = PACKAGE_LABELS.get(package, package)
     ok = [
         r
         for r in rows
@@ -219,6 +250,8 @@ def compute_summary(rows: list[dict]) -> dict:
     ]
     if not ok:
         return {
+            "package": package,
+            "package_label": label,
             "tools_ok": 0,
             "tools_win": 0,
             "ratio_geo": None,
@@ -230,21 +263,25 @@ def compute_summary(rows: list[dict]) -> dict:
             "cpu_ratio_geo": None,
             "cpu_ratio_median": None,
             "cpu_wins": 0,
+            "cpu_tools_ok": 0,
             "mem_ratio_geo": None,
             "mem_ratio_median": None,
             "mem_wins": 0,
+            "mem_tools_ok": 0,
+            "sum_gnu_ms": None,
+            "sum_f00_ms": None,
             "sum_gnu_cpu_ms": None,
             "sum_f00_cpu_ms": None,
             "sum_gnu_rss_kb": None,
             "sum_f00_rss_kb": None,
             "headline_x": "—",
             "headline_pct": "—",
-            "headline": "suite bench pending",
+            "headline": f"bench pending vs {label}",
             "headline_cpu": None,
             "headline_mem": None,
             "method": (
                 "geometric mean of per-tool wall/CPU/RSS ratios "
-                "(f00-* --core vs /usr/bin; spawn-inclusive median; wait4 rusage)"
+                f"(f00-* --core vs {label}; spawn-inclusive median; wait4 rusage)"
             ),
         }
 
@@ -293,26 +330,28 @@ def compute_summary(rows: list[dict]) -> dict:
 
     x_disp = round(ratio_geo, 1)
     pct_disp = int(round(pct_geo))
-    headline = f"{x_disp:g}× faster than GNU coreutils overall"
-    headline_pct = f"{pct_disp}% faster overall"
+    headline = f"{x_disp:g}× faster than {label}"
+    headline_pct = f"{pct_disp}% faster ({package})"
     headline_cpu = None
     if cpu_geo is not None:
         cx = round(cpu_geo, 1)
         headline_cpu = (
-            f"{cx:g}× less CPU than GNU overall"
+            f"{cx:g}× less CPU than {label}"
             if cpu_geo >= 1.0
-            else f"{round(1.0 / cpu_geo, 1):g}× more CPU than GNU overall"
+            else f"{round(1.0 / cpu_geo, 1):g}× more CPU than {label}"
         )
     headline_mem = None
     if mem_geo is not None:
         mx = round(mem_geo, 1)
         headline_mem = (
-            f"{mx:g}× less peak RSS than GNU overall"
+            f"{mx:g}× less peak RSS than {label}"
             if mem_geo >= 1.0
-            else f"{round(1.0 / mem_geo, 1):g}× more peak RSS than GNU overall"
+            else f"{round(1.0 / mem_geo, 1):g}× more peak RSS than {label}"
         )
 
     return {
+        "package": package,
+        "package_label": label,
         "tools_ok": len(ok),
         "tools_win": tools_win,
         "ratio_geo": round(ratio_geo, 3),
@@ -342,7 +381,7 @@ def compute_summary(rows: list[dict]) -> dict:
         "headline_mem": headline_mem,
         "method": (
             "geometric mean of per-tool wall/CPU/RSS ratios "
-            "(f00-* --core vs /usr/bin; spawn-inclusive median; wait4 rusage)"
+            f"(f00-* --core vs {label}; spawn-inclusive median; wait4 rusage)"
         ),
     }
 
@@ -495,6 +534,16 @@ def main() -> int:
             ("yes", "--version", ["--version"], None),
             # entry/help races for tools without a fair payload race
             ("[", "-f fixture.txt", ["-f", str(fix)], None),
+            # --- GNU userland (separate package totals; not blended with coreutils) ---
+            ("grep", "-F hello fixture.txt", ["-F", "hello", str(fix)], None),
+            ("fgrep", "hello fixture.txt", ["hello", str(fix)], None),
+            ("egrep", "h.llo fixture.txt", ["h.llo", str(fix)], None),
+            ("find", f"-maxdepth 1 -name '*.txt' {d}", [str(d), "-maxdepth", "1", "-name", "*.txt"], None),
+            ("xargs", "-n 2", ["-n", "2"], b"a\nb\nc\nd\n"),
+            ("diff", "-u a.txt b.txt", ["-u", str(a), str(b)], None),
+            ("cmp", "fixture.txt fixture.txt", [str(fix), str(fix)], None),
+            ("diff3", "a.txt b.txt a.txt", [str(a), str(b), str(a)], None),
+            ("sdiff", "a.txt b.txt", [str(a), str(b)], None),
         ]
 
         rows = []
@@ -519,11 +568,13 @@ def main() -> int:
             f_disp = f"f00-{name} --core" + (f" {disp_args}" if disp_args else "")
             g_disp = f"{gnu_name}" + (f" {disp_args}" if disp_args else "")
 
+            pkg = tool_package(name)
             if not gnu:
                 fm = measure_runs(f_cmd, stdin=stdin)
                 rows.append(
                     {
                         "tool": name,
+                        "package": pkg,
                         "command_gnu": g_disp,
                         "command_f00": f_disp,
                         "output_gnu": "",
@@ -585,6 +636,7 @@ def main() -> int:
                 rows.append(
                     {
                         "tool": name,
+                        "package": pkg,
                         "command_gnu": g_disp,
                         "command_f00": f_disp,
                         "output_gnu": out_g,
@@ -605,6 +657,7 @@ def main() -> int:
                 rows.append(
                     {
                         "tool": name,
+                        "package": pkg,
                         "command_gnu": g_disp,
                         "command_f00": f_disp,
                         "output_gnu": "",
@@ -623,7 +676,15 @@ def main() -> int:
                 )
             print(f"{name:16} done", flush=True)
 
-        summary = compute_summary(rows)
+        # Per-package totals only (never blend coreutils + grep + find + diff)
+        by_pkg_rows: dict[str, list[dict]] = {p: [] for p in PACKAGES}
+        for r in rows:
+            by_pkg_rows.setdefault(r.get("package") or "coreutils", []).append(r)
+        packages = {
+            p: compute_summary(by_pkg_rows.get(p, []), package=p) for p in PACKAGES
+        }
+        # Back-compat: summary == coreutils package (primary set)
+        summary = packages["coreutils"]
         by_tool = {r["tool"]: r for r in rows if r.get("status") == "ok"}
         showcase = []
         for t in SHOWCASE_TOOLS:
@@ -633,6 +694,7 @@ def main() -> int:
             showcase.append(
                 {
                     "tool": t,
+                    "package": r.get("package") or "coreutils",
                     "command_f00": r.get("command_f00"),
                     "time_gnu_ms": r.get("time_gnu_ms"),
                     "time_f00_ms": r.get("time_f00_ms"),
@@ -690,14 +752,21 @@ def main() -> int:
                 "Wall clock includes process spawn. "
                 "CPU = user+sys (wait4); RSS = peak resident set (Linux KB)."
             ),
-            "overall": summary.get("headline"),
-            "overall_x": summary.get("headline_x"),
-            "overall_pct": summary.get("headline_pct"),
-            "overall_cpu": summary.get("headline_cpu"),
-            "overall_mem": summary.get("headline_mem"),
+            "packages": {
+                p: {
+                    "headline": packages[p].get("headline"),
+                    "headline_x": packages[p].get("headline_x"),
+                    "tools_ok": packages[p].get("tools_ok"),
+                    "ratio_geo": packages[p].get("ratio_geo"),
+                    "cpu_ratio_geo": packages[p].get("cpu_ratio_geo"),
+                }
+                for p in PACKAGES
+            },
         }
         payload = {
             "meta": meta,
+            "packages": packages,
+            # back-compat for older site JS: coreutils summary only
             "summary": summary,
             "showcase": showcase,
             "cold_startup": cold_agg,
@@ -706,50 +775,69 @@ def main() -> int:
         OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
         OUT_JSON.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
+        def _f(v, nd=3):
+            return f"{v:.{nd}f}" if isinstance(v, (int, float)) else "—"
+
+        def _r(v):
+            return f"**{v:.2f}×**" if isinstance(v, (int, float)) else "—"
+
         lines = [
-            "# Suite benchmarks (f00 vs GNU coreutils)",
+            "# Suite benchmarks (f00 vs GNU — **per package set**)",
             "",
-            f"**Overall wall: {summary.get('headline', '—')}** "
-            f"({summary.get('headline_pct', '—')}; geo mean of per-tool wall speedups)",
-            "",
-            f"**CPU:** {summary.get('headline_cpu') or '—'} "
-            f"(geo {summary.get('cpu_ratio_geo') or '—'}× · "
-            f"{summary.get('cpu_wins')}/{summary.get('cpu_tools_ok')} tools use less CPU)",
-            "",
-            f"**Memory (peak RSS):** {summary.get('headline_mem') or '—'} "
-            f"(geo {summary.get('mem_ratio_geo') or '—'}× · "
-            f"{summary.get('mem_wins')}/{summary.get('mem_tools_ok')} tools lower RSS)",
+            "Totals are **not** blended across packages. Each set has its own geo mean.",
             "",
             f"Generated: `{meta['generated_at']}` · N={N} median · {meta['method']}",
             "",
             f"Host: {meta['machine']} · {meta['system']}",
             "",
-            f"Tools timed: {summary.get('tools_ok')} · wall wins: {summary.get('tools_win')} · "
-            f"median {summary.get('ratio_median')}× · total-time {summary.get('ratio_total')}×",
+            "## Package totals",
             "",
-            "| Tool | Command (f00) | GNU ms | f00 ms | Speedup | "
-            "GNU CPU ms | f00 CPU ms | CPU × | GNU RSS KB | f00 RSS KB | Mem × |",
-            "|------|---------------|-------:|-------:|--------:|"
-            "----------:|-----------:|------:|-----------:|-----------:|------:|",
+            "| Package | Tools timed | Wall geo | Wall wins | CPU geo | RSS geo |",
+            "|---------|------------:|---------:|----------:|--------:|--------:|",
         ]
-        for r in rows:
-            if r["status"] != "ok":
+        for p in PACKAGES:
+            s = packages[p]
+            if not s.get("tools_ok"):
+                lines.append(
+                    f"| **{PACKAGE_LABELS[p]}** (`{p}`) | 0 | — | — | — | — |"
+                )
                 continue
-            def _f(v, nd=3):
-                return f"{v:.{nd}f}" if isinstance(v, (int, float)) else "—"
-
-            def _r(v):
-                return f"**{v:.2f}×**" if isinstance(v, (int, float)) else "—"
-
             lines.append(
-                f"| `{r['tool']}` | `{r['command_f00']}` | {_f(r['time_gnu_ms'])} | "
-                f"**{_f(r['time_f00_ms'])}** | {_r(r.get('ratio'))} | "
-                f"{_f(r.get('cpu_gnu_ms'))} | **{_f(r.get('cpu_f00_ms'))}** | "
-                f"{_r(r.get('cpu_ratio'))} | "
-                f"{_f(r.get('rss_gnu_kb'), 0)} | **{_f(r.get('rss_f00_kb'), 0)}** | "
-                f"{_r(r.get('mem_ratio'))} |"
+                f"| **{PACKAGE_LABELS[p]}** (`{p}`) | {s.get('tools_ok')} | "
+                f"**{s.get('ratio_geo')}×** | {s.get('tools_win')}/{s.get('tools_ok')} | "
+                f"{s.get('cpu_ratio_geo') or '—'}× | {s.get('mem_ratio_geo') or '—'}× |"
             )
         lines.append("")
+        for p in PACKAGES:
+            s = packages[p]
+            pkg_rows = [r for r in rows if r.get("package") == p and r.get("status") == "ok"]
+            lines.append(f"## {PACKAGE_LABELS[p]}")
+            lines.append("")
+            if s.get("headline"):
+                lines.append(f"**{s.get('headline')}** · {s.get('headline_cpu') or 'CPU —'} · {s.get('headline_mem') or 'RSS —'}")
+                lines.append("")
+            if not pkg_rows:
+                lines.append("_No timed tools in this set yet._")
+                lines.append("")
+                continue
+            lines.append(
+                "| Tool | Command (f00) | GNU ms | f00 ms | Speedup | "
+                "GNU CPU ms | f00 CPU ms | CPU × | GNU RSS KB | f00 RSS KB | Mem × |"
+            )
+            lines.append(
+                "|------|---------------|-------:|-------:|--------:|"
+                "----------:|-----------:|------:|-----------:|-----------:|------:|"
+            )
+            for r in pkg_rows:
+                lines.append(
+                    f"| `{r['tool']}` | `{r['command_f00']}` | {_f(r['time_gnu_ms'])} | "
+                    f"**{_f(r['time_f00_ms'])}** | {_r(r.get('ratio'))} | "
+                    f"{_f(r.get('cpu_gnu_ms'))} | **{_f(r.get('cpu_f00_ms'))}** | "
+                    f"{_r(r.get('cpu_ratio'))} | "
+                    f"{_f(r.get('rss_gnu_kb'), 0)} | **{_f(r.get('rss_f00_kb'), 0)}** | "
+                    f"{_r(r.get('mem_ratio'))} |"
+                )
+            lines.append("")
         lines.append(
             "Ratios: wall/CPU/mem = GNU÷f00 (**>1 means f00 wins**). "
             "CPU = user+sys; RSS = peak resident set (Linux KB)."
@@ -758,13 +846,13 @@ def main() -> int:
         lines.append("Full machine-readable data: [suite.json](suite.json)")
         lines.append("")
         OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        update_readme_table(rows, meta, summary)
-        update_file_id_diz(summary, meta)
+        update_readme_table(rows, meta, packages)
+        update_file_id_diz(packages, meta)
         print(f"wrote {OUT_JSON}")
         print(f"wrote {OUT_MD}")
-        print(f"overall: {summary.get('headline')}")
-        print(f"cpu:     {summary.get('headline_cpu')}")
-        print(f"memory:  {summary.get('headline_mem')}")
+        for p in PACKAGES:
+            s = packages[p]
+            print(f"{p:12} wall={s.get('headline_x')} cpu={s.get('cpu_ratio_geo')} n={s.get('tools_ok')}")
         ok = sum(1 for r in rows if r["status"] == "ok")
         print(f"tools ok: {ok}/{len(rows)}")
         return 0
@@ -774,48 +862,43 @@ def main() -> int:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def update_readme_table(rows: list[dict], meta: dict, summary: dict) -> None:
-    """Refresh the README representative bench table + overall headline."""
+def update_readme_table(rows: list[dict], meta: dict, packages: dict) -> None:
+    """Refresh README bench table + per-package headlines (no blended total)."""
     import re
 
     if not README.is_file():
         return
     by_tool = {r["tool"]: r for r in rows if r.get("status") == "ok"}
     table_lines = [
-        "| Tool | Command | GNU wall | f00 wall | Speed | GNU CPU | f00 CPU | CPU × | GNU RSS | f00 RSS | Mem × |",
-        "|------|---------|---------:|---------:|------:|--------:|--------:|------:|--------:|--------:|------:|",
+        "| Package | Tool | Command | GNU wall | f00 wall | Speed | CPU × |",
+        "|---------|------|---------|---------:|---------:|------:|------:|",
     ]
     for name in README_TOOLS:
         r = by_tool.get(name)
-        if not r:
-            table_lines.append(
-                f"| `{name}` | `f00-{name} --core` | — | — | — | — | — | — | — | — | — |"
-            )
-            continue
+        pkg = tool_package(name)
 
         def _ms(v):
             return f"{v:.2f} ms" if isinstance(v, (int, float)) else "—"
 
-        def _kb(v):
-            return f"{int(v)} KB" if isinstance(v, (int, float)) else "—"
-
         def _rx(v):
             return f"**~{v:.1f}×**" if isinstance(v, (int, float)) else "—"
 
+        if not r:
+            table_lines.append(
+                f"| {pkg} | `{name}` | `f00-{name} --core` | — | — | — | — |"
+            )
+            continue
         cmd = r.get("command_f00") or f"f00-{name} --core"
         table_lines.append(
-            f"| `{name}` | `{cmd}` | {_ms(r.get('time_gnu_ms'))} | "
+            f"| {pkg} | `{name}` | `{cmd}` | {_ms(r.get('time_gnu_ms'))} | "
             f"**{_ms(r.get('time_f00_ms'))}** | {_rx(r.get('ratio'))} | "
-            f"{_ms(r.get('cpu_gnu_ms'))} | **{_ms(r.get('cpu_f00_ms'))}** | "
-            f"{_rx(r.get('cpu_ratio'))} | "
-            f"{_kb(r.get('rss_gnu_kb'))} | **{_kb(r.get('rss_f00_kb'))}** | "
-            f"{_rx(r.get('mem_ratio'))} |"
+            f"{_rx(r.get('cpu_ratio'))} |"
         )
 
     stamp = (
         f"_CI / suite bench · `{meta.get('generated_at', '?')}` · "
         f"N={meta.get('n_runs', N)} median · {meta.get('machine', '?')} · "
-        f"{meta.get('system', '?')}_"
+        f"{meta.get('system', '?')}_ · **totals are per package set, not blended**"
     )
     block = (
         f"{BENCH_START}\n"
@@ -824,18 +907,21 @@ def update_readme_table(rows: list[dict], meta: dict, summary: dict) -> None:
         + f"\n{BENCH_END}"
     )
 
-    hx = summary.get("headline_x") or "—"
-    hp = summary.get("headline_pct") or "—"
-    cpu_h = summary.get("headline_cpu") or "CPU —"
-    mem_h = summary.get("headline_mem") or "RSS —"
+    # One line per package
+    bits = []
+    for p in PACKAGES:
+        s = packages.get(p) or {}
+        if not s.get("tools_ok"):
+            continue
+        bits.append(
+            f"**{PACKAGE_LABELS[p]}:** {s.get('headline_x', '—')} "
+            f"({s.get('tools_win', 0)}/{s.get('tools_ok', 0)} wins · "
+            f"CPU {s.get('cpu_ratio_geo', '—')}×)"
+        )
     headline_block = (
         f"{HEADLINE_START}\n"
-        f"**Overall: {hx} faster than GNU coreutils** "
-        f"({hp}; geometric mean of {summary.get('tools_ok', '?')} timed tools · "
-        f"{summary.get('tools_win', '?')} wins · median {summary.get('ratio_median', '—')}×). "
-        f"**{cpu_h}** (geo CPU {summary.get('cpu_ratio_geo', '—')}×). "
-        f"**{mem_h}** (geo RSS {summary.get('mem_ratio_geo', '—')}×).\n"
-        f"{HEADLINE_END}"
+        + " · ".join(bits)
+        + (f"\n{HEADLINE_END}" if bits else f"(bench pending)\n{HEADLINE_END}")
     )
 
     text = README.read_text(encoding="utf-8")
@@ -873,10 +959,18 @@ def update_readme_table(rows: list[dict], meta: dict, summary: dict) -> None:
             count=1,
         )
 
-    # Opening blurb: keep one crisp speed claim
+    # Opening blurb: multi-set claim (no single blended total)
+    core = packages.get("coreutils") or {}
+    hx = core.get("headline_x") or "—"
     text2 = re.sub(
-        r"Faster than coreutils on the measured path\.",
-        f"**{hx} faster than GNU coreutils overall** (CI suite geo mean).",
+        r"\*\*[^*]+\*\* faster than GNU coreutils overall \(CI suite geo mean\)\.",
+        f"**{hx} vs coreutils** · per-package suite totals (CI geo means; not blended).",
+        text2,
+        count=1,
+    )
+    text2 = re.sub(
+        r"\*\*[^*]+ vs coreutils\*\* · per-package suite totals[^.]*\.",
+        f"**{hx} vs coreutils** · per-package suite totals (CI geo means; not blended).",
         text2,
         count=1,
     )
@@ -886,8 +980,11 @@ def update_readme_table(rows: list[dict], meta: dict, summary: dict) -> None:
         print(f"updated {README} bench table + headline")
 
 
-def update_file_id_diz(summary: dict, meta: dict) -> None:
-    """Stamp overall speed + version into the ACiD scene card."""
+def update_file_id_diz(packages: dict, meta: dict) -> None:
+    """Stamp per-package speed lines + version into the ACiD scene card (release asset).
+
+    file_id.diz ships on GitHub Releases only — do not spotlight it on the website.
+    """
     if not FILE_ID.is_file():
         return
     text = FILE_ID.read_text(encoding="utf-8")
@@ -895,96 +992,101 @@ def update_file_id_diz(summary: dict, meta: dict) -> None:
     if not lines:
         return
 
-    # Version line: "… · v0.15.11 …"
-    ver = None
-    fv = meta.get("f00_version") or ""
     import re
 
+    ver = None
+    fv = meta.get("f00_version") or ""
     m = re.search(r"(\d+\.\d+\.\d+)", fv)
     if m:
         ver = m.group(1)
-    hx = summary.get("headline_x") or "—"
-    hp = summary.get("headline_pct") or "—"
-    cpu_x = summary.get("cpu_ratio_geo")
-    mem_x = summary.get("mem_ratio_geo")
-    # Fixed-width scene lines: █ + 50 cells + █ (matches file_id.diz frame)
+
     def scene_row(body: str) -> str:
         inner = ("  " + body)[:50].ljust(50)
         return "█" + inner + "█"
 
-    # Keep short — scene frame is only 50 cells of interior
-    # e.g. "overall 2.5× · 148% faster than coreutils"
-    pct_short = hp.replace(" faster overall", "").replace(" faster", "")
-    speed_line = scene_row(f"overall {hx} · {pct_short} faster than coreutils")
-    cpu_bit = f"CPU {cpu_x:.1f}×" if isinstance(cpu_x, (int, float)) else "CPU —"
-    mem_bit = f"RSS {mem_x:.1f}×" if isinstance(mem_x, (int, float)) else "RSS —"
-    method_line = scene_row(f"geo · wall/CPU/RSS · {cpu_bit} · {mem_bit}")
+    core = packages.get("coreutils") or {}
+    hx = core.get("headline_x") or "—"
+    speed_line = scene_row(f"coreutils {hx} · per-set totals (not blended)")
+    bits = []
+    short = {"coreutils": "core", "grep": "grep", "findutils": "find", "diffutils": "diff"}
+    for p in PACKAGES:
+        s = packages.get(p) or {}
+        if s.get("tools_ok"):
+            bits.append(f"{short.get(p, p[:4])} {s.get('headline_x', '—')}")
+    method_line = scene_row(" · ".join(bits) if bits else "per-package wall geo (not blended)")
+    sets_line = scene_row("coreutils · grep · findutils · diffutils")
 
-    out = []
-    replaced_speed = False
+    def is_stamp_line(ln: str) -> bool:
+        """Drop previous speed / package stamp rows so re-runs stay clean."""
+        if not ln.startswith("█"):
+            return False
+        body = ln.strip("█").strip().lower()
+        if not body:
+            return False
+        keys = (
+            "faster than gnu",
+            "faster than coreutils",
+            "per-set totals",
+            "per-package",
+            "geo · wall",
+            "geo mean",
+            "not blended",
+            "coreutils · grep · findutils",
+            "core ",
+            "overall ",
+        )
+        # Keep the logo block / MIT line / modern line / URL
+        if body.startswith("mit ·") or "modern default" in body or "pretty json" in body:
+            return False
+        if "https://f00.sh" in body or "github:" in body:
+            return False
+        if any(k in body for k in keys):
+            return True
+        # compact "core 1.3× · grep …" stamp
+        if body.startswith("core ") and "×" in body and "grep" in body:
+            return True
+        return False
+
+    out: list[str] = []
     for ln in lines:
-        if ver and "v0." in ln and "scene card" in ln:
+        if ver and "scene card" in ln:
             ln = re.sub(r"v\d+\.\d+\.\d+", f"v{ver}", ln)
-        # Replace the vague "faster than GNU…" line or inject after modern line
-        if "faster than GNU" in ln or "faster than coreutils" in ln or "overall " in ln and "faster" in ln:
-            out.append(speed_line)
-            replaced_speed = True
+        if is_stamp_line(ln):
             continue
-        if "geo mean · spawn" in ln:
-            continue  # will re-add once
         out.append(ln)
 
-    if not replaced_speed:
-        # Insert before the URL line if present
-        inserted = False
-        final = []
-        for ln in out:
-            if (not inserted) and ("https://f00.sh" in ln or "github:theesfeld" in ln):
-                final.append(speed_line)
-                final.append(method_line)
-                inserted = True
-            final.append(ln)
-        out = final
-    else:
-        # Ensure method line sits under speed line once
-        final = []
-        for ln in out:
-            final.append(ln)
-            if ln == speed_line:
-                final.append(method_line)
-        out = final
+    # Insert stamp block once, just above the URL row (or before final bar)
+    final: list[str] = []
+    inserted = False
+    for ln in out:
+        if (not inserted) and (
+            "https://f00.sh" in ln or "github:theesfeld" in ln
+        ):
+            final.append(sets_line)
+            final.append(speed_line)
+            final.append(method_line)
+            inserted = True
+        final.append(ln)
+    if not inserted:
+        final.extend([sets_line, speed_line, method_line])
+    out = final
 
     new = "\n".join(out) + ("\n" if text.endswith("\n") else "")
     if new != text:
         FILE_ID.write_text(new, encoding="utf-8")
         print(f"updated {FILE_ID}")
 
-    # Keep README + site embedded scene cards in sync when present
+    # Optional README embed only (not the website landing page).
     diz_body = new if new.endswith("\n") else new + "\n"
-    for path in (README, ROOT / "site" / "index.html"):
-        if not path.is_file():
-            continue
-        t = path.read_text(encoding="utf-8")
-        if "░▒▓█" not in t:
-            continue
-        if path.name == "index.html":
-            m = re.search(
-                r'(<pre class="code-block scene-card"[^>]*><code>)(.*?)(</code></pre>)',
-                t,
-                flags=re.S,
-            )
-            if m:
-                t2 = t[: m.start(2)] + diz_body.rstrip() + t[m.end(2) :]
-                if t2 != t:
-                    path.write_text(t2, encoding="utf-8")
-                    print(f"synced scene card in {path}")
-        else:
+    if README.is_file():
+        t = README.read_text(encoding="utf-8")
+        if "░▒▓█" in t:
             m = re.search(r"░▒▓█[^\n]*\n(?:.*\n)*?  ░▒▓  no libc[^\n]*\n", t)
             if m:
                 t2 = t[: m.start()] + diz_body + t[m.end() :]
                 if t2 != t:
-                    path.write_text(t2, encoding="utf-8")
-                    print(f"synced scene card in {path}")
+                    README.write_text(t2, encoding="utf-8")
+                    print(f"synced scene card in {README}")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@
         <a href="#scoreboard">Scoreboard</a>
         <a href="#install">Install</a>
         <a href="#packages">Packages</a>
-        <a href="#scene-card">Scene card</a>
+
         <a class="btn btn-ghost btn-sm" href="https://github.com/theesfeld/f00">GitHub</a>
       </nav>
     </div>
@@ -48,20 +48,19 @@
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <p class="eyebrow">f00tils · pure assembly · multicall · MIT · <span data-version>v0.16.3</span></p>
-          <h1>coreutils → f00tils</h1>
+          <h1>GNU userland → f00tils</h1>
           <p class="lead">
-            <strong>f00tils</strong> is the complete coreutils replacement suite in
-            <strong>pure freestanding x86-64 assembly</strong> — one multicall binary
-            named <code class="mono">f00</code>, no libc. Default mode is modern (color, Nerd icons, richer layout,
-            <code class="mono">--json</code> / <code class="mono">--csv</code>).
-            <code class="mono">--core</code> is script-safe coreutils presentation.
-            The core path is built to <strong>beat coreutils on speed</strong>.
+            <strong>f00tils</strong> replaces <strong>four</strong> GNU packages in one freestanding multicall:
+            <strong>coreutils</strong>, <strong>grep</strong>, <strong>findutils</strong>, and
+            <strong>diffutils</strong> (115 tools). Pure x86-64 assembly, no libc.
+            Default is modern (theme, chrome, extras).
+            <code class="mono">--core</code> is <strong>byte-identical</strong> to GNU and must win wall + CPU.
           </p>
           <div class="speed-badge" id="hero-speed" hidden>
             <span class="speed-x" id="hero-speed-x">—</span>
             <span class="speed-copy">
-              <strong id="hero-speed-label">faster than GNU coreutils overall</strong>
-              <span class="muted small" id="hero-speed-sub">CI suite · geo mean</span>
+              <strong id="hero-speed-label">vs GNU coreutils</strong>
+              <span class="muted small" id="hero-speed-sub">per package · not blended</span>
             </span>
           </div>
           <div class="install-block">
@@ -73,7 +72,7 @@
               <button type="button" class="copy-btn" data-copy="#install-line">copy</button>
             </div>
             <p class="muted small" style="margin-top:0.75rem">
-              Pin: <code class="mono">F00_VERSION=v0.16.3</code> · scoreboard <strong>106/106</strong>
+              Pin: <code class="mono">F00_VERSION=v0.16.3</code> · <strong>115</strong> tools · 4 packages
             </p>
           </div>
           <div class="hero-actions">
@@ -101,10 +100,10 @@
       <div class="wrap">
         <h2>Product laws</h2>
         <ol class="laws">
-          <li><strong>Clone first.</strong> Every GNU tool has <code class="mono">f00-*</code>. Under <code class="mono">--core</code>, match coreutils for scripts.</li>
-          <li><strong>Modern on top.</strong> Color, layout, <code class="mono">--json</code>/<code class="mono">--csv</code> — never a subset of GNU.</li>
-          <li><strong>Faster always.</strong> Freestanding ASM must win the core path. Slow and correct is not done.</li>
-          <li><strong>One binary.</strong> Multicall by <code class="mono">argv0</code>.</li>
+          <li><strong>Clone first.</strong> Under <code class="mono">--core</code>, output is <strong>byte-identical</strong> to the GNU tool.</li>
+          <li><strong>Win on resources.</strong> <code class="mono">--core</code> must beat GNU wall time <em>and</em> CPU.</li>
+          <li><strong>Modern is amazing.</strong> Default mode is themed chrome + extras — not a pale GNU subset.</li>
+          <li><strong>One binary.</strong> Multicall by <code class="mono">argv0</code> across four GNU package sets.</li>
         </ol>
       </div>
     </section>
@@ -113,20 +112,12 @@
       <div class="wrap">
         <h2>Benchmarks</h2>
         <p class="muted">
-          Spawn-inclusive <code class="mono">f00-* --core</code> vs <code class="mono">/usr/bin/*</code>.
-          Same data as CI · animated like the Bun landing race charts.
+          Spawn-inclusive <code class="mono">f00-* --core</code> vs GNU.
+          <strong>Totals are per package set</strong> (coreutils / grep / findutils / diffutils) — never one blended 115-tool average.
         </p>
 
-        <div class="overall-hero" id="overall-hero" hidden>
-          <div class="overall-num">
-            <span class="overall-x" id="overall-x">—</span>
-            <span class="overall-unit">overall</span>
-          </div>
-          <div class="overall-body">
-            <p class="overall-title" id="overall-title">faster than GNU coreutils</p>
-            <p class="muted small" id="overall-detail">Loading suite summary…</p>
-            <p class="muted small" id="overall-method"></p>
-          </div>
+        <div class="pkg-cards" id="pkg-cards" aria-live="polite">
+          <!-- filled by app.js from suite.json packages -->
         </div>
 
         <div class="bench-grid two" id="race-grid" aria-live="polite">
@@ -161,11 +152,17 @@
       <div class="wrap">
         <h2>Scoreboard</h2>
         <p class="muted">
-          Features and speed in one place. Suite status is
-          <strong>106/106</strong> shipped ·
-          <code class="mono">--core</code> full · modern ·
-          <span id="scoreboard-speed-claim">faster than GNU on measured tools</span>.
+          Four GNU packages, one multicall.
+          <strong>coreutils 106/106</strong> ·
+          <strong>userland 9/9</strong> (grep · findutils · diffutils) ·
+          <span id="scoreboard-speed-claim">per-set speed vs GNU</span>.
         </p>
+        <div class="pkg-tabs" id="pkg-tabs" role="tablist">
+          <button type="button" class="pkg-tab active" data-pkg="coreutils" role="tab">coreutils</button>
+          <button type="button" class="pkg-tab" data-pkg="grep" role="tab">grep</button>
+          <button type="button" class="pkg-tab" data-pkg="findutils" role="tab">findutils</button>
+          <button type="button" class="pkg-tab" data-pkg="diffutils" role="tab">diffutils</button>
+        </div>
 
         <h3 class="subhead">Ecosystem</h3>
         <div class="table-wrap">
@@ -183,7 +180,7 @@
               <tr>
                 <td>Tool names</td>
                 <td>Yes</td>
-                <td><strong>106/106</strong></td>
+                <td><strong>115</strong> (4 pkgs)</td>
                 <td>Growing</td>
                 <td>Subset</td>
               </tr>
@@ -228,22 +225,22 @@
         <p class="muted small">*coreutils ships many separate binaries.</p>
 
         <h3 class="subhead">Tools — ship status + speed</h3>
-        <p class="muted small" id="bench-meta">Loading measured times…</p>
+        <p class="muted small" id="bench-meta">Select a package tab · totals are never blended across sets</p>
         <div class="stat-row" id="bench-stats" hidden>
-          <div class="stat"><span class="stat-val" id="stat-overall">—</span><span class="stat-lbl">overall (geo)</span></div>
+          <div class="stat"><span class="stat-val" id="stat-overall">—</span><span class="stat-lbl" id="stat-overall-lbl">set geo</span></div>
           <div class="stat"><span class="stat-val" id="stat-pct">—</span><span class="stat-lbl">% faster</span></div>
           <div class="stat"><span class="stat-val" id="stat-tools">—</span><span class="stat-lbl">tools timed</span></div>
           <div class="stat"><span class="stat-val" id="stat-median">—</span><span class="stat-lbl">median vs GNU</span></div>
           <div class="stat"><span class="stat-val" id="stat-best">—</span><span class="stat-lbl">best win</span></div>
           <div class="stat"><span class="stat-val" id="stat-n">—</span><span class="stat-lbl">runs (median)</span></div>
         </div>
-        <div class="progress-bar" role="img" aria-label="shipped 106 of 106">
-          <div class="progress-fill" style="width:100%"></div>
+        <div class="progress-bar" id="pkg-progress" role="img" aria-label="package progress">
+          <div class="progress-fill" id="pkg-progress-fill" style="width:100%"></div>
         </div>
-        <p class="muted small">
-          One table: every coreutil with ship / <code class="mono">--core</code> / modern, plus timed
-          <code class="mono">f00-* --core</code> vs GNU when a safe payload race exists.
-          Destructive or privileged tools use a light entry race or show the speed-gate result only.
+        <p class="muted small" id="scoreboard-desc">
+          Each tab is one GNU package set (coreutils · grep · findutils · diffutils), not one 115-tool blob.
+          Rows show ship / <code class="mono">--core</code> depth / modern, plus timed
+          <code class="mono">f00-* --core</code> vs that package’s GNU binary when a safe race exists.
         </p>
         <div class="table-wrap">
           <table class="matrix compact" id="scoreboard-table">
@@ -371,46 +368,15 @@ sudo pacman -U f00-0.16.3-1-x86_64.pkg.tar.zst</code></pre>
       </div>
     </section>
 
-    <section class="section" id="scene-card">
-      <div class="wrap">
-        <h2>Scene card</h2>
-        <p class="muted">
-          Each SemVer release ships a crafted
-          <a href="https://github.com/theesfeld/f00/blob/main/file_id.diz"><code class="mono">file_id.diz</code></a>
-          (ACiD / 16colo.rs-style block ASCII) with the changelog.
-          GitHub Releases attach the same file as an asset.
-        </p>
-        <pre class="code-block scene-card" aria-label="file_id.diz release scene card"><code>░▒▓████████████████████████████████████████████▓▒░░░
-█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.16.3 ░▒▓█ 
-████████████████████████████████████████████████████
-█  ▄████████▄   ▄███████▄   ▄███████▄              █
-█  ███▀▀▀▀███   ███▀▀▀▀███  ███▀▀▀▀███  freest.    █
-█  ███        ▄ ███     ███ ███     ███  ASM       █
-█  ████████   █ ███     ███ ███     ███  suite     █
-█  ███        █ ███     ███ ███     ███  multi     █
-█  ███        █ ███▄▄▄▄███  ███▄▄▄▄███  call       █
-█  ▀          ▀  ▀██████▀    ▀██████▀   f00-*      █
-████████████████████████████████████████████████████
-█  MIT · 2026-07-24 · 106/106 tools shipped        █
-█  modern default · --core for scripts             █
-█  pretty JSON · CSV tables · cat content paint    █
-█  overall 2.5× · 148% faster than coreutils       █
-█  geo mean · spawn-incl · f00-* --core vs GNU     █
-█  https://f00.sh · github:theesfeld/f00           █
-████████████████████████████████████████████████████
-  ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░</code></pre>
-      </div>
-    </section>
-
     <section class="section" id="docs">
       <div class="wrap">
         <h2>Docs</h2>
         <ul>
           <li><a href="https://github.com/theesfeld/f00#readme">GitHub README</a></li>
+          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/COREUTILS-PROGRESS.md">Coreutils scoreboard</a></li>
+          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-USERLAND-PROGRESS.md">Userland scoreboard (grep · find · diff)</a></li>
           <li><a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-COMPLIANCE.md">GNU compliance</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/TERMINAL-UX.md">Terminal UX</a></li>
           <li><a href="https://github.com/theesfeld/f00/blob/main/CHANGELOG.md">Changelog</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/file_id.diz">Scene card (<code class="mono">file_id.diz</code>)</a></li>
           <li>Man: <code class="mono">man f00</code> · <code class="mono">man f00-ls</code> · …</li>
         </ul>
       </div>
@@ -419,7 +385,7 @@ sudo pacman -U f00-0.16.3-1-x86_64.pkg.tar.zst</code></pre>
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
-      <p>f00tils · freestanding assembly coreutils · binary <code class="mono">f00</code> · MIT · <span data-version>v0.16.3</span></p>
+      <p>f00tils · freestanding assembly GNU userland · binary <code class="mono">f00</code> · MIT · <span data-version>v0.16.3</span></p>
       <p><a href="https://github.com/theesfeld/f00">GitHub</a> · <a href="#install">Install</a> · <a href="#scoreboard">Scoreboard</a></p>
     </div>
   </footer>

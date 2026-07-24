@@ -4,7 +4,7 @@
 
 Binary name: **`f00`**. Tool names: **`f00-*`**. Joke: coreutils → **f00tils**.
 
-One multicall x86-64 Linux binary (no libc). Modern defaults for interactive work. `--core` for scripts. **2.5× faster than GNU coreutils overall** (CI suite geo mean). MIT.
+One multicall x86-64 Linux binary (no libc). Modern defaults for interactive work. `--core` for scripts. **Four GNU packages** (coreutils · grep · findutils · diffutils — 115 tools) with **per-package** suite totals (never one blended average). MIT.
 
 | | |
 |---|---|
@@ -221,7 +221,7 @@ Beyond coreutils, f00tils also targets **grep**, **findutils**, and **diffutils*
 ## Benchmarks
 
 <!-- bench-headline:start -->
-**Overall: 1.4× faster than GNU coreutils** (38% faster overall; geometric mean of 91 timed tools · 90 wins · median 1.33×). **1.4× less CPU than GNU overall** (geo CPU 1.355×). **1× more peak RSS than GNU overall** (geo RSS 1.0×).
+**GNU coreutils:** 1.3× (65/89 wins · CPU 1.283×) · **GNU grep:** 3.4× (3/3 wins · CPU 3.315×) · **GNU findutils:** 1.6× (2/2 wins · CPU 1.667×) · **GNU diffutils:** 1× (2/4 wins · CPU 1.061×)
 <!-- bench-headline:end -->
 
 Warm cache, **spawn-inclusive**, median of N runs. Compare `f00-* --core` to `/usr/bin/*` on Linux x86-64.
@@ -236,20 +236,24 @@ Per-tool tables (command, sample output, GNU time, f00 time):
 Representative results (from latest suite bench — do not hand-edit; CI overwrites):
 
 <!-- bench-table:start -->
-_CI / suite bench · `2026-07-24T17:36:15Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_
+_CI / suite bench · `2026-07-24T18:20:41Z` · N=2 median · x86_64 · Linux 7.1.4-arch1-1_ · **totals are per package set, not blended**
 
-| Tool | Command | GNU wall | f00 wall | Speed | GNU CPU | f00 CPU | CPU × | GNU RSS | f00 RSS | Mem × |
-|------|---------|---------:|---------:|------:|--------:|--------:|------:|--------:|--------:|------:|
-| `true` | `f00-true --core` | 0.95 ms | **0.72 ms** | **~1.3×** | 1.02 ms | **0.79 ms** | **~1.3×** | 13148 KB | **13148 KB** | **~1.0×** |
-| `basename` | `f00-basename --core /usr/bin/ls` | 1.12 ms | **0.75 ms** | **~1.5×** | 1.17 ms | **0.80 ms** | **~1.5×** | 13168 KB | **13168 KB** | **~1.0×** |
-| `nproc` | `f00-nproc --core` | 1.16 ms | **0.74 ms** | **~1.6×** | 1.23 ms | **0.83 ms** | **~1.5×** | 13188 KB | **13188 KB** | **~1.0×** |
-| `whoami` | `f00-whoami --core` | 1.18 ms | **0.77 ms** | **~1.5×** | 1.25 ms | **0.84 ms** | **~1.5×** | 13192 KB | **13192 KB** | **~1.0×** |
-| `cat` | `f00-cat --core fixture.txt` | 1.14 ms | **0.78 ms** | **~1.5×** | 1.22 ms | **0.85 ms** | **~1.4×** | 13236 KB | **13236 KB** | **~1.0×** |
-| `wc` | `f00-wc --core -l fixture.txt` | 1.15 ms | **0.91 ms** | **~1.3×** | 1.22 ms | **0.98 ms** | **~1.2×** | 13364 KB | **13364 KB** | **~1.0×** |
-| `md5sum` | `f00-md5sum --core fixture.txt` | 1.65 ms | **1.10 ms** | **~1.5×** | 1.73 ms | **1.18 ms** | **~1.5×** | 30148 KB | **30148 KB** | **~1.0×** |
-| `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.62 ms | **1.18 ms** | **~1.4×** | 1.70 ms | **1.25 ms** | **~1.4×** | 30156 KB | **30156 KB** | **~1.0×** |
-| `sort` | `f00-sort --core fixture.txt` | 1.67 ms | **1.35 ms** | **~1.2×** | 1.74 ms | **1.41 ms** | **~1.2×** | 13416 KB | **13416 KB** | **~1.0×** |
-| `ls` | `f00-ls --core -1 dir` | 1.51 ms | **1.17 ms** | **~1.3×** | 1.58 ms | **1.25 ms** | **~1.3×** | 30156 KB | **30156 KB** | **~1.0×** |
+| Package | Tool | Command | GNU wall | f00 wall | Speed | CPU × |
+|---------|------|---------|---------:|---------:|------:|------:|
+| coreutils | `true` | `f00-true --core` | 0.71 ms | **0.43 ms** | **~1.7×** | **~1.5×** |
+| coreutils | `basename` | `f00-basename --core /usr/bin/ls` | 0.67 ms | **0.63 ms** | **~1.1×** | **~0.9×** |
+| coreutils | `nproc` | `f00-nproc --core` | 0.75 ms | **0.48 ms** | **~1.5×** | **~1.5×** |
+| coreutils | `whoami` | `f00-whoami --core` | 1.43 ms | **0.37 ms** | **~3.8×** | **~3.7×** |
+| coreutils | `cat` | `f00-cat --core fixture.txt` | 0.68 ms | **0.63 ms** | **~1.1×** | **~1.2×** |
+| coreutils | `wc` | `f00-wc --core -l fixture.txt` | 0.78 ms | **0.93 ms** | **~0.8×** | **~0.8×** |
+| coreutils | `md5sum` | `f00-md5sum --core fixture.txt` | 1.26 ms | **0.99 ms** | **~1.3×** | **~1.3×** |
+| coreutils | `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.11 ms | **0.81 ms** | **~1.4×** | **~1.3×** |
+| coreutils | `sort` | `f00-sort --core fixture.txt` | 0.77 ms | **0.82 ms** | **~0.9×** | **~0.9×** |
+| coreutils | `ls` | `f00-ls --core -1 dir` | 0.77 ms | **0.91 ms** | **~0.8×** | **~0.8×** |
+| grep | `grep` | `f00-grep --core -F hello fixture.txt` | 1.82 ms | **0.85 ms** | **~2.1×** | **~2.1×** |
+| findutils | `find` | `f00-find --core -maxdepth 1 -name '*.txt' /tmp/f00-suite-bench.5s3c64yd/dir` | 1.63 ms | **0.96 ms** | **~1.7×** | **~1.8×** |
+| diffutils | `diff` | `f00-diff --core -u a.txt b.txt` | 1.08 ms | **1.20 ms** | **~0.9×** | **~0.9×** |
+| diffutils | `cmp` | `f00-cmp --core fixture.txt fixture.txt` | 1.19 ms | **1.30 ms** | **~0.9×** | **~0.9×** |
 <!-- bench-table:end -->
 
 Reproduce:
@@ -435,11 +439,11 @@ same file as an asset. Keep monospaced when you view it.
 █  ███        █ ███▄▄▄▄███  ███▄▄▄▄███  call       █
 █  ▀          ▀  ▀██████▀    ▀██████▀   f00-*      █
 ████████████████████████████████████████████████████
-█  MIT · 2026-07-24 · 106/106 tools shipped        █
+█  MIT · 2026-07-24 · 115 tools · 4 GNU packages  █
 █  modern default · --core for scripts             █
-█  pretty JSON · CSV tables · cat content paint    █
-█  overall 2.5× · 148% faster than coreutils       █
-█  geo mean · spawn-incl · f00-* --core vs GNU     █
+█  coreutils · grep · findutils · diffutils        █
+█  coreutils 1.3× · per-set totals (not blended)   █
+█  core 1.3× · grep 3.4× · find 1.6× · diff 1×     █
 █  https://f00.sh · github:theesfeld/f00           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    

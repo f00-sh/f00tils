@@ -31,8 +31,8 @@ README, GitHub Pages (`site/`), man pages under `asm/man/man1/`, root `file_id.d
 ## Release checklist
 
 - [ ] Version bumped in man page `.TH` lines and release notes
-- [ ] Root `file_id.diz` refreshed for this version (scene card); README + `site/` previews match; `f00.1` FILES/SEE ALSO still accurate
+- [ ] Root `file_id.diz` refreshed for this version (release asset only — do not spotlight on the website); `f00.1` FILES/SEE ALSO still accurate
 - [ ] `cd asm && make smoke && make speed`
-- [ ] `N=25 python3 scripts/gen-suite-bench.py` (refresh site/bench + README `<!-- bench-table -->`; CI does this on main)
+- [ ] `N=25 python3 scripts/gen-suite-bench.py` (per-package totals in site/bench + README; never blend coreutils/grep/find/diff; CI does this on main)
 - [ ] Package assets: tarball · deb · rpm · Arch (`scripts/build-linux-packages.sh`) · standalone `file_id.diz`
 - [ ] Tag `vX.Y.Z` triggers release workflow (attaches `file_id.diz`)

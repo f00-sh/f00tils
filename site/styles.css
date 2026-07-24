@@ -812,6 +812,75 @@ section {
   font-weight: 600;
 }
 
+/* ── per-package bench cards ─────────────────────────────── */
+.pkg-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0 1.75rem;
+}
+.pkg-card {
+  border: 1px solid var(--border, #2a2a32);
+  border-radius: 0.65rem;
+  padding: 0.85rem 1rem;
+  background: var(--card, rgba(255, 255, 255, 0.03));
+}
+.pkg-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.pkg-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: lowercase;
+}
+.pkg-x {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent, #7ec8ff);
+}
+.pkg-meta {
+  margin: 0;
+  line-height: 1.35;
+}
+.pkg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+.pkg-tab {
+  border: 1px solid var(--border, #2a2a32);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.pkg-tab.active {
+  background: var(--accent, #7ec8ff);
+  color: #0b0b10;
+  border-color: transparent;
+  font-weight: 600;
+}
+.pkg-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  border: 1px solid var(--border, #2a2a32);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  vertical-align: middle;
+}
+
 /* ── overall hero (benchmarks section) ──────────────────── */
 .overall-hero {
   display: grid;

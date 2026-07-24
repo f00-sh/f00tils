@@ -9,14 +9,11 @@
 █  ███        █ ███▄▄▄▄███  ███▄▄▄▄███  call       █
 █  ▀          ▀  ▀██████▀    ▀██████▀   f00-*      █
 ████████████████████████████████████████████████████
-█  MIT · 2026-07-24 · 106/106 tools shipped        █
+█  MIT · 2026-07-24 · 115 tools · 4 GNU packages  █
 █  modern default · --core for scripts             █
-█  pretty JSON · CSV tables · cat content paint    █
-█  overall 1.4× · 38% faster than coreutils        █
-█  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
-█  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
-█  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
-█  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
+█  coreutils · grep · findutils · diffutils        █
+█  coreutils 1.3× · per-set totals (not blended)   █
+█  core 1.3× · grep 3.4× · find 1.6× · diff 1×     █
 █  https://f00.sh · github:theesfeld/f00           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    

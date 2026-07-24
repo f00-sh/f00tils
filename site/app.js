@@ -84,11 +84,47 @@
     return map;
   }
 
-  function computeSummaryFallback(tools) {
+  const PKG_ORDER = ["coreutils", "grep", "findutils", "diffutils"];
+  const PKG_LABEL = {
+    coreutils: "coreutils",
+    grep: "grep",
+    findutils: "findutils",
+    diffutils: "diffutils",
+  };
+  const PKG_SHIPPED = {
+    coreutils: 106,
+    grep: 3,
+    findutils: 2,
+    diffutils: 4,
+  };
+  const GREP_TOOLS = new Set(["grep", "egrep", "fgrep"]);
+  const FIND_TOOLS = new Set(["find", "xargs"]);
+  const DIFF_TOOLS = new Set(["diff", "cmp", "diff3", "sdiff"]);
+
+  function toolPackage(name) {
+    if (GREP_TOOLS.has(name)) return "grep";
+    if (FIND_TOOLS.has(name)) return "findutils";
+    if (DIFF_TOOLS.has(name)) return "diffutils";
+    return "coreutils";
+  }
+
+  function computeSummaryFallback(tools, packageName) {
+    const pkg = packageName || "coreutils";
+    const label = PKG_LABEL[pkg] || pkg;
     const ok = (tools || []).filter(
       (t) => t.status === "ok" && t.ratio != null && t.ratio > 0
     );
-    if (!ok.length) return null;
+    if (!ok.length) {
+      return {
+        package: pkg,
+        package_label: label,
+        tools_ok: 0,
+        tools_win: 0,
+        headline_x: "—",
+        headline: `pending vs GNU ${label}`,
+        headline_pct: "—",
+      };
+    }
     const ratios = ok.map((t) => t.ratio);
     const logSum = ratios.reduce((a, r) => a + Math.log(r), 0);
     const geo = Math.exp(logSum / ratios.length);
@@ -98,99 +134,140 @@
     const total = f00 > 0 ? gnu / f00 : null;
     const x = Math.round(geo * 10) / 10;
     const pct = Math.round((geo - 1) * 100);
+    const cpuOk = ok.filter(
+      (t) => t.cpu_ratio != null && t.cpu_ratio > 0
+    );
+    const cpuGeo = cpuOk.length
+      ? Math.exp(
+          cpuOk.reduce((a, t) => a + Math.log(t.cpu_ratio), 0) / cpuOk.length
+        )
+      : null;
+    const memOk = ok.filter(
+      (t) => t.mem_ratio != null && t.mem_ratio > 0
+    );
+    const memGeo = memOk.length
+      ? Math.exp(
+          memOk.reduce((a, t) => a + Math.log(t.mem_ratio), 0) / memOk.length
+        )
+      : null;
     return {
+      package: pkg,
+      package_label: label,
       tools_ok: ok.length,
       tools_win: ratios.filter((r) => r > 1).length,
       ratio_geo: geo,
       ratio_median: med,
       ratio_total: total,
       pct_faster_geo: pct,
+      cpu_ratio_geo: cpuGeo,
+      mem_ratio_geo: memGeo,
       headline_x: `${x}×`,
-      headline_pct: `${pct}% faster overall`,
-      headline: `${x}× faster than GNU coreutils overall`,
-      method:
-        "geometric mean of per-tool speedups (f00-* --core vs /usr/bin, spawn-inclusive median)",
+      headline_pct: `${pct}% faster (${pkg})`,
+      headline: `${x}× faster than GNU ${label}`,
+      method: `geometric mean of per-tool speedups (f00-* --core vs GNU ${label})`,
     };
   }
 
-  function renderOverall(summary, meta) {
-    if (!summary) return;
-    const hx = summary.headline_x || "—";
-    const hp = summary.headline_pct || "";
-    const cpuH = summary.headline_cpu || "";
-    const memH = summary.headline_mem || "";
-    const title = summary.headline || "faster than GNU coreutils overall";
+  const USERLAND = {
+    grep: [
+      { n: 1, util: "grep", f00: "f00-grep", shipped: "yes", depth: "full", modern: "deep" },
+      { n: 2, util: "egrep", f00: "f00-egrep", shipped: "yes", depth: "full", modern: "yes" },
+      { n: 3, util: "fgrep", f00: "f00-fgrep", shipped: "yes", depth: "full", modern: "yes" },
+    ],
+    findutils: [
+      { n: 1, util: "find", f00: "f00-find", shipped: "yes", depth: "partial", modern: "deep" },
+      { n: 2, util: "xargs", f00: "f00-xargs", shipped: "yes", depth: "partial", modern: "yes" },
+    ],
+    diffutils: [
+      { n: 1, util: "diff", f00: "f00-diff", shipped: "yes", depth: "partial", modern: "deep" },
+      { n: 2, util: "cmp", f00: "f00-cmp", shipped: "yes", depth: "full", modern: "yes" },
+      { n: 3, util: "diff3", f00: "f00-diff3", shipped: "yes", depth: "partial", modern: "yes" },
+      { n: 4, util: "sdiff", f00: "f00-sdiff", shipped: "yes", depth: "partial", modern: "deep" },
+    ],
+  };
 
+  function packagesFromSuite(suite) {
+    if (suite && suite.packages && typeof suite.packages === "object") {
+      // Ensure all four keys exist even if a set had no timed tools
+      const out = {};
+      PKG_ORDER.forEach((p) => {
+        out[p] = suite.packages[p] || {
+          package: p,
+          package_label: PKG_LABEL[p],
+          tools_ok: 0,
+          headline_x: "—",
+          headline: `pending vs GNU ${PKG_LABEL[p]}`,
+        };
+      });
+      return out;
+    }
+    // Fall back: derive from tools[].package or tool name
+    const by = { coreutils: [], grep: [], findutils: [], diffutils: [] };
+    (suite && suite.tools ? suite.tools : []).forEach((t) => {
+      const p = t.package || toolPackage(t.tool || "");
+      if (!by[p]) by[p] = [];
+      by[p].push(t);
+    });
+    const out = {};
+    PKG_ORDER.forEach((p) => {
+      out[p] = computeSummaryFallback(by[p], p);
+    });
+    return out;
+  }
+
+  function renderPackageCards(packages, meta) {
+    const host = document.getElementById("pkg-cards");
+    if (!host) return;
+    const cards = PKG_ORDER.map((p) => {
+      const s = (packages && packages[p]) || {};
+      const hx = s.headline_x || "—";
+      const n = s.tools_ok != null ? s.tools_ok : 0;
+      const wins = s.tools_win != null ? `${s.tools_win}/${n}` : "—";
+      const cpu =
+        s.cpu_ratio_geo != null ? `${Number(s.cpu_ratio_geo).toFixed(2)}× CPU` : "CPU —";
+      const rss =
+        s.mem_ratio_geo != null ? `${Number(s.mem_ratio_geo).toFixed(2)}× RSS` : "RSS —";
+      return (
+        `<article class="pkg-card" data-pkg="${esc(p)}">` +
+        `<header><span class="pkg-name">${esc(PKG_LABEL[p])}</span>` +
+        `<span class="pkg-x">${esc(hx)}</span></header>` +
+        `<p class="pkg-meta muted small">${n} timed · ${esc(wins)} wall wins · ${esc(cpu)} · ${esc(rss)}</p>` +
+        `</article>`
+      );
+    }).join("");
+    host.innerHTML = cards;
+
+    // Hero shows coreutils set (primary), not a blend
+    const core = (packages && packages.coreutils) || {};
     const hero = document.getElementById("hero-speed");
-    if (hero) {
+    if (hero && core.headline_x) {
       hero.hidden = false;
       const xEl = document.getElementById("hero-speed-x");
       const sub = document.getElementById("hero-speed-sub");
-      if (xEl) xEl.textContent = hx;
+      const lab = document.getElementById("hero-speed-label");
+      if (xEl) xEl.textContent = core.headline_x;
+      if (lab) lab.textContent = "vs GNU coreutils";
       if (sub) {
-        const bits = [`${hp} · geo mean · ${summary.tools_ok || "?"} tools`];
-        if (summary.cpu_ratio_geo != null) {
-          bits.push(`CPU ${Number(summary.cpu_ratio_geo).toFixed(1)}×`);
-        }
-        if (summary.mem_ratio_geo != null) {
-          bits.push(`RSS ${Number(summary.mem_ratio_geo).toFixed(1)}×`);
-        }
-        sub.textContent = bits.join(" · ");
-      }
-    }
-
-    const overall = document.getElementById("overall-hero");
-    if (overall) {
-      overall.hidden = false;
-      const ox = document.getElementById("overall-x");
-      const ot = document.getElementById("overall-title");
-      const od = document.getElementById("overall-detail");
-      const om = document.getElementById("overall-method");
-      if (ox) ox.textContent = hx;
-      if (ot) ot.textContent = "faster than GNU coreutils overall";
-      if (od) {
-        od.textContent = [
-          hp,
-          summary.tools_win != null
-            ? `${summary.tools_win}/${summary.tools_ok} wall wins`
+        sub.textContent = [
+          core.tools_ok != null ? `${core.tools_ok} tools` : null,
+          core.cpu_ratio_geo != null
+            ? `CPU ${Number(core.cpu_ratio_geo).toFixed(1)}×`
             : null,
-          summary.ratio_median != null
-            ? `median ${Number(summary.ratio_median).toFixed(2)}×`
-            : null,
-          summary.ratio_total != null
-            ? `total-time ${Number(summary.ratio_total).toFixed(2)}×`
-            : null,
-          cpuH || null,
-          summary.cpu_ratio_geo != null
-            ? `CPU geo ${Number(summary.cpu_ratio_geo).toFixed(2)}× (${summary.cpu_wins || 0}/${summary.cpu_tools_ok || "?"} tools)`
-            : null,
-          memH || null,
-          summary.mem_ratio_geo != null
-            ? `RSS geo ${Number(summary.mem_ratio_geo).toFixed(2)}× (${summary.mem_wins || 0}/${summary.mem_tools_ok || "?"} tools)`
-            : null,
+          "per package · not blended",
         ]
           .filter(Boolean)
           .join(" · ");
-      }
-      if (om) {
-        const bits = [];
-        if (summary.method) bits.push(summary.method);
-        if (meta && meta.generated_at) bits.push(meta.generated_at);
-        if (meta && meta.machine) bits.push(meta.machine);
-        om.textContent = bits.join(" · ");
       }
     }
 
     const claim = document.getElementById("scoreboard-speed-claim");
     if (claim) {
-      const parts = [`${hx} faster overall (wall geo mean)`];
-      if (summary.cpu_ratio_geo != null) {
-        parts.push(`CPU ${Number(summary.cpu_ratio_geo).toFixed(1)}×`);
-      }
-      if (summary.mem_ratio_geo != null) {
-        parts.push(`RSS ${Number(summary.mem_ratio_geo).toFixed(1)}×`);
-      }
-      claim.textContent = parts.join(" · ");
+      claim.textContent = PKG_ORDER.map((p) => {
+        const s = packages[p] || {};
+        return s.headline_x ? `${PKG_LABEL[p]} ${s.headline_x}` : null;
+      })
+        .filter(Boolean)
+        .join(" · ");
     }
   }
 
@@ -227,13 +304,14 @@
         const gPct = Math.max(4, ((r.time_gnu_ms || 0) / maxMs) * 100);
         const fPct = Math.max(4, ((r.time_f00_ms || 0) / maxMs) * 100);
         const delay = (i * 0.06).toFixed(2);
+        const pkg = r.package || toolPackage(r.tool || "");
         return (
           `<article class="bench-card race-card" style="--d:${delay}s">` +
           `<header class="race-head">` +
           `<h3><code>${esc(r.tool)}</code></h3>` +
           `<span class="bench-tag win">${esc(Number(r.ratio).toFixed(2))}×</span>` +
           `</header>` +
-          `<p class="race-cmd muted small"><code>${esc(r.command_f00 || "f00-" + r.tool + " --core")}</code></p>` +
+          `<p class="race-cmd muted small"><span class="pkg-tag">${esc(pkg)}</span> · <code>${esc(r.command_f00 || "f00-" + r.tool + " --core")}</code></p>` +
           `<div class="bench-bars race-bars">` +
           `<div class="bar-row">` +
           `<span class="bar-label">f00tils</span>` +
@@ -326,7 +404,9 @@
     requestAnimationFrame(() => svg.classList.add("drawn"));
   }
 
-  function renderStats(tools, meta, summary) {
+  function renderStats(tools, meta, summary, pkg) {
+    const packageName = pkg || (summary && summary.package) || "coreutils";
+    const label = PKG_LABEL[packageName] || packageName;
     const metaEl = document.getElementById("bench-meta");
     const stats = document.getElementById("bench-stats");
     const ok = (tools || []).filter((t) => t.status === "ok" && t.ratio != null);
@@ -335,16 +415,25 @@
     if (metaEl) {
       const bits = [];
       if (summary && summary.headline) bits.push(summary.headline);
-      if (meta && meta.method) bits.push(meta.method);
+      else bits.push(`GNU ${label}`);
+      if (summary && summary.headline_cpu) bits.push(summary.headline_cpu);
       if (meta && meta.machine) bits.push(meta.machine);
       if (meta && meta.generated_at) bits.push(meta.generated_at);
-      metaEl.textContent = bits.join(" · ") || "Suite benchmarks";
+      bits.push("per package · not blended");
+      metaEl.textContent = bits.join(" · ");
     }
 
-    if (!stats || !ok.length) return;
+    const lbl = document.getElementById("stat-overall-lbl");
+    if (lbl) lbl.textContent = `${label} geo`;
+
+    if (!stats) return;
+    if (!ok.length && !(summary && summary.tools_ok)) {
+      stats.hidden = true;
+      return;
+    }
     stats.hidden = false;
     const ratios = ok.map((t) => t.ratio).sort((a, b) => a - b);
-    const mid = ratios[Math.floor(ratios.length / 2)];
+    const mid = ratios.length ? ratios[Math.floor(ratios.length / 2)] : null;
     const best = ok[0];
     const set = (id, v) => {
       const el = document.getElementById(id);
@@ -364,60 +453,115 @@
         ? `${Math.round(summary.pct_faster_geo)}%`
         : "—"
     );
-    set("stat-tools", String(ok.length));
-    set("stat-median", `${mid.toFixed(2)}×`);
-    set("stat-best", `${best.tool} ${best.ratio.toFixed(1)}×`);
+    set(
+      "stat-tools",
+      summary && summary.tools_ok != null
+        ? String(summary.tools_ok)
+        : String(ok.length)
+    );
+    set("stat-median", mid != null ? `${mid.toFixed(2)}×` : "—");
+    set(
+      "stat-best",
+      best ? `${best.tool} ${best.ratio.toFixed(1)}×` : "—"
+    );
     set("stat-n", meta && meta.n_runs ? String(meta.n_runs) : "—");
   }
 
-  function renderScoreboard(progress, bench) {
+  function updatePkgProgress(pkg, rows) {
+    const bar = document.getElementById("pkg-progress");
+    const fill = document.getElementById("pkg-progress-fill");
+    const total = PKG_SHIPPED[pkg] || rows.length || 1;
+    const shipped = rows.filter((r) => r.shipped === "yes" || r.shipped === true).length
+      || (pkg === "coreutils" ? 106 : rows.length);
+    const pct = Math.min(100, Math.round((shipped / total) * 100));
+    if (fill) fill.style.width = `${pct}%`;
+    if (bar) bar.setAttribute("aria-label", `shipped ${shipped} of ${total} (${pkg})`);
+  }
+
+  function rowHtml(r, bi) {
+    const key = r.util === "[" ? "[" : r.util;
+    const b = bi[key] || bi[r.util] || null;
+    const depth =
+      r.depth === "full" ? "<strong>full</strong>" : esc(r.depth);
+    let g = "—";
+    let f = "—";
+    let x = "—";
+    if (b && b.status === "ok") {
+      g = fmtMs(b.time_gnu_ms);
+      f = `<strong>${esc(fmtMs(b.time_f00_ms))}</strong>`;
+      const bits = [fmtRatio(b.ratio)];
+      if (b.cpu_ratio != null) bits.push(`CPU ${fmtRatio(b.cpu_ratio)}`);
+      if (b.mem_ratio != null) bits.push(`RSS ${fmtRatio(b.mem_ratio)}`);
+      x = bits.join(" · ");
+    } else if (r.speed === "win") {
+      x = "<strong>win</strong>";
+    } else if (r.speed && r.speed !== "—") {
+      x = esc(r.speed);
+    }
+    return (
+      `<tr class="shipped">` +
+      `<td>${esc(r.n)}</td>` +
+      `<td><code>${esc(r.util)}</code></td>` +
+      `<td><code>${esc(r.f00)}</code></td>` +
+      `<td>${esc(r.shipped)}</td>` +
+      `<td>${depth}</td>` +
+      `<td>${esc(r.modern)}</td>` +
+      `<td>${esc(g)}</td>` +
+      `<td>${f}</td>` +
+      `<td>${x}</td>` +
+      `</tr>`
+    );
+  }
+
+  function renderScoreboard(progress, suite, packages, pkg) {
     const body = document.getElementById("scoreboard-body");
     if (!body) return;
-    const rows = (progress && progress.rows) || [];
-    const bi = benchIndex(bench && bench.tools);
+    const bi = benchIndex(suite && suite.tools);
+    let rows = [];
+    if (pkg === "coreutils") {
+      rows = (progress && progress.rows) || [];
+      if (!rows.length) {
+        body.innerHTML =
+          '<tr><td colspan="9" class="muted">Missing coreutils-progress.json</td></tr>';
+        return;
+      }
+    } else {
+      rows = USERLAND[pkg] || [];
+      if (!rows.length) {
+        body.innerHTML =
+          '<tr><td colspan="9" class="muted">No tools in this package set</td></tr>';
+        return;
+      }
+    }
+    body.innerHTML = rows.map((r) => rowHtml(r, bi)).join("");
+    updatePkgProgress(pkg, rows);
 
-    if (!rows.length) {
-      body.innerHTML =
-        '<tr><td colspan="9" class="muted">Missing coreutils-progress.json</td></tr>';
+    const pkgTools = (suite && suite.tools ? suite.tools : []).filter(
+      (t) => (t.package || toolPackage(t.tool || "")) === pkg
+    );
+    const sum = (packages && packages[pkg]) || null;
+    renderStats(pkgTools, suite && suite.meta, sum, pkg);
+  }
+
+  function wirePkgTabs(progress, suite, packages) {
+    const tabs = document.getElementById("pkg-tabs");
+    if (!tabs) {
+      renderScoreboard(progress, suite, packages, "coreutils");
       return;
     }
-
-    body.innerHTML = rows
-      .map((r) => {
-        const key = r.util === "[" ? "[" : r.util;
-        const b = bi[key] || bi[r.util] || null;
-        const depth =
-          r.depth === "full" ? "<strong>full</strong>" : esc(r.depth);
-        let g = "—";
-        let f = "—";
-        let x = "—";
-        if (b && b.status === "ok") {
-          g = fmtMs(b.time_gnu_ms);
-          f = `<strong>${esc(fmtMs(b.time_f00_ms))}</strong>`;
-          const bits = [fmtRatio(b.ratio)];
-          if (b.cpu_ratio != null) bits.push(`CPU ${fmtRatio(b.cpu_ratio)}`);
-          if (b.mem_ratio != null) bits.push(`RSS ${fmtRatio(b.mem_ratio)}`);
-          x = bits.join(" · ");
-        } else if (r.speed === "win") {
-          x = "<strong>win</strong>";
-        } else if (r.speed && r.speed !== "—") {
-          x = esc(r.speed);
-        }
-        return (
-          `<tr class="shipped">` +
-          `<td>${esc(r.n)}</td>` +
-          `<td><code>${esc(r.util)}</code></td>` +
-          `<td><code>${esc(r.f00)}</code></td>` +
-          `<td>${esc(r.shipped)}</td>` +
-          `<td>${depth}</td>` +
-          `<td>${esc(r.modern)}</td>` +
-          `<td>${esc(g)}</td>` +
-          `<td>${f}</td>` +
-          `<td>${x}</td>` +
-          `</tr>`
-        );
-      })
-      .join("");
+    tabs.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".pkg-tab");
+      if (!btn) return;
+      tabs.querySelectorAll(".pkg-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderScoreboard(
+        progress,
+        suite,
+        packages,
+        btn.getAttribute("data-pkg") || "coreutils"
+      );
+    });
+    renderScoreboard(progress, suite, packages, "coreutils");
   }
 
   Promise.all([
@@ -428,16 +572,22 @@
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]).then(([progress, suite]) => {
-    if (!suite) {
-      renderScoreboard(progress, null);
-      return;
+    const packages = suite ? packagesFromSuite(suite) : null;
+    if (suite) {
+      renderPackageCards(packages, suite.meta);
+      renderRaceCards(suite.showcase, suite.tools);
+      renderColdChart(suite.cold_startup);
+    } else {
+      renderPackageCards(
+        {
+          coreutils: { headline_x: "—", tools_ok: 0, headline: "pending" },
+          grep: { headline_x: "—", tools_ok: 0, headline: "pending" },
+          findutils: { headline_x: "—", tools_ok: 0, headline: "pending" },
+          diffutils: { headline_x: "—", tools_ok: 0, headline: "pending" },
+        },
+        null
+      );
     }
-    const summary =
-      suite.summary || computeSummaryFallback(suite.tools) || null;
-    renderOverall(summary, suite.meta);
-    renderRaceCards(suite.showcase, suite.tools);
-    renderColdChart(suite.cold_startup);
-    renderStats(suite.tools, suite.meta, summary);
-    renderScoreboard(progress, suite);
+    wirePkgTabs(progress, suite, packages);
   });
 })();

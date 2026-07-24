@@ -4,16 +4,30 @@ Machine-readable and markdown tables for the website and README.
 
 | File | Role |
 |------|------|
-| [suite.json](suite.json) | Per-tool times + **overall summary**, showcase, cold-startup series |
-| [suite.md](suite.md) | Human table + overall headline |
+| [suite.json](suite.json) | Per-tool times + **per-package** summaries, showcase, cold-startup series |
+| [suite.md](suite.md) | Human tables split by GNU package set |
 
-## Overall headline
+## Package sets (not one blended total)
 
-`summary.headline` / `summary.headline_x` / `summary.pct_faster_geo` are the single source of truth:
+f00tils replaces **four** GNU packages. Totals are **never** blended across sets:
 
-- **×** = geometric mean of per-tool speedups (`f00-* --core` vs GNU)
-- **% faster** = `(geo − 1) × 100`
-- Stamped into **README**, **file_id.diz**, and the website hero / race charts
+| Key | GNU package | Tools (examples) |
+|-----|-------------|------------------|
+| `coreutils` | GNU coreutils | ls, cat, md5sum, … |
+| `grep` | GNU grep | grep, egrep, fgrep |
+| `findutils` | GNU findutils | find, xargs |
+| `diffutils` | GNU diffutils | diff, cmp, diff3, sdiff |
+
+`suite.json` fields:
+
+- `packages.coreutils|grep|findutils|diffutils` — geo means, win counts, wall/CPU/RSS headlines
+- `summary` — **coreutils only** (back-compat for older readers)
+- `tools[].package` — which set the row belongs to
+- `meta.packages` — short headlines per set
+
+Website hero uses **coreutils** headline only; package cards show all four.
+
+`file_id.diz` is stamped for GitHub Release assets (not spotlighted on the site).
 
 ## Regenerate
 
