@@ -843,6 +843,17 @@ section {
   font-weight: 700;
   color: var(--accent, #7ec8ff);
 }
+.pkg-x-sub {
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.02em;
+}
+.pkg-cpu {
+  margin: 0 0 0.25rem;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 1.05rem;
+}
 .pkg-meta {
   margin: 0;
   line-height: 1.35;

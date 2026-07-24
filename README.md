@@ -221,7 +221,7 @@ Beyond coreutils, f00tils also targets **grep**, **findutils**, and **diffutils*
 ## Benchmarks
 
 <!-- bench-headline:start -->
-**GNU coreutils:** 1.3× (65/89 wins · CPU 1.283×) · **GNU grep:** 3.4× (3/3 wins · CPU 3.315×) · **GNU findutils:** 1.6× (2/2 wins · CPU 1.667×) · **GNU diffutils:** 1× (2/4 wins · CPU 1.061×)
+**GNU coreutils:** wall 2.6× · CPU 2.8× (86/89 wall wins · 87/89 CPU wins) · **GNU grep:** wall 9× · CPU 10.1× (3/3 wall wins · 3/3 CPU wins) · **GNU findutils:** wall 3.6× · CPU 3.7× (2/2 wall wins · 2/2 CPU wins) · **GNU diffutils:** wall 2× · CPU 2.1× (4/4 wall wins · 4/4 CPU wins)
 <!-- bench-headline:end -->
 
 Warm cache, **spawn-inclusive**, median of N runs. Compare `f00-* --core` to `/usr/bin/*` on Linux x86-64.
@@ -236,24 +236,24 @@ Per-tool tables (command, sample output, GNU time, f00 time):
 Representative results (from latest suite bench — do not hand-edit; CI overwrites):
 
 <!-- bench-table:start -->
-_CI / suite bench · `2026-07-24T18:20:41Z` · N=2 median · x86_64 · Linux 7.1.4-arch1-1_ · **totals are per package set, not blended**
+_CI / suite bench · `2026-07-24T18:27:34Z` · N=5 median · x86_64 · Linux 7.1.4-arch1-1_ · **totals are per package set, not blended**
 
 | Package | Tool | Command | GNU wall | f00 wall | Speed | CPU × |
 |---------|------|---------|---------:|---------:|------:|------:|
-| coreutils | `true` | `f00-true --core` | 0.71 ms | **0.43 ms** | **~1.7×** | **~1.5×** |
-| coreutils | `basename` | `f00-basename --core /usr/bin/ls` | 0.67 ms | **0.63 ms** | **~1.1×** | **~0.9×** |
-| coreutils | `nproc` | `f00-nproc --core` | 0.75 ms | **0.48 ms** | **~1.5×** | **~1.5×** |
-| coreutils | `whoami` | `f00-whoami --core` | 1.43 ms | **0.37 ms** | **~3.8×** | **~3.7×** |
-| coreutils | `cat` | `f00-cat --core fixture.txt` | 0.68 ms | **0.63 ms** | **~1.1×** | **~1.2×** |
-| coreutils | `wc` | `f00-wc --core -l fixture.txt` | 0.78 ms | **0.93 ms** | **~0.8×** | **~0.8×** |
-| coreutils | `md5sum` | `f00-md5sum --core fixture.txt` | 1.26 ms | **0.99 ms** | **~1.3×** | **~1.3×** |
-| coreutils | `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.11 ms | **0.81 ms** | **~1.4×** | **~1.3×** |
-| coreutils | `sort` | `f00-sort --core fixture.txt` | 0.77 ms | **0.82 ms** | **~0.9×** | **~0.9×** |
-| coreutils | `ls` | `f00-ls --core -1 dir` | 0.77 ms | **0.91 ms** | **~0.8×** | **~0.8×** |
-| grep | `grep` | `f00-grep --core -F hello fixture.txt` | 1.82 ms | **0.85 ms** | **~2.1×** | **~2.1×** |
-| findutils | `find` | `f00-find --core -maxdepth 1 -name '*.txt' /tmp/f00-suite-bench.5s3c64yd/dir` | 1.63 ms | **0.96 ms** | **~1.7×** | **~1.8×** |
-| diffutils | `diff` | `f00-diff --core -u a.txt b.txt` | 1.08 ms | **1.20 ms** | **~0.9×** | **~0.9×** |
-| diffutils | `cmp` | `f00-cmp --core fixture.txt fixture.txt` | 1.19 ms | **1.30 ms** | **~0.9×** | **~0.9×** |
+| coreutils | `true` | `f00-true --core` | 0.22 ms | **0.08 ms** | **~2.7×** | **~2.8×** |
+| coreutils | `basename` | `f00-basename --core /usr/bin/ls` | 0.22 ms | **0.09 ms** | **~2.4×** | **~2.8×** |
+| coreutils | `nproc` | `f00-nproc --core` | 0.40 ms | **0.08 ms** | **~4.8×** | **~6.1×** |
+| coreutils | `whoami` | `f00-whoami --core` | 1.25 ms | **0.08 ms** | **~15.7×** | **~18.6×** |
+| coreutils | `cat` | `f00-cat --core fixture.txt` | 0.23 ms | **0.10 ms** | **~2.2×** | **~2.6×** |
+| coreutils | `wc` | `f00-wc --core -l fixture.txt` | 0.33 ms | **0.30 ms** | **~1.1×** | **~1.1×** |
+| coreutils | `md5sum` | `f00-md5sum --core fixture.txt` | 0.88 ms | **0.20 ms** | **~4.4×** | **~4.4×** |
+| coreutils | `sha256sum` | `f00-sha256sum --core fixture.txt` | 0.83 ms | **0.25 ms** | **~3.3×** | **~2.9×** |
+| coreutils | `sort` | `f00-sort --core fixture.txt` | 0.65 ms | **0.53 ms** | **~1.2×** | **~1.2×** |
+| coreutils | `ls` | `f00-ls --core -1 dir` | 0.28 ms | **0.21 ms** | **~1.4×** | **~1.4×** |
+| grep | `grep` | `f00-grep --core -F hello fixture.txt` | 1.29 ms | **0.16 ms** | **~7.9×** | **~9.2×** |
+| findutils | `find` | `f00-find --core -maxdepth 1 -name '*.txt' /tmp/f00-suite-bench.4qer4dic/dir` | 1.38 ms | **0.21 ms** | **~6.6×** | **~7.3×** |
+| diffutils | `diff` | `f00-diff --core -u a.txt b.txt` | 0.39 ms | **0.33 ms** | **~1.2×** | **~1.1×** |
+| diffutils | `cmp` | `f00-cmp --core fixture.txt fixture.txt` | 0.26 ms | **0.17 ms** | **~1.5×** | **~1.6×** |
 <!-- bench-table:end -->
 
 Reproduce:
@@ -442,8 +442,8 @@ same file as an asset. Keep monospaced when you view it.
 █  MIT · 2026-07-24 · 115 tools · 4 GNU packages  █
 █  modern default · --core for scripts             █
 █  coreutils · grep · findutils · diffutils        █
-█  coreutils 1.3× · per-set totals (not blended)   █
-█  core 1.3× · grep 3.4× · find 1.6× · diff 1×     █
+█  coreutils 2.6× · per-set totals (not blended)   █
+█  core 2.6× · grep 9× · find 3.6× · diff 2×       █
 █  https://f00.sh · github:theesfeld/f00           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    

@@ -134,22 +134,14 @@
     const total = f00 > 0 ? gnu / f00 : null;
     const x = Math.round(geo * 10) / 10;
     const pct = Math.round((geo - 1) * 100);
-    const cpuOk = ok.filter(
-      (t) => t.cpu_ratio != null && t.cpu_ratio > 0
-    );
+    const cpuOk = ok.filter((t) => t.cpu_ratio != null && t.cpu_ratio > 0);
     const cpuGeo = cpuOk.length
       ? Math.exp(
           cpuOk.reduce((a, t) => a + Math.log(t.cpu_ratio), 0) / cpuOk.length
         )
       : null;
-    const memOk = ok.filter(
-      (t) => t.mem_ratio != null && t.mem_ratio > 0
-    );
-    const memGeo = memOk.length
-      ? Math.exp(
-          memOk.reduce((a, t) => a + Math.log(t.mem_ratio), 0) / memOk.length
-        )
-      : null;
+    const cpuX =
+      cpuGeo != null ? `${Math.round(cpuGeo * 10) / 10}×` : "—";
     return {
       package: pkg,
       package_label: label,
@@ -160,11 +152,14 @@
       ratio_total: total,
       pct_faster_geo: pct,
       cpu_ratio_geo: cpuGeo,
-      mem_ratio_geo: memGeo,
+      cpu_wins: cpuOk.filter((t) => t.cpu_ratio > 1).length,
+      cpu_tools_ok: cpuOk.length,
       headline_x: `${x}×`,
-      headline_pct: `${pct}% faster (${pkg})`,
-      headline: `${x}× faster than GNU ${label}`,
-      method: `geometric mean of per-tool speedups (f00-* --core vs GNU ${label})`,
+      headline_cpu_x: cpuX,
+      headline_pct: `${pct}% faster wall (${pkg})`,
+      headline: `${x}× wall vs GNU ${label}`,
+      headline_cpu: cpuGeo != null ? `${cpuX} CPU vs GNU ${label}` : null,
+      method: `separate wall and CPU geos (f00-* --core vs GNU ${label})`,
     };
   }
 
@@ -221,23 +216,29 @@
     const cards = PKG_ORDER.map((p) => {
       const s = (packages && packages[p]) || {};
       const hx = s.headline_x || "—";
+      const cx =
+        s.headline_cpu_x ||
+        (s.cpu_ratio_geo != null
+          ? `${Math.round(Number(s.cpu_ratio_geo) * 10) / 10}×`
+          : "—");
       const n = s.tools_ok != null ? s.tools_ok : 0;
       const wins = s.tools_win != null ? `${s.tools_win}/${n}` : "—";
-      const cpu =
-        s.cpu_ratio_geo != null ? `${Number(s.cpu_ratio_geo).toFixed(2)}× CPU` : "CPU —";
-      const rss =
-        s.mem_ratio_geo != null ? `${Number(s.mem_ratio_geo).toFixed(2)}× RSS` : "RSS —";
+      const cpuWins =
+        s.cpu_wins != null && s.cpu_tools_ok != null
+          ? `${s.cpu_wins}/${s.cpu_tools_ok}`
+          : "—";
       return (
         `<article class="pkg-card" data-pkg="${esc(p)}">` +
         `<header><span class="pkg-name">${esc(PKG_LABEL[p])}</span>` +
-        `<span class="pkg-x">${esc(hx)}</span></header>` +
-        `<p class="pkg-meta muted small">${n} timed · ${esc(wins)} wall wins · ${esc(cpu)} · ${esc(rss)}</p>` +
+        `<span class="pkg-x">${esc(hx)} <span class="pkg-x-sub">wall</span></span></header>` +
+        `<p class="pkg-cpu"><strong>${esc(cx)}</strong> <span class="muted">CPU</span></p>` +
+        `<p class="pkg-meta muted small">${n} timed · wall wins ${esc(wins)} · CPU wins ${esc(cpuWins)}</p>` +
         `</article>`
       );
     }).join("");
     host.innerHTML = cards;
 
-    // Hero shows coreutils set (primary), not a blend
+    // Hero shows coreutils wall + CPU (separate), not a blend across packages
     const core = (packages && packages.coreutils) || {};
     const hero = document.getElementById("hero-speed");
     if (hero && core.headline_x) {
@@ -246,14 +247,17 @@
       const sub = document.getElementById("hero-speed-sub");
       const lab = document.getElementById("hero-speed-label");
       if (xEl) xEl.textContent = core.headline_x;
-      if (lab) lab.textContent = "vs GNU coreutils";
+      if (lab) lab.textContent = "wall vs GNU coreutils";
       if (sub) {
+        const cpuX =
+          core.headline_cpu_x ||
+          (core.cpu_ratio_geo != null
+            ? `${Number(core.cpu_ratio_geo).toFixed(1)}×`
+            : null);
         sub.textContent = [
+          cpuX ? `CPU ${cpuX}` : null,
           core.tools_ok != null ? `${core.tools_ok} tools` : null,
-          core.cpu_ratio_geo != null
-            ? `CPU ${Number(core.cpu_ratio_geo).toFixed(1)}×`
-            : null,
-          "per package · not blended",
+          "wall · CPU separate · per package",
         ]
           .filter(Boolean)
           .join(" · ");
@@ -264,7 +268,13 @@
     if (claim) {
       claim.textContent = PKG_ORDER.map((p) => {
         const s = packages[p] || {};
-        return s.headline_x ? `${PKG_LABEL[p]} ${s.headline_x}` : null;
+        if (!s.headline_x) return null;
+        const cpu =
+          s.headline_cpu_x ||
+          (s.cpu_ratio_geo != null
+            ? `${Number(s.cpu_ratio_geo).toFixed(1)}×`
+            : "—");
+        return `${PKG_LABEL[p]} wall ${s.headline_x} / CPU ${cpu}`;
       })
         .filter(Boolean)
         .join(" · ");
@@ -414,17 +424,17 @@
 
     if (metaEl) {
       const bits = [];
-      if (summary && summary.headline) bits.push(summary.headline);
+      if (summary && summary.headline) bits.push(`Wall ${summary.headline}`);
       else bits.push(`GNU ${label}`);
       if (summary && summary.headline_cpu) bits.push(summary.headline_cpu);
       if (meta && meta.machine) bits.push(meta.machine);
       if (meta && meta.generated_at) bits.push(meta.generated_at);
-      bits.push("per package · not blended");
+      bits.push("wall · CPU separate · per package");
       metaEl.textContent = bits.join(" · ");
     }
 
     const lbl = document.getElementById("stat-overall-lbl");
-    if (lbl) lbl.textContent = `${label} geo`;
+    if (lbl) lbl.textContent = `${label} wall`;
 
     if (!stats) return;
     if (!ok.length && !(summary && summary.tools_ok)) {
@@ -489,9 +499,8 @@
     if (b && b.status === "ok") {
       g = fmtMs(b.time_gnu_ms);
       f = `<strong>${esc(fmtMs(b.time_f00_ms))}</strong>`;
-      const bits = [fmtRatio(b.ratio)];
+      const bits = [`wall ${fmtRatio(b.ratio)}`];
       if (b.cpu_ratio != null) bits.push(`CPU ${fmtRatio(b.cpu_ratio)}`);
-      if (b.mem_ratio != null) bits.push(`RSS ${fmtRatio(b.mem_ratio)}`);
       x = bits.join(" · ");
     } else if (r.speed === "win") {
       x = "<strong>win</strong>";

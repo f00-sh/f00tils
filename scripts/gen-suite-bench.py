@@ -2,7 +2,13 @@
 """Generate per-tool bench data for the website: tool, command, output, times.
 
 Totals are **per GNU package set** (coreutils / grep / findutils / diffutils),
-not one blended 115-tool average. Also records CPU (user+sys) + peak RSS.
+not one blended 115-tool average.
+
+Two separate averages (never mixed into one score):
+  - wall geo  — spawn-inclusive median wall (GNU÷f00)
+  - CPU geo   — user+sys from children rusage (GNU÷f00)
+
+RSS / peak memory is not measured (uninformative for these short tools).
 
 Writes:
   site/bench/suite.json
@@ -18,6 +24,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import resource
 import statistics
 import subprocess
 import sys
@@ -121,101 +128,57 @@ def find_gnu(name: str) -> str | None:
     return None
 
 
-def _run_once_wait4(
+def _run_once(
     cmd: list[str], stdin: bytes | None = None
-) -> tuple[float, float, float, int]:
-    """One spawn via fork/exec + wait4.
+) -> tuple[float, float]:
+    """One spawn via subprocess (low harness overhead) + children rusage CPU.
 
-    Returns (wall_s, user_s, sys_s, maxrss_kb) for *this* child only.
-    Linux: ru_maxrss is kilobytes. Falls back to wall-only if fork/wait4 missing.
+    Returns (wall_s, cpu_s) where cpu_s = user+sys for the reaped child.
+    Wall is spawn-inclusive perf_counter around subprocess.run — same style as
+    the historical 2.5× suite. CPU is a *separate* metric from RUSAGE_CHILDREN
+    deltas (not mixed into wall). RSS is not collected.
     """
-    if not hasattr(os, "fork") or not hasattr(os, "wait4"):
-        t0 = time.perf_counter()
-        if stdin is None:
-            subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-        else:
-            subprocess.run(
-                cmd,
-                input=stdin,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-        return time.perf_counter() - t0, 0.0, 0.0, 0
+    kw: dict[str, Any] = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "check": False,
+    }
+    if stdin is None:
+        kw["stdin"] = subprocess.DEVNULL
+    else:
+        kw["input"] = stdin
 
-    r_in = w_in = None
-    if stdin is not None:
-        r_in, w_in = os.pipe()
-
-    pid = os.fork()
-    if pid == 0:
-        # child
-        try:
-            devnull = os.open(os.devnull, os.O_RDWR)
-            if stdin is None:
-                os.dup2(devnull, 0)
-            else:
-                os.dup2(r_in, 0)
-                os.close(r_in)
-                os.close(w_in)
-            os.dup2(devnull, 1)
-            os.dup2(devnull, 2)
-            if devnull > 2:
-                os.close(devnull)
-            os.execvp(cmd[0], cmd)
-        except Exception:
-            os._exit(127)
-
-    # parent
-    if stdin is not None:
-        assert r_in is not None and w_in is not None
-        os.close(r_in)
-        try:
-            os.write(w_in, stdin)
-        finally:
-            os.close(w_in)
-
+    ru0 = resource.getrusage(resource.RUSAGE_CHILDREN)
     t0 = time.perf_counter()
-    _pid, _status, ru = os.wait4(pid, 0)
+    subprocess.run(cmd, **kw)
     wall = time.perf_counter() - t0
-    # Linux: KB; Darwin: bytes — normalize later if needed (CI is Linux)
-    maxrss = int(getattr(ru, "ru_maxrss", 0) or 0)
-    return wall, float(ru.ru_utime), float(ru.ru_stime), maxrss
+    ru1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu = (ru1.ru_utime - ru0.ru_utime) + (ru1.ru_stime - ru0.ru_stime)
+    # Clamp tiny negative / zero noise from rusage granularity
+    if cpu < 0:
+        cpu = 0.0
+    return wall, cpu
 
 
 def measure_runs(
     cmd: list[str], n: int = N, stdin: bytes | None = None, warm: int = 3
 ) -> dict[str, Any]:
-    """Warm then collect n samples: wall, cpu (user+sys), peak RSS."""
+    """Warm then collect n samples: wall and CPU (user+sys) as separate series."""
     for _ in range(warm):
-        _run_once_wait4(cmd, stdin=stdin)
+        _run_once(cmd, stdin=stdin)
 
     walls: list[float] = []
     cpus: list[float] = []
-    rss: list[int] = []
     for _ in range(n):
-        wall, user, sys_t, maxrss = _run_once_wait4(cmd, stdin=stdin)
+        wall, cpu = _run_once(cmd, stdin=stdin)
         walls.append(wall)
-        cpus.append(user + sys_t)
-        if maxrss > 0:
-            rss.append(maxrss)
+        cpus.append(cpu)
 
-    wall_med = statistics.median(walls)
-    cpu_med = statistics.median(cpus) if cpus else 0.0
-    rss_med = int(statistics.median(rss)) if rss else 0
     return {
         "wall_s": walls,
         "cpu_s": cpus,
-        "rss_kb": rss,
-        "wall_med_s": wall_med,
-        "cpu_med_s": cpu_med,
-        "rss_med_kb": rss_med,
+        "wall_med_s": statistics.median(walls),
+        "cpu_med_s": statistics.median(cpus) if cpus else 0.0,
     }
 
 
@@ -237,7 +200,10 @@ def _geo_mean(vals: list[float]) -> float | None:
 
 
 def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
-    """Wall/CPU/memory totals for one GNU package set (not a cross-set blend)."""
+    """Separate wall and CPU geos for one GNU package set (not a cross-set blend).
+
+    Wall geo and CPU geo are independent averages — never blended into one score.
+    """
     label = PACKAGE_LABELS.get(package, package)
     ok = [
         r
@@ -248,6 +214,11 @@ def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
         and isinstance(r.get("time_gnu_ms"), (int, float))
         and isinstance(r.get("time_f00_ms"), (int, float))
     ]
+    method = (
+        "separate geo means of per-tool wall and CPU ratios "
+        f"(f00-* --core vs {label}; spawn-inclusive wall median; "
+        "CPU = children rusage user+sys)"
+    )
     if not ok:
         return {
             "package": package,
@@ -264,25 +235,16 @@ def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
             "cpu_ratio_median": None,
             "cpu_wins": 0,
             "cpu_tools_ok": 0,
-            "mem_ratio_geo": None,
-            "mem_ratio_median": None,
-            "mem_wins": 0,
-            "mem_tools_ok": 0,
             "sum_gnu_ms": None,
             "sum_f00_ms": None,
             "sum_gnu_cpu_ms": None,
             "sum_f00_cpu_ms": None,
-            "sum_gnu_rss_kb": None,
-            "sum_f00_rss_kb": None,
             "headline_x": "—",
+            "headline_cpu_x": "—",
             "headline_pct": "—",
             "headline": f"bench pending vs {label}",
             "headline_cpu": None,
-            "headline_mem": None,
-            "method": (
-                "geometric mean of per-tool wall/CPU/RSS ratios "
-                f"(f00-* --core vs {label}; spawn-inclusive median; wait4 rusage)"
-            ),
+            "method": method,
         }
 
     ratios = [float(r["ratio"]) for r in ok]
@@ -296,7 +258,7 @@ def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
     pct_geo = (ratio_geo - 1.0) * 100.0
     pct_total = ((ratio_total - 1.0) * 100.0) if ratio_total else None
 
-    # CPU: ratio = gnu_cpu / f00_cpu  (>1 ⇒ f00 uses less CPU time)
+    # CPU geo is independent of wall geo (ratio = gnu_cpu / f00_cpu)
     cpu_ok = [
         r
         for r in ok
@@ -312,41 +274,19 @@ def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
     sum_gnu_cpu = sum(float(r["cpu_gnu_ms"]) for r in cpu_ok) if cpu_ok else None
     sum_f00_cpu = sum(float(r["cpu_f00_ms"]) for r in cpu_ok) if cpu_ok else None
 
-    # Memory: ratio = gnu_rss / f00_rss  (>1 ⇒ f00 peaks lower)
-    mem_ok = [
-        r
-        for r in ok
-        if isinstance(r.get("rss_gnu_kb"), (int, float))
-        and isinstance(r.get("rss_f00_kb"), (int, float))
-        and r["rss_f00_kb"] > 0
-        and r["rss_gnu_kb"] > 0
-    ]
-    mem_ratios = [float(r["rss_gnu_kb"]) / float(r["rss_f00_kb"]) for r in mem_ok]
-    mem_geo = _geo_mean(mem_ratios)
-    mem_med = statistics.median(mem_ratios) if mem_ratios else None
-    mem_wins = sum(1 for r in mem_ratios if r > 1.0)
-    sum_gnu_rss = sum(float(r["rss_gnu_kb"]) for r in mem_ok) if mem_ok else None
-    sum_f00_rss = sum(float(r["rss_f00_kb"]) for r in mem_ok) if mem_ok else None
-
     x_disp = round(ratio_geo, 1)
     pct_disp = int(round(pct_geo))
-    headline = f"{x_disp:g}× faster than {label}"
-    headline_pct = f"{pct_disp}% faster ({package})"
+    headline = f"{x_disp:g}× wall vs {label}"
+    headline_pct = f"{pct_disp}% faster wall ({package})"
     headline_cpu = None
+    headline_cpu_x = "—"
     if cpu_geo is not None:
         cx = round(cpu_geo, 1)
+        headline_cpu_x = f"{cx:g}×"
         headline_cpu = (
-            f"{cx:g}× less CPU than {label}"
+            f"{cx:g}× CPU vs {label}"
             if cpu_geo >= 1.0
             else f"{round(1.0 / cpu_geo, 1):g}× more CPU than {label}"
-        )
-    headline_mem = None
-    if mem_geo is not None:
-        mx = round(mem_geo, 1)
-        headline_mem = (
-            f"{mx:g}× less peak RSS than {label}"
-            if mem_geo >= 1.0
-            else f"{round(1.0 / mem_geo, 1):g}× more peak RSS than {label}"
         )
 
     return {
@@ -368,21 +308,12 @@ def compute_summary(rows: list[dict], *, package: str = "coreutils") -> dict:
         "cpu_tools_ok": len(cpu_ok),
         "sum_gnu_cpu_ms": round(sum_gnu_cpu, 2) if sum_gnu_cpu is not None else None,
         "sum_f00_cpu_ms": round(sum_f00_cpu, 2) if sum_f00_cpu is not None else None,
-        "mem_ratio_geo": round(mem_geo, 3) if mem_geo is not None else None,
-        "mem_ratio_median": round(mem_med, 3) if mem_med is not None else None,
-        "mem_wins": mem_wins,
-        "mem_tools_ok": len(mem_ok),
-        "sum_gnu_rss_kb": round(sum_gnu_rss, 1) if sum_gnu_rss is not None else None,
-        "sum_f00_rss_kb": round(sum_f00_rss, 1) if sum_f00_rss is not None else None,
         "headline_x": f"{x_disp:g}×",
+        "headline_cpu_x": headline_cpu_x,
         "headline_pct": headline_pct,
         "headline": headline,
         "headline_cpu": headline_cpu,
-        "headline_mem": headline_mem,
-        "method": (
-            "geometric mean of per-tool wall/CPU/RSS ratios "
-            f"(f00-* --core vs {label}; spawn-inclusive median; wait4 rusage)"
-        ),
+        "method": method,
     }
 
 
@@ -583,11 +514,8 @@ def main() -> int:
                         "time_f00_ms": round(fm["wall_med_s"] * 1000, 3),
                         "cpu_gnu_ms": None,
                         "cpu_f00_ms": round(fm["cpu_med_s"] * 1000, 3),
-                        "rss_gnu_kb": None,
-                        "rss_f00_kb": fm["rss_med_kb"] or None,
                         "ratio": None,
                         "cpu_ratio": None,
-                        "mem_ratio": None,
                         "status": "skip-no-gnu",
                     }
                 )
@@ -601,11 +529,8 @@ def main() -> int:
                 f_ms = f_m["wall_med_s"] * 1000
                 g_cpu = g_m["cpu_med_s"] * 1000
                 f_cpu = f_m["cpu_med_s"] * 1000
-                g_rss = g_m["rss_med_kb"]
-                f_rss = f_m["rss_med_kb"]
                 ratio = (g_ms / f_ms) if f_ms > 0 else None
                 cpu_ratio = (g_cpu / f_cpu) if f_cpu > 0 and g_cpu > 0 else None
-                mem_ratio = (g_rss / f_rss) if f_rss > 0 and g_rss > 0 else None
 
                 # For cold-start tools keep raw sample series for line charts
                 if name in COLD_TOOLS:
@@ -617,17 +542,12 @@ def main() -> int:
                             "f00_ms": [round(t * 1000, 3) for t in f_m["wall_s"]],
                             "gnu_cpu_ms": [round(t * 1000, 3) for t in g_m["cpu_s"]],
                             "f00_cpu_ms": [round(t * 1000, 3) for t in f_m["cpu_s"]],
-                            "gnu_rss_kb": g_m["rss_kb"],
-                            "f00_rss_kb": f_m["rss_kb"],
                             "median_gnu_ms": round(g_ms, 3),
                             "median_f00_ms": round(f_ms, 3),
                             "median_gnu_cpu_ms": round(g_cpu, 3),
                             "median_f00_cpu_ms": round(f_cpu, 3),
-                            "median_gnu_rss_kb": g_rss,
-                            "median_f00_rss_kb": f_rss,
                             "ratio": round(ratio, 2) if ratio is not None else None,
                             "cpu_ratio": round(cpu_ratio, 2) if cpu_ratio is not None else None,
-                            "mem_ratio": round(mem_ratio, 2) if mem_ratio is not None else None,
                         }
                     )
 
@@ -645,11 +565,8 @@ def main() -> int:
                         "time_f00_ms": round(f_ms, 3),
                         "cpu_gnu_ms": round(g_cpu, 3),
                         "cpu_f00_ms": round(f_cpu, 3),
-                        "rss_gnu_kb": g_rss or None,
-                        "rss_f00_kb": f_rss or None,
                         "ratio": round(ratio, 2) if ratio is not None else None,
                         "cpu_ratio": round(cpu_ratio, 2) if cpu_ratio is not None else None,
-                        "mem_ratio": round(mem_ratio, 2) if mem_ratio is not None else None,
                         "status": "ok",
                     }
                 )
@@ -666,11 +583,8 @@ def main() -> int:
                         "time_f00_ms": None,
                         "cpu_gnu_ms": None,
                         "cpu_f00_ms": None,
-                        "rss_gnu_kb": None,
-                        "rss_f00_kb": None,
                         "ratio": None,
                         "cpu_ratio": None,
-                        "mem_ratio": None,
                         "status": f"error:{type(e).__name__}",
                     }
                 )
@@ -700,11 +614,8 @@ def main() -> int:
                     "time_f00_ms": r.get("time_f00_ms"),
                     "cpu_gnu_ms": r.get("cpu_gnu_ms"),
                     "cpu_f00_ms": r.get("cpu_f00_ms"),
-                    "rss_gnu_kb": r.get("rss_gnu_kb"),
-                    "rss_f00_kb": r.get("rss_f00_kb"),
                     "ratio": r.get("ratio"),
                     "cpu_ratio": r.get("cpu_ratio"),
-                    "mem_ratio": r.get("mem_ratio"),
                 }
             )
 
@@ -741,7 +652,10 @@ def main() -> int:
             "machine": os.uname().machine,
             "system": f"{os.uname().sysname} {os.uname().release}",
             "n_runs": N,
-            "method": "warm-cache spawn-inclusive median (wall + wait4 CPU/RSS)",
+            "method": (
+                "warm-cache spawn-inclusive median wall "
+                "+ separate children-rusage CPU (no RSS)"
+            ),
             "f00_version": subprocess.run(
                 [str(F00), "--version"], capture_output=True, text=True, check=False
             ).stdout.splitlines()[0]
@@ -749,13 +663,16 @@ def main() -> int:
             else "unknown",
             "notes": (
                 "f00 timed as f00-TOOL --core; GNU as /usr/bin/TOOL. "
-                "Wall clock includes process spawn. "
-                "CPU = user+sys (wait4); RSS = peak resident set (Linux KB)."
+                "Wall and CPU are separate averages (never blended). "
+                "Wall = spawn-inclusive perf_counter around subprocess. "
+                "CPU = user+sys via RUSAGE_CHILDREN delta. No RSS."
             ),
             "packages": {
                 p: {
                     "headline": packages[p].get("headline"),
                     "headline_x": packages[p].get("headline_x"),
+                    "headline_cpu": packages[p].get("headline_cpu"),
+                    "headline_cpu_x": packages[p].get("headline_cpu_x"),
                     "tools_ok": packages[p].get("tools_ok"),
                     "ratio_geo": packages[p].get("ratio_geo"),
                     "cpu_ratio_geo": packages[p].get("cpu_ratio_geo"),
@@ -790,10 +707,10 @@ def main() -> int:
             "",
             f"Host: {meta['machine']} · {meta['system']}",
             "",
-            "## Package totals",
+            "## Package totals (wall and CPU are separate averages)",
             "",
-            "| Package | Tools timed | Wall geo | Wall wins | CPU geo | RSS geo |",
-            "|---------|------------:|---------:|----------:|--------:|--------:|",
+            "| Package | Tools timed | Wall geo | Wall wins | CPU geo | CPU wins |",
+            "|---------|------------:|---------:|----------:|--------:|---------:|",
         ]
         for p in PACKAGES:
             s = packages[p]
@@ -805,7 +722,8 @@ def main() -> int:
             lines.append(
                 f"| **{PACKAGE_LABELS[p]}** (`{p}`) | {s.get('tools_ok')} | "
                 f"**{s.get('ratio_geo')}×** | {s.get('tools_win')}/{s.get('tools_ok')} | "
-                f"{s.get('cpu_ratio_geo') or '—'}× | {s.get('mem_ratio_geo') or '—'}× |"
+                f"**{s.get('cpu_ratio_geo') or '—'}×** | "
+                f"{s.get('cpu_wins')}/{s.get('cpu_tools_ok')} |"
             )
         lines.append("")
         for p in PACKAGES:
@@ -814,33 +732,34 @@ def main() -> int:
             lines.append(f"## {PACKAGE_LABELS[p]}")
             lines.append("")
             if s.get("headline"):
-                lines.append(f"**{s.get('headline')}** · {s.get('headline_cpu') or 'CPU —'} · {s.get('headline_mem') or 'RSS —'}")
+                lines.append(
+                    f"**Wall:** {s.get('headline')} · **CPU:** {s.get('headline_cpu') or '—'}"
+                )
                 lines.append("")
             if not pkg_rows:
                 lines.append("_No timed tools in this set yet._")
                 lines.append("")
                 continue
             lines.append(
-                "| Tool | Command (f00) | GNU ms | f00 ms | Speedup | "
-                "GNU CPU ms | f00 CPU ms | CPU × | GNU RSS KB | f00 RSS KB | Mem × |"
+                "| Tool | Command (f00) | GNU wall | f00 wall | Wall × | "
+                "GNU CPU | f00 CPU | CPU × |"
             )
             lines.append(
-                "|------|---------------|-------:|-------:|--------:|"
-                "----------:|-----------:|------:|-----------:|-----------:|------:|"
+                "|------|---------------|---------:|---------:|-------:|"
+                "--------:|--------:|------:|"
             )
             for r in pkg_rows:
                 lines.append(
                     f"| `{r['tool']}` | `{r['command_f00']}` | {_f(r['time_gnu_ms'])} | "
                     f"**{_f(r['time_f00_ms'])}** | {_r(r.get('ratio'))} | "
                     f"{_f(r.get('cpu_gnu_ms'))} | **{_f(r.get('cpu_f00_ms'))}** | "
-                    f"{_r(r.get('cpu_ratio'))} | "
-                    f"{_f(r.get('rss_gnu_kb'), 0)} | **{_f(r.get('rss_f00_kb'), 0)}** | "
-                    f"{_r(r.get('mem_ratio'))} |"
+                    f"{_r(r.get('cpu_ratio'))} |"
                 )
             lines.append("")
         lines.append(
-            "Ratios: wall/CPU/mem = GNU÷f00 (**>1 means f00 wins**). "
-            "CPU = user+sys; RSS = peak resident set (Linux KB)."
+            "Ratios wall/CPU = GNU÷f00 (**>1 means f00 wins**). "
+            "Wall and CPU geos are computed separately — not one blended score. "
+            "CPU = user+sys (children rusage)."
         )
         lines.append("")
         lines.append("Full machine-readable data: [suite.json](suite.json)")
@@ -852,7 +771,10 @@ def main() -> int:
         print(f"wrote {OUT_MD}")
         for p in PACKAGES:
             s = packages[p]
-            print(f"{p:12} wall={s.get('headline_x')} cpu={s.get('cpu_ratio_geo')} n={s.get('tools_ok')}")
+            print(
+                f"{p:12} wall={s.get('headline_x')} "
+                f"cpu={s.get('headline_cpu_x')} n={s.get('tools_ok')}"
+            )
         ok = sum(1 for r in rows if r["status"] == "ok")
         print(f"tools ok: {ok}/{len(rows)}")
         return 0
@@ -907,16 +829,17 @@ def update_readme_table(rows: list[dict], meta: dict, packages: dict) -> None:
         + f"\n{BENCH_END}"
     )
 
-    # One line per package
+    # One line per package — wall and CPU called out separately
     bits = []
     for p in PACKAGES:
         s = packages.get(p) or {}
         if not s.get("tools_ok"):
             continue
         bits.append(
-            f"**{PACKAGE_LABELS[p]}:** {s.get('headline_x', '—')} "
-            f"({s.get('tools_win', 0)}/{s.get('tools_ok', 0)} wins · "
-            f"CPU {s.get('cpu_ratio_geo', '—')}×)"
+            f"**{PACKAGE_LABELS[p]}:** wall {s.get('headline_x', '—')} · "
+            f"CPU {s.get('headline_cpu_x', '—')} "
+            f"({s.get('tools_win', 0)}/{s.get('tools_ok', 0)} wall wins · "
+            f"{s.get('cpu_wins', 0)}/{s.get('cpu_tools_ok', 0)} CPU wins)"
         )
     headline_block = (
         f"{HEADLINE_START}\n"
