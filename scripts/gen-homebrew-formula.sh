@@ -85,17 +85,17 @@ class F00 < Formula
       # f00tils brew: prepend libexec bare names when replace enabled
       _f00_libbin="#{libexec}"
       _f00_replace_enabled() {
-        local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}/f00/config"
-        [ -f "$cfg" ] || return 0
-        if grep -Eiq '^[[:space:]]*replace[[:space:]]*=[[:space:]]*(false|no|0|none)([[:space:]]|#|$)' "$cfg" 2>/dev/null; then
+        local cfg="\${XDG_CONFIG_HOME:-\${HOME}/.config}/f00/config"
+        [ -f "\$cfg" ] || return 0
+        if grep -Eiq '^[[:space:]]*replace[[:space:]]*=[[:space:]]*(false|no|0|none)([[:space:]]|#|$)' "\$cfg" 2>/dev/null; then
           return 1
         fi
         return 0
       }
-      if [ -d "$_f00_libbin" ] && _f00_replace_enabled; then
-        case ":${PATH}:" in
-          *":${_f00_libbin}:"*) ;;
-          *) PATH="${_f00_libbin}${PATH:+:}${PATH}"; export PATH ;;
+      if [ -d "\$_f00_libbin" ] && _f00_replace_enabled; then
+        case ":\${PATH}:" in
+          *":\${_f00_libbin}:"*) ;;
+          *) PATH="\${_f00_libbin}\${PATH:+:}\${PATH}"; export PATH ;;
         esac
       fi
       unset _f00_libbin
@@ -108,8 +108,8 @@ class F00 < Formula
       f00tils replaces coreutils by default via bare names in:
         #{libexec}
       Add to your shell rc (or source the profile snippet):
-        export PATH="#{libexec}:$PATH"
-      Or:  echo 'export PATH="#{libexec}:$PATH"' >> ~/.zshrc
+        export PATH="#{libexec}:\$PATH"
+      Or:  echo 'export PATH="#{libexec}:\$PATH"' >> ~/.zshrc
       Opt out:  f00-config replace off   # writes replace = false
     EOS
   end
