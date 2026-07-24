@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.21] - 2026-07-24
+
+### Fixed
+- **Theme dashboard**: picker now selects (and scrolls to) the **saved/current** theme on open, not always the first entry
+
+### Added
+- **Suite benches: CPU + peak RSS** vs GNU coreutils (wait4 rusage)
+  - per-tool `cpu_*_ms`, `rss_*_kb`, `cpu_ratio`, `mem_ratio` in `suite.json`
+  - overall geo means + headlines for CPU and memory
+  - README / suite.md / site hero + scoreboard show wall · CPU · RSS
+
 ## [0.15.20] - 2026-07-24
 
 ### Added

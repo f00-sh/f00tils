@@ -5,7 +5,7 @@
 (() => {
   "use strict";
 
-  const FALLBACK_VERSION = "v0.15.20";
+  const FALLBACK_VERSION = "v0.15.21";
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -117,6 +117,8 @@
     if (!summary) return;
     const hx = summary.headline_x || "—";
     const hp = summary.headline_pct || "";
+    const cpuH = summary.headline_cpu || "";
+    const memH = summary.headline_mem || "";
     const title = summary.headline || "faster than GNU coreutils overall";
 
     const hero = document.getElementById("hero-speed");
@@ -126,7 +128,14 @@
       const sub = document.getElementById("hero-speed-sub");
       if (xEl) xEl.textContent = hx;
       if (sub) {
-        sub.textContent = `${hp} · geo mean · ${summary.tools_ok || "?"} tools`;
+        const bits = [`${hp} · geo mean · ${summary.tools_ok || "?"} tools`];
+        if (summary.cpu_ratio_geo != null) {
+          bits.push(`CPU ${Number(summary.cpu_ratio_geo).toFixed(1)}×`);
+        }
+        if (summary.mem_ratio_geo != null) {
+          bits.push(`RSS ${Number(summary.mem_ratio_geo).toFixed(1)}×`);
+        }
+        sub.textContent = bits.join(" · ");
       }
     }
 
@@ -143,13 +152,21 @@
         od.textContent = [
           hp,
           summary.tools_win != null
-            ? `${summary.tools_win}/${summary.tools_ok} tools win`
+            ? `${summary.tools_win}/${summary.tools_ok} wall wins`
             : null,
           summary.ratio_median != null
             ? `median ${Number(summary.ratio_median).toFixed(2)}×`
             : null,
           summary.ratio_total != null
             ? `total-time ${Number(summary.ratio_total).toFixed(2)}×`
+            : null,
+          cpuH || null,
+          summary.cpu_ratio_geo != null
+            ? `CPU geo ${Number(summary.cpu_ratio_geo).toFixed(2)}× (${summary.cpu_wins || 0}/${summary.cpu_tools_ok || "?"} tools)`
+            : null,
+          memH || null,
+          summary.mem_ratio_geo != null
+            ? `RSS geo ${Number(summary.mem_ratio_geo).toFixed(2)}× (${summary.mem_wins || 0}/${summary.mem_tools_ok || "?"} tools)`
             : null,
         ]
           .filter(Boolean)
@@ -165,7 +182,16 @@
     }
 
     const claim = document.getElementById("scoreboard-speed-claim");
-    if (claim) claim.textContent = `${hx} faster overall (geo mean)`;
+    if (claim) {
+      const parts = [`${hx} faster overall (wall geo mean)`];
+      if (summary.cpu_ratio_geo != null) {
+        parts.push(`CPU ${Number(summary.cpu_ratio_geo).toFixed(1)}×`);
+      }
+      if (summary.mem_ratio_geo != null) {
+        parts.push(`RSS ${Number(summary.mem_ratio_geo).toFixed(1)}×`);
+      }
+      claim.textContent = parts.join(" · ");
+    }
   }
 
   function renderRaceCards(showcase, tools) {
@@ -368,7 +394,10 @@
         if (b && b.status === "ok") {
           g = fmtMs(b.time_gnu_ms);
           f = `<strong>${esc(fmtMs(b.time_f00_ms))}</strong>`;
-          x = fmtRatio(b.ratio);
+          const bits = [fmtRatio(b.ratio)];
+          if (b.cpu_ratio != null) bits.push(`CPU ${fmtRatio(b.cpu_ratio)}`);
+          if (b.mem_ratio != null) bits.push(`RSS ${fmtRatio(b.mem_ratio)}`);
+          x = bits.join(" · ");
         } else if (r.speed === "win") {
           x = "<strong>win</strong>";
         } else if (r.speed && r.speed !== "—") {

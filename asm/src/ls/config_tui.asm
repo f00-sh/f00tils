@@ -15,7 +15,7 @@ extern g_cfg_headers, g_cfg_line_numbers, g_cfg_syntax
 extern g_icons_when, g_icons_style
 extern is_tty, get_winsize, strlen, strcmp, memcpy
 extern theme_apply_name, theme_current_name, theme_count_builtins, theme_name_by_index
-extern theme_seed_user_dir, theme_init
+extern theme_seed_user_dir, theme_init, theme_apply_env
 extern color_path, color_num, color_ok, color_err, color_hdr, color_dim, color_reset
 extern config_upsert_theme, config_upsert_replace, replace_is_off, config_upsert_kv
 extern config_load
@@ -223,6 +223,13 @@ config_tui_run:
     mov [g_cols], eax
     call config_load                 ; load all g_cfg_* from XDG
     call theme_init
+    ; apply saved theme (then env) so picker + preview match ~/.config
+    lea rdi, [g_cfg_theme]
+    cmp byte [rdi], 0
+    je .th_env
+    call theme_apply_name
+.th_env:
+    call theme_apply_env
 
     call theme_count_builtins
     mov [theme_cnt], eax
@@ -235,7 +242,9 @@ config_tui_run:
     mov dword [theme_scr], 0
     mov dword [set_sel], 0
     mov byte [status], 0
-    call select_current_theme
+    call select_current_theme        ; cursor → current/saved theme
+    call ensure_visible
+    call live_preview
 
     call raw_on
     lea rsi, [ansi_alt]
@@ -859,17 +868,42 @@ icons_cycle_prev:
     jmp icons_cycle_next.store
 
 ; ── theme helpers ─────────────────────────────────────────
+; select_current_theme — put theme_sel on the active theme.
+; Prefer applied name (g_theme_name); if empty/miss, fall back to g_cfg_theme.
 select_current_theme:
+    push rbx
+    push r12
     call theme_current_name
     test rax, rax
-    jz .r
+    jz .try_cfg
     cmp byte [rax], 0
-    je .r
+    je .try_cfg
     mov r12, rax
+    call .find
+    test eax, eax
+    jnz .ok
+.try_cfg:
+    lea r12, [g_cfg_theme]
+    cmp byte [r12], 0
+    je .miss
+    call .find
+    test eax, eax
+    jnz .ok
+.miss:
+    pop r12
+    pop rbx
+    ret
+.ok:
+    pop r12
+    pop rbx
+    ret
+
+; r12 = name cstr → eax=1 and theme_sel set on match, else eax=0
+.find:
     xor ebx, ebx
 .lp:
     cmp ebx, [theme_cnt]
-    jae .r
+    jae .no
     mov edi, ebx
     call theme_name_by_index
     test rax, rax
@@ -880,10 +914,12 @@ select_current_theme:
     test eax, eax
     jnz .n
     mov [theme_sel], ebx
+    mov eax, 1
     ret
 .n: inc ebx
     jmp .lp
-.r: ret
+.no: xor eax, eax
+    ret
 
 live_preview:
     push rbx
