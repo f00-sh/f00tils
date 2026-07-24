@@ -52,10 +52,13 @@ extern config_main
 extern base64_main, basenc_main, base32_main, dircolors_main
 ; suite_misc
 extern chroot_main, stty_main, stdbuf_main, runcon_main, chcon_main
+; suite_search — grep / findutils / diffutils
+extern grep_main, egrep_main, fgrep_main
+extern find_main, xargs_main, diff_main, cmp_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.15.21", 10
+    db "f00-ls (f00) 0.16.0", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg
@@ -253,6 +256,13 @@ N stdbuf, "stdbuf"
 N runcon, "runcon"
 N chcon, "chcon"
 N config, "config"
+N grep, "grep"
+N egrep, "egrep"
+N fgrep, "fgrep"
+N find, "find"
+N xargs, "xargs"
+N diff, "diff"
+N cmp, "cmp"
 name_bracket: db "[", 0
 name_f00_bracket: db "f00-[", 0
 
@@ -368,6 +378,13 @@ util_table:
     dq name_runcon, runcon_main, name_f00_runcon, runcon_main
     dq name_chcon, chcon_main, name_f00_chcon, chcon_main
     dq name_config, config_main, name_f00_config, config_main
+    dq name_grep, grep_main, name_f00_grep, grep_main
+    dq name_egrep, egrep_main, name_f00_egrep, egrep_main
+    dq name_fgrep, fgrep_main, name_f00_fgrep, fgrep_main
+    dq name_find, find_main, name_f00_find, find_main
+    dq name_xargs, xargs_main, name_f00_xargs, xargs_main
+    dq name_diff, diff_main, name_f00_diff, diff_main
+    dq name_cmp, cmp_main, name_f00_cmp, cmp_main
     dq 0, 0
 
 dot_path:       db ".", 0

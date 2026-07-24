@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-24
+
+### Added
+- **Beyond coreutils:** first **grep / findutils / diffutils** tools in the multicall
+  - `grep` / `egrep` / `fgrep` — fixed-string + ERE subset; `-i/-v/-n/-c/-l/-L/-H/-h/-q/-w/-x/-F/-E/-e/-m/-r`; modern themed match highlight
+  - `find` — `-name` glob, `-type f|d`, `-maxdepth`, themed paths
+  - `xargs` — basic stdin → command (default `echo`)
+  - `diff` — unified line diff with modern +/- colors; `-q` brief
+  - `cmp` — byte compare
+- Product scope: f00tils as freestanding **GNU userland** (coreutils + grep + findutils + diffutils), same `--core` / modern / theme rules
+
 ## [0.15.21] - 2026-07-24
 
 ### Fixed

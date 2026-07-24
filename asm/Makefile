@@ -20,7 +20,8 @@ UTILS := ls cat true false yes nproc tty whoami basename dirname \
 	id groups uname arch date users who pinky uptime hostname \
 	nice nohup timeout kill test printf \
 	md5sum sha1sum sha256sum sha224sum sha384sum sha512sum b2sum cksum sum \
-	base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config
+	base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
+grep egrep fgrep find xargs diff cmp
 
 .PHONY: all clean install links test smoke parity speed ux-check
 
@@ -74,6 +75,9 @@ smoke: $(TARGET) links
 	./f00-wc -l Makefile
 	./f00-head -n 3 Makefile
 	./f00-seq 1 5
+	./f00-grep --core hello Makefile || true
+	./f00-find . -maxdepth 1 -name Makefile
+	./f00-diff --core Makefile Makefile; test $$? -eq 0
 	./f00-uname -a
 	./f00-id
 	echo abc | ./f00-tr a-z A-Z

@@ -2,7 +2,7 @@
 
 ## Project name
 
-**f00tils** — freestanding assembly **coreutils** replacement (coreutils → f00tils).
+**f00tils** — freestanding assembly **GNU userland** (coreutils + grep + findutils + diffutils) (coreutils → f00tils).
 
 - Product / narrative name: **f00tils**
 - Binary / multicall: **`f00`**, tools **`f00-*`**

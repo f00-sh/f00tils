@@ -1,0 +1,50 @@
+.TH F00-FIND 1 "2026" "f00 0.16.0" "User Commands"
+.SH NAME
+f00-find \- GNU coreutils-compatible find
+.SH SYNOPSIS
+.B f00-find
+[\fIOPTION\fR]... [\fIARG\fR]...
+.SH DESCRIPTION
+GNU coreutils-compatible find.
+.B f00-find
+is part of the
+.B f00
+suite: one freestanding x86-64 assembly multicall binary  — f00tils (the freestanding coreutils replacement).
+.PP
+Default mode is modern (color and richer layout where it applies).
+Use
+.B --core
+for strict GNU coreutils
+.B find
+presentation in scripts.
+.SH OPTIONS
+.TP
+\fB\-\-help\fR
+Show help and exit.
+.TP
+\fB\-\-version\fR
+Show version and exit.
+.TP
+\fB\-\-core\fR
+Use strict coreutils-compatible presentation.
+.TP
+\fB\-\-json\fR
+Write a JSON summary when the tool supports it.
+.TP
+\fB\-\-csv\fR
+Write a CSV summary when the tool supports it.
+.PP
+Run
+.B f00-find --help
+for the full flag list.
+.SH EXIT STATUS
+0 on success. Non-zero on error. Match coreutils classes under
+.BR --core
+when applicable.
+.SH AUTHOR
+f00 contributors. License MIT.
+.SH SEE ALSO
+.BR find (1),
+.BR f00 (1)
+.PP
+https://f00.sh
