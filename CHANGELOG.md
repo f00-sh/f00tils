@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.12] - 2026-07-24
+
+### Fixed
+- Package/install tool lists include **`config`** (`f00-config` / bare `config` under supersede dir)
 
 ## [0.15.11] - 2026-07-24
 

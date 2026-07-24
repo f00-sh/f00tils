@@ -71,7 +71,7 @@ class F00 < Formula
       id groups uname arch date users who pinky uptime hostname
       nice nohup timeout kill test printf
       md5sum sha1sum sha256sum sha224sum sha384sum sha512sum b2sum cksum sum
-      base64 basenc base32 dircolors chroot stty stdbuf runcon chcon
+      base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config
     ]
     utils.each do |u|
       bin.install_symlink "f00" => "f00-#{u}"

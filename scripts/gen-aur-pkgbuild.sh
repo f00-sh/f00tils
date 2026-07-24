@@ -100,7 +100,7 @@ EOS
            id groups uname arch date users who pinky uptime hostname \\
            nice nohup timeout kill test printf \\
            md5sum sha1sum sha256sum sha224sum sha384sum sha512sum b2sum cksum sum \\
-           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon; do
+           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config; do
     ln -s f00 "\${pkgdir}/usr/bin/f00-\${u}"
     ln -s ../../../bin/f00 "\${pkgdir}/usr/lib/f00/bin/\${u}"
   done
