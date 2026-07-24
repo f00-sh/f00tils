@@ -2,8 +2,8 @@
 # f00tils installer (binary: f00) — https://f00.sh
 #   curl -fsSL https://f00.sh/install.sh | bash
 #
-# f00tils: pure-assembly multicall coreutils replacement (Linux x86-64 only).
-# Default: REPLACE coreutils — multicall `f00` + f00-* + bare names (ls, cat, …)
+# f00tils: pure-assembly multicall GNU userland (coreutils+grep+findutils+diffutils).
+# Default: REPLACE bare names — multicall `f00` + all f00-* + bare names (ls, cat, grep, find, …)
 # in INSTALL_DIR (must win on PATH). Opt out: F00_SUPERSEDE=0 or config replace=false.
 #
 # Beta pin example:

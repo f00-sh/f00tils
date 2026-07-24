@@ -600,24 +600,50 @@ def main() -> int:
         # Back-compat: summary == coreutils package (primary set)
         summary = packages["coreutils"]
         by_tool = {r["tool"]: r for r in rows if r.get("status") == "ok"}
+
+        def _race_row(r: dict) -> dict:
+            return {
+                "tool": r["tool"],
+                "package": r.get("package") or "coreutils",
+                "command_f00": r.get("command_f00"),
+                "time_gnu_ms": r.get("time_gnu_ms"),
+                "time_f00_ms": r.get("time_f00_ms"),
+                "cpu_gnu_ms": r.get("cpu_gnu_ms"),
+                "cpu_f00_ms": r.get("cpu_f00_ms"),
+                "ratio": r.get("ratio"),
+                "cpu_ratio": r.get("cpu_ratio"),
+            }
+
+        # Per-package race lists: all timed tools, sorted by wall speedup
+        showcase_by_package: dict[str, list[dict]] = {}
+        for p in PACKAGES:
+            pkg_ok = [
+                r
+                for r in rows
+                if r.get("status") == "ok"
+                and r.get("package") == p
+                and r.get("ratio") is not None
+            ]
+            pkg_ok.sort(key=lambda r: float(r["ratio"]), reverse=True)
+            showcase_by_package[p] = [_race_row(r) for r in pkg_ok]
+
+        # Flat showcase for back-compat: curated names first, then fill per set
         showcase = []
+        seen: set[str] = set()
         for t in SHOWCASE_TOOLS:
             r = by_tool.get(t)
             if not r or r.get("ratio") is None:
                 continue
-            showcase.append(
-                {
-                    "tool": t,
-                    "package": r.get("package") or "coreutils",
-                    "command_f00": r.get("command_f00"),
-                    "time_gnu_ms": r.get("time_gnu_ms"),
-                    "time_f00_ms": r.get("time_f00_ms"),
-                    "cpu_gnu_ms": r.get("cpu_gnu_ms"),
-                    "cpu_f00_ms": r.get("cpu_f00_ms"),
-                    "ratio": r.get("ratio"),
-                    "cpu_ratio": r.get("cpu_ratio"),
-                }
-            )
+            showcase.append(_race_row(r))
+            seen.add(t)
+        for p in PACKAGES:
+            for r in showcase_by_package[p]:
+                if r["tool"] in seen:
+                    continue
+                # include every non-coreutils tool; cap coreutils extras in flat list
+                if p != "coreutils" or len([x for x in showcase if x["package"] == "coreutils"]) < 12:
+                    showcase.append(r)
+                    seen.add(r["tool"])
 
         # Aggregate cold-start: per-run mean across tools for fluid line chart
         cold_agg = None
@@ -686,6 +712,8 @@ def main() -> int:
             # back-compat for older site JS: coreutils summary only
             "summary": summary,
             "showcase": showcase,
+            # full per-package race lists (site renders each set separately)
+            "showcase_by_package": showcase_by_package,
             "cold_startup": cold_agg,
             "tools": rows,
         }

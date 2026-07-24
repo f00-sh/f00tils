@@ -891,6 +891,19 @@ section {
   padding: 0.05rem 0.45rem;
   vertical-align: middle;
 }
+.race-pkg {
+  margin: 0 0 1.75rem;
+}
+.race-pkg-title {
+  margin: 0 0 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+.race-pkg-grid {
+  margin: 0;
+}
 
 /* ── overall hero (benchmarks section) ──────────────────── */
 .overall-hero {

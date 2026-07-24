@@ -8,11 +8,12 @@ One multicall x86-64 Linux binary (no libc). Modern defaults for interactive wor
 
 | | |
 |---|---|
-| **Project** | **f00tils** (coreutils replacement suite) |
+| **Project** | **f00tils** — GNU **userland** replacement (4 packages) |
+| **Packages** | **coreutils** (106) · **grep** (3) · **findutils** (2) · **diffutils** (4) = **115** |
 | **Binary** | `f00` = **config hub/TUI**; `f00-*` tools; bare names via PATH replace |
 | **Default** | Modern (color, **Nerd File Icons**, table columns, chromed JSON/CSV) |
 | **Icons** | On by default (Nerd; ascii fallback if no font) · `emoji`/`glyph`/`ascii` skins · off under `--core` |
-| **Scripts** | `--core` — strict coreutils-compatible presentation |
+| **Scripts** | `--core` — byte-identical to the GNU tool |
 | **Engine** | Pure ASM multicall · ~650K static · no libc |
 | **License** | MIT |
 | **Status** | Released `v0.16.3` |
@@ -35,33 +36,34 @@ curl -fsSL https://f00.sh/install.sh | bash
 
 ## Why it matters
 
-Coreutils are correct and portable. They are not the speed or UX ceiling.
+GNU userland is correct and portable. It is not the speed or UX ceiling.
 
-**f00tils** ships the full tool surface as one multicall binary written in freestanding assembly. You keep script-safe behavior under `--core`, and you get modern presentation by default.
+**f00tils** ships **four** GNU package sets as one freestanding multicall: coreutils, grep, findutils, and diffutils. You keep script-safe **`--core`** (byte-identical + faster wall/CPU), and modern presentation by default.
 
 ---
 
 ## Product laws
 
 1. **Clone first (`--core`).** Covered GNU tools (coreutils, grep, findutils, diffutils) have `f00-*` names. Under **`--core`**, output is **byte-identical** to GNU for the same inputs (stdout/stderr + exit code) — scripts must not care which binary ran.
-2. **`--core` must win on resources.** The core path must beat GNU on **wall time and CPU** (user+sys). Correct but slower is unfinished.
+2. **`--core` must win on resources.** The core path must beat GNU on **wall time and CPU** (user+sys). Correct but slower is unfinished. Wall and CPU are **separate** averages — never blended; no RSS theater.
 3. **Modern is amazing (default).** Non-`--core` is not a pale GNU subset: theme tokens, chrome, icons, rich `--json`/`--csv`, and extra power (fd/rg/delta-class where it fits). Output may differ freely from GNU. Scripts stay on `--core`; humans get the good mode.
-4. **One binary.** Multicall by `argv0` (`f00-ls`, `ls`, `f00-grep`, …).
+4. **One binary.** Multicall by `argv0` (`f00-ls`, `ls`, `f00-grep`, `grep`, …).
 
 ---
 
 ## Feature parity
 
-| Area | GNU coreutils | **f00tils (ASM)** | uutils | busybox / toybox |
-|------|---------------|---------------|--------|------------------|
-| All coreutils *names* | Yes | **106/106 scoreboard** | Growing | Subset |
+| Area | GNU | **f00tils (ASM)** | uutils | busybox / toybox |
+|------|-----|-------------------|--------|------------------|
+| coreutils names | Yes | **106/106** | Growing | Subset |
+| grep / findutils / diffutils | Separate pkgs | **9/9 shipped** (depth varies) | Partial | Subset |
 | Script drop-in | Yes | **`--core`** | Flags vary | Reduced |
 | Modern default UX | No | **Yes** | Partial | Minimal |
 | Suite-wide `--json`/`--csv` | No | **Yes (`f00/v1`)** | Limited | No |
 | Pure freestanding ASM | No | **Yes** | No | C |
 | Multicall single binary | No* | **Yes** | Optional | Yes |
 
-\*coreutils ships many separate binaries.
+\*GNU ships many separate binaries across packages.
 
 ### Suite modern surface
 
@@ -70,13 +72,50 @@ Coreutils are correct and portable. They are not the speed or UX ceiling.
 | Color / theme chrome | **On** TTY (respects `NO_COLOR`) | Off |
 | Extra UX / features | **Yes** — best interactive experience | Minimal; script-safe only |
 | `--json` / `--csv` | Rich `f00/v1` where applicable | Available, plain |
-| Wall + CPU vs GNU | Should feel instant | **Must beat GNU wall and CPU** |
+| Wall + CPU vs GNU | Should feel instant | **Must beat GNU wall and CPU** (separate metrics) |
+
+---
+
+## Config & settings
+
+Bare **`f00`** is the config hub/TUI (Themes · Settings · Plugins) → `~/.config/f00/config`.
+
+| Setting | Effect |
+|---------|--------|
+| `replace` | Bare names on PATH run f00tils (**install default on**) |
+| `core` | Prefer GNU-plain presentation suite-wide |
+| `theme` | Named theme (truecolor / terminal / f00) |
+| `color` | auto / always / never |
+| `icons` | nerd / ascii / off |
+| animations / spinner | Motion on long work |
+| git / hyperlink / dirs-first / ignore-files | Modern **ls** |
+| headers / line-numbers / syntax | Modern **cat** |
+
+```bash
+f00                       # TUI
+f00-config                # CLI
+f00-config replace off    # keep GNU bare names
+```
+
+---
+
+## Package map (115 tools)
+
+| GNU package | Count | Shipped | `--core` depth | Scoreboard |
+|-------------|------:|--------:|:---------------|:-----------|
+| **coreutils** | 106 | 106/106 | full (common cases) | [COREUTILS-PROGRESS.md](docs/COREUTILS-PROGRESS.md) |
+| **grep** | 3 | 3/3 | full common | [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) |
+| **findutils** | 2 | 2/2 | partial | same |
+| **diffutils** | 4 | 4/4 | 1 full · 3 partial | same |
+| **Total** | **115** | **115/115** | mixed | website tabs |
+
+Also multicall extras: `config`, `hostname`, `kill`, `rev`, … (~119 argv0 names).
 
 ---
 
 ## Coreutils replacement progress
 
-**Goal: replace every GNU coreutils program.**
+**Goal: replace every GNU coreutils program** (one of four package sets).
 
 <!-- progress: total=106 shipped=106 core_full=106 core_partial=0 core_missing=0 -->
 **Progress:** **106/106** tools shipped · **`--core` depth:** 106 full · 0 partial · 0 missing
@@ -208,32 +247,52 @@ Detail: [docs/GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md) · scoreboard: [docs/CO
 
 ## GNU userland (grep · findutils · diffutils)
 
-Beyond coreutils, f00tils also targets **grep**, **findutils**, and **diffutils** under the same dual-track law (`--core` byte-identical + faster; modern amazing).
+Same dual-track law as coreutils (`--core` byte-identical + faster wall/CPU; modern amazing).
 
-**Scoreboard:** [docs/GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · **9/9** tools shipped (depth deepening).
+**Scoreboard:** [docs/GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · **9/9 shipped** · **4 full / 5 partial** (depth still crushing).
 
-| Package | Tools |
-|---------|--------|
-| grep | `grep` `egrep` `fgrep` |
-| findutils | `find` `xargs` |
-| diffutils | `diff` `cmp` `diff3` `sdiff` |
+### grep
+
+| # | GNU | f00 | shipped | `--core` | modern | Notes |
+|--:|:----|:----|:--------|:---------|:-------|:------|
+| 1 | `grep` | `f00-grep` | yes | **full** | deep | Common flags; no `-A/-B/-C`/PCRE yet |
+| 2 | `egrep` | `f00-egrep` | yes | **full** | yes | ≡ `grep -E` |
+| 3 | `fgrep` | `f00-fgrep` | yes | **full** | yes | ≡ `grep -F` |
+
+### findutils
+
+| # | GNU | f00 | shipped | `--core` | modern | Notes |
+|--:|:----|:----|:--------|:---------|:-------|:------|
+| 1 | `find` | `f00-find` | yes | **partial** | deep | `-name/-path/-type/-maxdepth/-mindepth`; more predicates TBD |
+| 2 | `xargs` | `f00-xargs` | yes | **partial** | yes | `-n/-0/-r`; quoting/ARG_MAX TBD |
+
+### diffutils
+
+| # | GNU | f00 | shipped | `--core` | modern | Notes |
+|--:|:----|:----|:--------|:---------|:-------|:------|
+| 1 | `diff` | `f00-diff` | yes | **partial** | deep | LCS unified; mtime headers TBD |
+| 2 | `cmp` | `f00-cmp` | yes | **full** | yes | mmap + qword |
+| 3 | `diff3` | `f00-diff3` | yes | **partial** | yes | 3-way + `-m` |
+| 4 | `sdiff` | `f00-sdiff` | yes | **partial** | deep | Side-by-side themed |
 
 ## Benchmarks
+
+**Per package set — wall and CPU are separate geos (never one 115-tool blend, never wall+CPU soup).**
 
 <!-- bench-headline:start -->
 **GNU coreutils:** wall 2.6× · CPU 2.8× (86/89 wall wins · 87/89 CPU wins) · **GNU grep:** wall 9× · CPU 10.1× (3/3 wall wins · 3/3 CPU wins) · **GNU findutils:** wall 3.6× · CPU 3.7× (2/2 wall wins · 2/2 CPU wins) · **GNU diffutils:** wall 2× · CPU 2.1× (4/4 wall wins · 4/4 CPU wins)
 <!-- bench-headline:end -->
 
-Warm cache, **spawn-inclusive**, median of N runs. Compare `f00-* --core` to `/usr/bin/*` on Linux x86-64.
+Warm cache, **spawn-inclusive** wall · **children rusage** CPU · median of N runs. `f00-* --core` vs `/usr/bin/*` on Linux x86-64.
 
-CI regenerates the full suite and this snapshot table on every push to `main` (same data as the website scoreboard).
+| View | Where |
+|------|--------|
+| Package averages + race bars by set | [f00.sh/#benchmarks](https://f00.sh/#benchmarks) |
+| Full per-tool scoreboard (tabs) | [f00.sh/#scoreboard](https://f00.sh/#scoreboard) |
+| Full markdown tables | [site/bench/suite.md](site/bench/suite.md) |
+| Machine JSON | [site/bench/suite.json](site/bench/suite.json) |
 
-Per-tool tables (command, sample output, GNU time, f00 time):
-
-- Website: [https://f00.sh/#benchmarks](https://f00.sh/#benchmarks) · [scoreboard](https://f00.sh/#scoreboard)
-- Data: [site/bench/suite.json](site/bench/suite.json) · [site/bench/suite.md](site/bench/suite.md)
-
-Representative results (from latest suite bench — do not hand-edit; CI overwrites):
+Representative snapshot (CI overwrites; **not** the full suite — see `suite.md` for every timed tool):
 
 <!-- bench-table:start -->
 _CI / suite bench · `2026-07-24T18:27:34Z` · N=5 median · x86_64 · Linux 7.1.4-arch1-1_ · **totals are per package set, not blended**
@@ -275,22 +334,22 @@ bash benches/parity.sh
 curl -fsSL https://f00.sh/install.sh | bash
 ```
 
-**Default is replace.** Installs multicall `f00`, every `f00-*`, and **bare names** (`ls`, `cat`, …) so f00tils is what you run when you type `cat`. GNU coreutils stay on disk; f00 wins on **PATH**.
+**Default is replace for the full tool surface.** Installs multicall `f00`, every `f00-*` in `TOOLS_ALL` (**coreutils + grep + egrep + fgrep + find + xargs + diff + cmp + diff3 + sdiff + hub extras**), and **bare names** for each (`ls`, `cat`, `grep`, `find`, `diff`, …). GNU packages stay on disk; f00 wins on **PATH**. This is not a partial alias list — `F00_TOOLS=all` is the default.
 
-| Method | What you get | Bare `ls`/`cat`? |
-|--------|----------------|------------------|
-| **curl** (default) | `f00` + `f00-*` + bare names in `~/.local/bin` | **Yes** (dir first on PATH) |
+| Method | What you get | Bare names? |
+|--------|----------------|-------------|
+| **curl** (default) | `f00` + all `f00-*` + bare names in `~/.local/bin` | **Yes** (dir first on PATH) |
 | **AUR / deb / rpm** | `f00` + `f00-*` in `/usr/bin`; bare names in `/usr/lib/f00/bin` | **Yes** via `/etc/profile.d/f00.sh` |
-| **Homebrew** | `f00` + `f00-*` in `bin`; bare names in `libexec` | **Yes** after PATH caveat / shellenv |
+| **Homebrew** | `f00` + `f00-*` in `bin`; bare names in `libexec` | **Yes** after PATH / shellenv |
 | curl + `F00_SUPERSEDE=0` | `f00` + `f00-*` only | No (side-by-side) |
-| config `replace = false` | packages still install bare names | **PATH snippet skips them** |
+| config `replace = false` | packages may still install bare names | **PATH snippet skips them** |
 
 | Env / config | Effect |
 |--------------|--------|
 | `INSTALL_DIR` | Target bin dir (default `~/.local/bin`) |
 | `F00_VERSION` | Release tag (default: latest) |
 | `F00_LOCAL` | Path to local `asm/` build that contains `./f00` |
-| `F00_TOOLS` | `all` or comma list |
+| `F00_TOOLS` | `all` (default) or comma list |
 | `F00_SUPERSEDE=0` | **Opt-out:** do not install bare names (curl) |
 | `replace = true` / `false` | XDG config — shell integration honors this (**default true**) |
 | `f00-config replace on\|off` | Persist `replace =` |
@@ -367,8 +426,11 @@ f00-ls --core -la
 f00-cat -n README.md
 f00-wc --json Makefile
 f00-sha256sum --core file
-f00-df -h
-f00-id --core
+f00-grep -F hello README.md
+f00-find . -maxdepth 1 -name '*.md'
+f00-diff -u a b
+f00-cmp a b
+f00                  # config TUI
 f00 --list-utils
 ```
 
@@ -409,16 +471,31 @@ install.sh           curl installer
 
 ---
 
+## Current gaps (honest)
+
+| Area | Gap |
+|------|-----|
+| **find** | More predicates (`-regex`, `-exec`, …) still partial |
+| **xargs** | Quoting / ARG_MAX edge cases |
+| **diff / diff3 / sdiff** | Full GNU formats (mtime headers, all flags) incomplete |
+| **grep** | No `-A/-B/-C` context yet; no PCRE; multi-MB emit still optimizing |
+| **Bench coverage** | ~90/106 coreutils have safe timed races; destructive/privileged tools use light entry races or scoreboard-only |
+| **Modern depth** | fd/rg/delta-class extras vary by tool — some deep, some still rising |
+| **Platform** | Product path is **Linux x86-64** release assets |
+
+Depth scoreboard: [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · flags: [GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md).
+
 ## Documentation
 
 | Doc | Topic |
 |-----|-------|
 | [docs/COREUTILS-PROGRESS.md](docs/COREUTILS-PROGRESS.md) | Scoreboard for every coreutil |
+| [docs/GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) | grep · findutils · diffutils |
 | [docs/GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md) | Per-flag full / partial / missing |
 | [docs/TERMINAL-UX.md](docs/TERMINAL-UX.md) | Color tokens, help, JSON envelope |
 | [docs/MODERN-FEATURES.md](docs/MODERN-FEATURES.md) | Modern extras |
 | [CHANGELOG.md](CHANGELOG.md) | Releases |
-| [file_id.diz](file_id.diz) | Release scene card (ACiD / 16colo.rs style) |
+| [file_id.diz](file_id.diz) | Release scene card (GitHub asset; not site-spotlighted) |
 | Man | `man f00` · `man f00-ls` · `man f00-cat` · … |
 
 ## Scene card

@@ -281,68 +281,139 @@
     }
   }
 
-  function renderRaceCards(showcase, tools) {
-    const grid = document.getElementById("race-grid");
-    if (!grid) return;
-    let rows = showcase && showcase.length ? showcase : null;
-    if (!rows) {
-      const ok = (tools || [])
-        .filter((t) => t.status === "ok" && t.ratio != null)
-        .sort((a, b) => b.ratio - a.ratio)
-        .slice(0, 8)
-        .map((t) => ({
-          tool: t.tool,
-          time_gnu_ms: t.time_gnu_ms,
-          time_f00_ms: t.time_f00_ms,
-          ratio: t.ratio,
-          command_f00: t.command_f00,
-        }));
-      rows = ok;
+  function raceCardHtml(r, maxMs, i) {
+    const gPct = Math.max(4, ((r.time_gnu_ms || 0) / maxMs) * 100);
+    const fPct = Math.max(4, ((r.time_f00_ms || 0) / maxMs) * 100);
+    const delay = (i * 0.04).toFixed(2);
+    const pkg = r.package || toolPackage(r.tool || "");
+    const cpu =
+      r.cpu_ratio != null
+        ? ` · CPU ${Number(r.cpu_ratio).toFixed(2)}×`
+        : "";
+    return (
+      `<article class="bench-card race-card" style="--d:${delay}s">` +
+      `<header class="race-head">` +
+      `<h3><code>${esc(r.tool)}</code></h3>` +
+      `<span class="bench-tag win">${esc(Number(r.ratio).toFixed(2))}×</span>` +
+      `</header>` +
+      `<p class="race-cmd muted small"><span class="pkg-tag">${esc(pkg)}</span> · <code>${esc(r.command_f00 || "f00-" + r.tool + " --core")}</code>${esc(cpu)}</p>` +
+      `<div class="bench-bars race-bars">` +
+      `<div class="bar-row">` +
+      `<span class="bar-label">f00tils</span>` +
+      `<div class="bar-track"><div class="bar fluid f00" style="--w:${fPct.toFixed(1)}%"></div></div>` +
+      `<span class="bar-val"><strong>${esc(fmtMs(r.time_f00_ms))}</strong> ms</span>` +
+      `</div>` +
+      `<div class="bar-row">` +
+      `<span class="bar-label">GNU</span>` +
+      `<div class="bar-track"><div class="bar fluid gnu dim" style="--w:${gPct.toFixed(1)}%"></div></div>` +
+      `<span class="bar-val">${esc(fmtMs(r.time_gnu_ms))} ms</span>` +
+      `</div>` +
+      `</div>` +
+      `</article>`
+    );
+  }
+
+  function toolsByPackage(suite) {
+    if (suite && suite.showcase_by_package) {
+      return suite.showcase_by_package;
     }
-    if (!rows.length) {
-      grid.innerHTML = '<p class="muted">No showcase benches yet.</p>';
+    const by = { coreutils: [], grep: [], findutils: [], diffutils: [] };
+    (suite && suite.tools ? suite.tools : []).forEach((t) => {
+      if (t.status !== "ok" || t.ratio == null) return;
+      const p = t.package || toolPackage(t.tool || "");
+      if (!by[p]) by[p] = [];
+      by[p].push({
+        tool: t.tool,
+        package: p,
+        command_f00: t.command_f00,
+        time_gnu_ms: t.time_gnu_ms,
+        time_f00_ms: t.time_f00_ms,
+        cpu_gnu_ms: t.cpu_gnu_ms,
+        cpu_f00_ms: t.cpu_f00_ms,
+        ratio: t.ratio,
+        cpu_ratio: t.cpu_ratio,
+      });
+    });
+    PKG_ORDER.forEach((p) => {
+      by[p].sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
+    });
+    return by;
+  }
+
+  function renderRaceCards(suite, packages, filterPkg) {
+    const host = document.getElementById("race-grid");
+    if (!host) return;
+    const by = toolsByPackage(suite);
+    const filter = filterPkg || "all";
+    const pkgs =
+      filter === "all" ? PKG_ORDER.slice() : PKG_ORDER.filter((p) => p === filter);
+
+    // coreutils has ~90 timed tools — show top 12 in "all", all when filtered
+    const CORE_CAP_ALL = 12;
+
+    let html = "";
+    let cardI = 0;
+    pkgs.forEach((p) => {
+      let rows = (by[p] || []).slice();
+      if (!rows.length) {
+        html +=
+          `<section class="race-pkg" data-race-pkg="${esc(p)}">` +
+          `<h3 class="subhead race-pkg-title">${esc(PKG_LABEL[p])} <span class="muted small">no timed races yet</span></h3>` +
+          `</section>`;
+        return;
+      }
+      const total = rows.length;
+      let note = "";
+      if (p === "coreutils" && filter === "all" && rows.length > CORE_CAP_ALL) {
+        rows = rows.slice(0, CORE_CAP_ALL);
+        note = ` · showing top ${CORE_CAP_ALL} of ${total} by wall × — open coreutils tab or scoreboard for all`;
+      }
+      const sum = (packages && packages[p]) || {};
+      const wall = sum.headline_x || "—";
+      const cpu =
+        sum.headline_cpu_x ||
+        (sum.cpu_ratio_geo != null
+          ? `${Number(sum.cpu_ratio_geo).toFixed(1)}×`
+          : "—");
+      const maxMs = Math.max(
+        ...rows.map((r) => Math.max(r.time_gnu_ms || 0, r.time_f00_ms || 0)),
+        0.001
+      );
+      html +=
+        `<section class="race-pkg" data-race-pkg="${esc(p)}">` +
+        `<h3 class="subhead race-pkg-title">` +
+        `${esc(PKG_LABEL[p])} ` +
+        `<span class="muted small">wall ${esc(wall)} · CPU ${esc(cpu)} · ${total} timed${esc(note)}</span>` +
+        `</h3>` +
+        `<div class="bench-grid two race-pkg-grid">` +
+        rows.map((r) => raceCardHtml(r, maxMs, cardI++)).join("") +
+        `</div></section>`;
+    });
+
+    if (!html) {
+      host.innerHTML = '<p class="muted">No showcase benches yet.</p>';
       return;
     }
-
-    const maxMs = Math.max(
-      ...rows.map((r) => Math.max(r.time_gnu_ms || 0, r.time_f00_ms || 0)),
-      0.001
-    );
-
-    grid.innerHTML = rows
-      .map((r, i) => {
-        const gPct = Math.max(4, ((r.time_gnu_ms || 0) / maxMs) * 100);
-        const fPct = Math.max(4, ((r.time_f00_ms || 0) / maxMs) * 100);
-        const delay = (i * 0.06).toFixed(2);
-        const pkg = r.package || toolPackage(r.tool || "");
-        return (
-          `<article class="bench-card race-card" style="--d:${delay}s">` +
-          `<header class="race-head">` +
-          `<h3><code>${esc(r.tool)}</code></h3>` +
-          `<span class="bench-tag win">${esc(Number(r.ratio).toFixed(2))}×</span>` +
-          `</header>` +
-          `<p class="race-cmd muted small"><span class="pkg-tag">${esc(pkg)}</span> · <code>${esc(r.command_f00 || "f00-" + r.tool + " --core")}</code></p>` +
-          `<div class="bench-bars race-bars">` +
-          `<div class="bar-row">` +
-          `<span class="bar-label">f00tils</span>` +
-          `<div class="bar-track"><div class="bar fluid f00" style="--w:${fPct.toFixed(1)}%"></div></div>` +
-          `<span class="bar-val"><strong>${esc(fmtMs(r.time_f00_ms))}</strong> ms</span>` +
-          `</div>` +
-          `<div class="bar-row">` +
-          `<span class="bar-label">GNU</span>` +
-          `<div class="bar-track"><div class="bar fluid gnu dim" style="--w:${gPct.toFixed(1)}%"></div></div>` +
-          `<span class="bar-val">${esc(fmtMs(r.time_gnu_ms))} ms</span>` +
-          `</div>` +
-          `</div>` +
-          `</article>`
-        );
-      })
-      .join("");
-
-    // trigger fluid animation on enter viewport
+    host.innerHTML = html;
     requestAnimationFrame(() => {
-      grid.classList.add("animate");
+      host.classList.add("animate");
     });
+  }
+
+  function wireRacePkgTabs(suite, packages) {
+    const tabs = document.getElementById("race-pkg-tabs");
+    if (!tabs) {
+      renderRaceCards(suite, packages, "all");
+      return;
+    }
+    tabs.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".pkg-tab");
+      if (!btn) return;
+      tabs.querySelectorAll(".pkg-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderRaceCards(suite, packages, btn.getAttribute("data-race-pkg") || "all");
+    });
+    renderRaceCards(suite, packages, "all");
   }
 
   function polyline(xs, ys, w, h, pad) {
@@ -584,7 +655,7 @@
     const packages = suite ? packagesFromSuite(suite) : null;
     if (suite) {
       renderPackageCards(packages, suite.meta);
-      renderRaceCards(suite.showcase, suite.tools);
+      wireRacePkgTabs(suite, packages);
       renderColdChart(suite.cold_startup);
     } else {
       renderPackageCards(
