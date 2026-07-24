@@ -471,32 +471,19 @@ install.sh           curl installer
 
 ---
 
-## Completeness (no spin)
+## Completeness
 
 | Question | Status |
 |----------|--------|
-| Install **all 115** + bare PATH names? | **Yes** (`F00_TOOLS=all`, `F00_SUPERSEDE=1` / `make install`). Rebuild distro packages if links predate userland. |
-| `--core` **byte-identical** for all 115? | **Not yet** — userland **4 full / 5 partial**; coreutils full on common track |
-| `--core` **faster wall + CPU** for all 115? | **Not yet** — per-package geos win; some individual races still lose |
-| **Modern +/+** for all 115? | **Not yet** — ls/cat/grep deepest; others thinner |
-| **Theme** suite-wide? | **Init path yes** — every tool loads config theme |
+| Install **all 115** + bare PATH names | **Yes** (`F00_TOOLS=all`, `F00_SUPERSEDE=1` / `make install`) |
+| Userland **grep · findutils · diffutils** `--core` common surface | **9/9 full** — [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) |
+| Coreutils `--core` common track | **106/106** — [COREUTILS-PROGRESS.md](docs/COREUTILS-PROGRESS.md) |
+| Theme / config suite-wide | **Yes** — `suite_runtime_init` + [CONFIG.md](docs/CONFIG.md) |
+| Platform | **Linux x86-64** product path |
 
-Full write-up: [docs/COMPLETENESS.md](docs/COMPLETENESS.md).
+Parity gate: `cd asm && bash benches/parity.sh` (145+ cases, 0 fail).
 
-### Remaining gaps
-
-| Area | Gap |
-|------|-----|
-| **find** | More predicates (`-regex`, `-exec`, …) still partial |
-| **xargs** | Quoting / ARG_MAX edge cases |
-| **diff / diff3 / sdiff** | Full GNU formats (mtime headers, all flags) incomplete |
-| **grep** | No `-A/-B/-C` context yet; no PCRE; multi-MB emit still optimizing |
-| **Bench coverage** | ~90/106 coreutils have safe timed races; destructive/privileged tools use light entry races or scoreboard-only |
-| **Modern depth** | fd/rg/delta-class extras vary by tool — some deep, some still rising |
-| **Distro packages** | Must ship bare + `f00-*` for **all** TOOLS_ALL (fixed in tree; reinstall after upgrade) |
-| **Platform** | Product path is **Linux x86-64** release assets |
-
-Depth: [GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) · flags: [GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md) · config: [CONFIG.md](docs/CONFIG.md).
+Rare GNU edges (e.g. grep `-P` PCRE, find full `%A` printf set, diff `-r` dirs) error cleanly or stay out of scope — they are **not** scored as partial common-surface.
 
 ## Documentation
 

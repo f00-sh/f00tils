@@ -34,12 +34,15 @@ extern err_str
 %define GF_SILENT    16384
 %define GF_ONLY      32768
 %define GF_SMART     65536          ; modern smart-case active
+%define GF_CTX       131072         ; -A/-B/-C/-NUM context mode (even if 0)
 
 %define MAX_PATS     64
 %define READ_CAP     262144
 %define LINE_CAP     65536
 %define DENT_CAP     65536
 %define PATH_CAP     4096
+; before-context ring: last N lines (N capped)
+%define CTX_RING_MAX 256
 
 section .bss
 alignb 8
@@ -56,14 +59,27 @@ had_error:      resb 1
 is_egrep:       resb 1
 is_fgrep:       resb 1
 multi_file:     resb 1
+ctx_have_out:   resb 1              ; any context/match line emitted (global)
+ctx_file_out:   resb 1              ; emitted something in current file
 ; match position of last fixed hit (for highlight / word)
 last_off:       resd 1
 last_mlen:      resd 1
+; context (-A/-B/-C)
+alignb 8
+ctx_before:     resq 1              ; -B NUM
+ctx_after:      resq 1              ; -A NUM
+ctx_pending:    resq 1              ; remaining after-context lines
+ctx_last_prn:   resq 1              ; last printed line no in this file (0=none)
+ctx_rcount:     resq 1              ; lines currently in before-ring
+ctx_rhead:      resq 1              ; index of oldest ring slot
+ctx_r_lineno:   resq CTX_RING_MAX
+ctx_r_len:      resq CTX_RING_MAX
 ; I/O
 alignb 64
 read_buf:       resb READ_CAP
 line_buf:       resb LINE_CAP
 line_len:       resq 1
+ctx_r_text:     resb CTX_RING_MAX * LINE_CAP
 ; recursive
 dents:          resb DENT_CAP
 path_buf:       resb PATH_CAP
@@ -90,13 +106,18 @@ h_grep:
     db "  -x, --line-regexp       match whole lines", 10
     db "  -F, --fixed-strings     fixed strings", 10
     db "  -E, --extended-regexp   ERE subset (. * + ? [] ^ $ | \\)", 10
+    db "  -P, --perl-regexp       PCRE (not supported; errors)", 10
     db "  -e PAT                  use PAT as a pattern", 10
     db "  -m N, --max-count=N     stop after N matches per file", 10
+    db "  -A N, --after-context=N print N lines of trailing context", 10
+    db "  -B N, --before-context=N print N lines of leading context", 10
+    db "  -C N, --context=N       print N lines of output context", 10
+    db "  -NUM                    same as --context=NUM", 10
     db "  -r, -R, --recursive     recurse directories", 10
     db "      --core              plain GNU-like output (no color)", 10
     db "      --color[=WHEN]      color matches (modern TTY default)", 10
     db "  --help  --version", 10
-    db "Modern TTY: themed match highlight, smart-case; --core is script-safe.", 10, 0
+    db "Modern TTY: theme c_* match highlight (color_ok/dim), smart-case; --core is script-safe.", 10, 0
 
 s_core:     db "core", 0
 s_help:     db "help", 0
@@ -118,16 +139,27 @@ s_word:     db "word-regexp", 0
 s_linex:    db "line-regexp", 0
 s_fixed:    db "fixed-strings", 0
 s_ere:      db "extended-regexp", 0
+s_perl:     db "perl-regexp", 0
 s_rec:      db "recursive", 0
 s_maxc:     db "max-count", 0
 s_maxc_eq:  db "max-count=", 0
+s_after:    db "after-context", 0
+s_after_eq: db "after-context=", 0
+s_before:   db "before-context", 0
+s_before_eq: db "before-context=", 0
+s_context:  db "context", 0
+s_context_eq: db "context=", 0
 colon:      db ":", 0
+hyphen:     db "-", 0
+group_sep:  db "--", 10, 0
 stdin_name: db "(standard input)", 0
 msg_miss:   db ": missing pattern", 10, 0
 msg_usage:  db "Try 'f00-grep --help' for more information.", 10, 0
 msg_enoent: db ": No such file or directory", 10, 0
 msg_isdir:  db ": Is a directory", 10, 0
 msg_colon_sp: db ": ", 0
+msg_bad_ctx: db ": invalid context length argument", 10, 0
+msg_no_pcre: db ": the -P option is not supported", 10, 0
 
 section .text
 
@@ -162,9 +194,17 @@ grep_main:
     mov qword [pat_n], 0
     mov qword [max_count], 0
     mov qword [file_matches], 0
+    mov qword [ctx_before], 0
+    mov qword [ctx_after], 0
+    mov qword [ctx_pending], 0
+    mov qword [ctx_last_prn], 0
+    mov qword [ctx_rcount], 0
+    mov qword [ctx_rhead], 0
     mov byte [any_match], 0
     mov byte [had_error], 0
     mov byte [multi_file], 0
+    mov byte [ctx_have_out], 0
+    mov byte [ctx_file_out], 0
 
     cmp byte [is_fgrep], 0
     je .go
@@ -244,7 +284,11 @@ grep_main:
     jne .s14
     and dword [g_flags], ~GF_FIXED
     jmp .sn
-.s14: cmp al, 'r'
+.s14: cmp al, 'P'
+    jne .s14b
+    ; freestanding: no PCRE — hard error (do not silent-ignore)
+    jmp .no_pcre
+.s14b: cmp al, 'r'
     je .srec
     cmp al, 'R'
     je .srec
@@ -282,7 +326,45 @@ grep_main:
     call parse_u64
     mov [max_count], rax
     jmp .next_arg
-.s17:
+.s17: cmp al, 'A'
+    jne .s18
+    ; -A NUM / -ANUM  after-context
+    inc rdi
+    call parse_ctx_num              ; rax=num, uses r12/r13/r14
+    mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.s18: cmp al, 'B'
+    jne .s19
+    inc rdi
+    call parse_ctx_num
+    mov [ctx_before], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.s19: cmp al, 'C'
+    jne .s20
+    inc rdi
+    call parse_ctx_num
+    mov [ctx_before], rax
+    mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.s20:
+    ; -NUM ≡ --context=NUM (digit starts context in short cluster)
+    cmp al, '0'
+    jb .sunk
+    cmp al, '9'
+    ja .sunk
+    call parse_u64                  ; rdi at first digit
+    cmp rax, CTX_RING_MAX
+    jbe .num_ok
+    mov rax, CTX_RING_MAX
+.num_ok:
+    mov [ctx_before], rax
+    mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.sunk:
     ; unknown short: skip char (forward-compat)
 .sn: inc rdi
     jmp .sh
@@ -464,6 +546,116 @@ grep_main:
     mov [max_count], rax
     jmp .next_arg
 .l18:
+    ; --after-context=N / --after-context N  ("after-context=" = 14)
+    lea rsi, [s_after_eq]
+    mov rcx, 14
+    push rdi
+    call memeq_n
+    pop rdi
+    test eax, eax
+    jnz .l19
+    add rdi, 14
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .ae1
+    mov rax, CTX_RING_MAX
+.ae1: mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l19: lea rsi, [s_after]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l20
+    inc r14
+    cmp r14, r12
+    jge .ctx_bad
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .ae2
+    mov rax, CTX_RING_MAX
+.ae2: mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l20:
+    ; "before-context=" = 15
+    lea rsi, [s_before_eq]
+    mov rcx, 15
+    push rdi
+    call memeq_n
+    pop rdi
+    test eax, eax
+    jnz .l21
+    add rdi, 15
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .be1
+    mov rax, CTX_RING_MAX
+.be1: mov [ctx_before], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l21: lea rsi, [s_before]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l22
+    inc r14
+    cmp r14, r12
+    jge .ctx_bad
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .be2
+    mov rax, CTX_RING_MAX
+.be2: mov [ctx_before], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l22:
+    ; "context=" = 8
+    lea rsi, [s_context_eq]
+    mov rcx, 8
+    push rdi
+    call memeq_n
+    pop rdi
+    test eax, eax
+    jnz .l23
+    add rdi, 8
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .ce1
+    mov rax, CTX_RING_MAX
+.ce1: mov [ctx_before], rax
+    mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l23: lea rsi, [s_context]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l24
+    inc r14
+    cmp r14, r12
+    jge .ctx_bad
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .ce2
+    mov rax, CTX_RING_MAX
+.ce2: mov [ctx_before], rax
+    mov [ctx_after], rax
+    or dword [g_flags], GF_CTX
+    jmp .next_arg
+.l24:
+    lea rsi, [s_perl]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jz .no_pcre
     lea rsi, [s_color]
     push rdi
     call strcmp
@@ -477,6 +669,20 @@ grep_main:
     pop rdi
     ; accept any --color=… as no-op under core; modern leaves g_color
     jmp .next_arg
+
+.no_pcre:
+    call emit_prog
+    lea rsi, [msg_no_pcre]
+    call err_str
+    mov dword [g_exit], 2
+    jmp .done
+
+.ctx_bad:
+    call emit_prog
+    lea rsi, [msg_bad_ctx]
+    call err_str
+    mov dword [g_exit], 2
+    jmp .done
 
 .end_opts:
     inc r14
@@ -802,6 +1008,36 @@ parse_u64:
     jmp .lp
 .d: ret
 
+; parse_ctx_num — after -A/-B/-C letter: inline digits or next argv.
+; Uses r12=argc, r13=argv, r14=arg index (may advance). → rax=NUM
+; On missing/non-numeric: print error and exit 2.
+parse_ctx_num:
+    cmp byte [rdi], 0
+    jne .have
+    inc r14
+    cmp r14, r12
+    jge .bad
+    mov rdi, [r13 + r14*8]
+.have:
+    mov al, [rdi]
+    cmp al, '0'
+    jb .bad
+    cmp al, '9'
+    ja .bad
+    call parse_u64
+    cmp rax, CTX_RING_MAX
+    jbe .ok
+    mov rax, CTX_RING_MAX
+.ok: ret
+.bad:
+    call emit_prog
+    lea rsi, [msg_bad_ctx]
+    call err_str
+    call out_flush
+    mov edi, 2
+    mov rax, SYS_exit
+    syscall
+
 ; memeq_n(rdi=a, rsi=b, rcx=n) → eax=0 equal
 memeq_n:
     push rbx
@@ -876,6 +1112,12 @@ grep_fd:
     mov qword [file_matches], 0
     mov byte [had_match], 0
     mov qword [line_len], 0
+    ; per-file context state (group sep spans files via ctx_have_out)
+    mov qword [ctx_pending], 0
+    mov qword [ctx_last_prn], 0
+    mov qword [ctx_rcount], 0
+    mov qword [ctx_rhead], 0
+    mov byte [ctx_file_out], 0
 
 .read:
     mov rax, SYS_read
@@ -915,11 +1157,14 @@ grep_fd:
     cmp byte [had_match], 0
     jne .eof
 .mc2:
+    ; stop after max selected matches AND after-context drained
     mov rax, [max_count]
     test rax, rax
     jz .blp
     cmp [file_matches], rax
     jb .blp
+    cmp qword [ctx_pending], 0
+    jne .blp
     jmp .eof
 .eof:
     cmp qword [line_len], 0
@@ -994,27 +1239,130 @@ emit_count:
 
 process_line:
     push rbx
+    push r12
+    push r13
     inc qword [line_no]
-    call line_matches               ; al=1 match
+    call line_matches               ; al=1 pattern match
     test dword [g_flags], GF_INVERT
     jz .nv
     xor al, 1
 .nv:
-    test al, al
-    jz .no
+    mov r12b, al                    ; r12b = selected (match after invert)
+
+    ; -q / -l / -L / -c / -o: no context formatting
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT | GF_ONLY
+    jnz .simple
+
+    test dword [g_flags], GF_CTX
+    jnz .ctx
+
+.simple:
+    test r12b, r12b
+    jz .done
+    ; honor max-count for selected lines
+    mov rax, [max_count]
+    test rax, rax
+    jz .sel
+    cmp [file_matches], rax
+    jae .done
+.sel:
     mov byte [had_match], 1
     mov byte [any_match], 1
     inc qword [file_matches]
     test dword [g_flags], GF_QUIET
-    jnz .no
+    jnz .done
     test dword [g_flags], GF_LIST
-    jnz .no
+    jnz .done
     test dword [g_flags], GF_LIST_INV
-    jnz .no
+    jnz .done
     test dword [g_flags], GF_COUNT
-    jnz .no
-    call emit_match_line
-.no: pop rbx
+    jnz .done
+    mov dil, ':'
+    call emit_grep_line
+    jmp .done
+
+; ── context path (-A/-B/-C/-NUM) ──────────────────────────
+.ctx:
+    test r12b, r12b
+    jz .ctx_nomatch
+
+    ; matching line: select if under max-count
+    mov rax, [max_count]
+    test rax, rax
+    jz .ctx_select
+    cmp [file_matches], rax
+    jb .ctx_select
+    ; over max: treat as non-selected (may still be after-context)
+    jmp .ctx_nomatch
+
+.ctx_select:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+
+    ; start = max(1, line_no - before), then max with last_prn+1
+    mov r13, [line_no]
+    mov rax, [ctx_before]
+    cmp r13, rax
+    ja .subb
+    mov r13, 1
+    jmp .clamp_printed
+.subb:
+    sub r13, rax
+    test r13, r13
+    jnz .clamp_printed
+    mov r13, 1
+.clamp_printed:
+    mov rax, [ctx_last_prn]
+    test rax, rax
+    jz .do_before
+    lea rdx, [rax + 1]
+    cmp r13, rdx
+    jae .do_before
+    mov r13, rdx
+
+.do_before:
+    cmp r13, [line_no]
+    jae .match_only                ; no unprinted before-lines
+    mov rdi, r13
+    call maybe_group_sep
+    call emit_ring_from             ; r13..line_no-1 as context
+    ; match is contiguous with last before line
+    jmp .match_body
+
+.match_only:
+    mov rdi, [line_no]
+    call maybe_group_sep
+.match_body:
+    mov dil, ':'
+    call emit_grep_line
+    mov rax, [line_no]
+    mov [ctx_last_prn], rax
+    mov byte [ctx_have_out], 1
+    mov byte [ctx_file_out], 1
+    mov rax, [ctx_after]
+    mov [ctx_pending], rax
+    call ctx_ring_push
+    jmp .done
+
+.ctx_nomatch:
+    cmp qword [ctx_pending], 0
+    je .ctx_push_only
+    mov rdi, [line_no]
+    call maybe_group_sep
+    mov dil, '-'
+    call emit_grep_line
+    mov rax, [line_no]
+    mov [ctx_last_prn], rax
+    mov byte [ctx_have_out], 1
+    mov byte [ctx_file_out], 1
+    dec qword [ctx_pending]
+.ctx_push_only:
+    call ctx_ring_push
+.done:
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 line_matches:
@@ -1807,9 +2155,49 @@ re_match_atom:
     jnz .yes
     jmp .no
 
-; emit_match_line
-emit_match_line:
+; maybe_group_sep(rdi=next_line_no) — print "--\n" if non-contiguous group
+maybe_group_sep:
+    cmp byte [ctx_have_out], 0
+    je .no
+    cmp byte [ctx_file_out], 0
+    je .yes                         ; new file after prior output
+    mov rax, [ctx_last_prn]
+    test rax, rax
+    jz .no
+    inc rax
+    cmp rdi, rax
+    jbe .no                         ; contiguous (next <= last+1)
+.yes:
+    lea rsi, [group_sep]
+    call out_str
+.no: ret
+
+; emit_grep_line(dil=sep ':' or '-') — current line_buf / line_no / path
+emit_grep_line:
+    push rsi
+    push rdx
+    push rcx
+    lea rsi, [line_buf]
+    mov rdx, [line_len]
+    mov rcx, [line_no]
+    call emit_grep_line_ex
+    pop rcx
+    pop rdx
+    pop rsi
+    ret
+
+; emit_grep_line_ex(dil=sep, rsi=text, rdx=len, rcx=lineno)
+; --core: plain GNU. Modern match (':') may highlight; context stays plain.
+emit_grep_line_ex:
     push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12b, dil                   ; separator
+    mov r13, rsi                    ; text
+    mov r14, rdx                    ; len
+    mov r15, rcx                    ; lineno
     test dword [g_flags], GF_WITH_NAME
     jz .num
     test dword [g_flags], GF_CORE
@@ -1820,12 +2208,12 @@ emit_match_line:
 .pn: lea rsi, [path_buf]
     call out_str
     test dword [g_flags], GF_CORE
-    jnz .pc
+    jnz .ps
     cmp byte [g_color], 0
-    je .pc
+    je .ps
     call color_reset
-.pc: lea rsi, [colon]
-    call out_str
+.ps: mov dil, r12b
+    call out_byte
 .num:
     test dword [g_flags], GF_NUMBER
     jz .body
@@ -1834,28 +2222,34 @@ emit_match_line:
     cmp byte [g_color], 0
     je .nn
     call color_num
-.nn: mov rdi, [line_no]
+.nn: mov rdi, r15
     call out_u64
     test dword [g_flags], GF_CORE
-    jnz .nc
+    jnz .ns
     cmp byte [g_color], 0
-    je .nc
+    je .ns
     call color_reset
-.nc: lea rsi, [colon]
-    call out_str
+.ns: mov dil, r12b
+    call out_byte
 .body:
+    ; highlight only modern match lines from line_buf (sep ':')
+    cmp r12b, ':'
+    jne .plain
     test dword [g_flags], GF_CORE
     jnz .plain
     cmp byte [g_color], 0
     je .plain
     test dword [g_flags], GF_FIXED
     jz .plain
+    ; only highlight when emitting the live line_buf
+    lea rax, [line_buf]
+    cmp r13, rax
+    jne .plain
     test dword [g_flags], GF_ONLY
     jnz .only_c
     call emit_line_highlight
     jmp .nl
 .only_c:
-    ; modern -o: only matching part, colored
     call color_ok
     mov eax, [last_off]
     lea rsi, [line_buf + rax]
@@ -1866,6 +2260,10 @@ emit_match_line:
 .plain:
     test dword [g_flags], GF_ONLY
     jz .full
+    ; -o only applies to live matches, not ring context
+    lea rax, [line_buf]
+    cmp r13, rax
+    jne .full
     mov eax, [last_off]
     lea rsi, [line_buf + rax]
     mov edx, [last_mlen]
@@ -1874,16 +2272,149 @@ emit_match_line:
     call out_strn
     jmp .nl
 .full:
-    mov rdx, [line_len]
+    mov rdx, r14
     test rdx, rdx
     jz .nl
-    lea rsi, [line_buf]
+    mov rsi, r13
     call out_strn
 .nl: mov dil, 10
     call out_byte
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     ret
 
+; ctx_ring_push — store current line into before-context ring (size ctx_before)
+ctx_ring_push:
+    push rbx
+    push r12
+    mov rax, [ctx_before]
+    test rax, rax
+    jz .out
+    cmp rax, CTX_RING_MAX
+    jbe .cap_ok
+    mov rax, CTX_RING_MAX
+.cap_ok:
+    mov rbx, rax                    ; cap = before
+    mov rcx, [ctx_rcount]
+    cmp rcx, rbx
+    jb .not_full
+    ; full: overwrite oldest at head, advance head
+    mov r12, [ctx_rhead]
+    call .store_at_r12
+    mov rax, [ctx_rhead]
+    inc rax
+    xor rdx, rdx
+    div rbx
+    mov [ctx_rhead], rdx
+    jmp .out
+.not_full:
+    ; index = (head + count) % cap
+    mov rax, [ctx_rhead]
+    add rax, rcx
+    xor rdx, rdx
+    div rbx
+    mov r12, rdx
+    call .store_at_r12
+    inc qword [ctx_rcount]
+.out:
+    pop r12
+    pop rbx
+    ret
+
+; .store_at_r12 — write line_no/len/text into ring slot r12
+.store_at_r12:
+    push rax
+    push rcx
+    push rsi
+    push rdi
+    push rdx
+    mov rax, [line_no]
+    mov [ctx_r_lineno + r12*8], rax
+    mov rax, [line_len]
+    cmp rax, LINE_CAP
+    jb .len_ok
+    mov rax, LINE_CAP - 1
+.len_ok:
+    mov [ctx_r_len + r12*8], rax
+    ; dest = ctx_r_text + r12 * LINE_CAP
+    mov rax, r12
+    imul rax, LINE_CAP
+    lea rdi, [ctx_r_text + rax]
+    lea rsi, [line_buf]
+    mov rdx, [ctx_r_len + r12*8]
+    test rdx, rdx
+    jz .copied
+    call memcpy
+.copied:
+    pop rdx
+    pop rdi
+    pop rsi
+    pop rcx
+    pop rax
+    ret
+
+; emit_ring_from — print ring lines with lineno in [r13, line_no) as context
+; Does not clobber line_buf / line_no / line_len.
+emit_ring_from:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r14, [ctx_rcount]
+    test r14, r14
+    jz .done
+    mov r15, [ctx_before]
+    test r15, r15
+    jz .done
+    cmp r15, CTX_RING_MAX
+    jbe .c1
+    mov r15, CTX_RING_MAX
+.c1:
+    xor ebx, ebx                    ; i = 0
+.lp:
+    cmp rbx, r14
+    jae .done
+    ; idx = (head + i) % cap
+    mov rax, [ctx_rhead]
+    add rax, rbx
+    xor rdx, rdx
+    div r15
+    mov r12, rdx                    ; slot
+    mov rax, [ctx_r_lineno + r12*8]
+    cmp rax, r13
+    jb .next
+    cmp rax, [line_no]
+    jae .next
+    ; emit stored line as context via ex
+    push rax
+    mov rcx, rax                    ; lineno
+    mov rax, r12
+    imul rax, LINE_CAP
+    lea rsi, [ctx_r_text + rax]
+    mov rdx, [ctx_r_len + r12*8]
+    mov dil, '-'
+    call emit_grep_line_ex
+    pop rax
+    mov [ctx_last_prn], rax
+    mov byte [ctx_have_out], 1
+    mov byte [ctx_file_out], 1
+.next:
+    inc rbx
+    jmp .lp
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_line_highlight — modern match paint via theme tokens only
+; (color_ok → c_ok, color_dim → c_dim, color_reset → c_reset). No fixed red.
 emit_line_highlight:
     push rbx
     push r12

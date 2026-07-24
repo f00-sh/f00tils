@@ -553,6 +553,46 @@ if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
   cmp_out "grep -r -F" \
     bash -c "\"$ROOT/f00-grep\" --core -r -F hello \"$WORKDIR/gr\" | sort" ::: \
     bash -c "\"$CORE/grep\" -r -F hello \"$WORKDIR/gr\" | sort"
+  # context: -A/-B/-C (GNU group separators + :/- prefixes)
+  cat >"$WORKDIR/gc.txt" <<'EOF'
+alpha
+beta
+gamma
+hello
+delta
+epsilon
+zeta
+hello
+eta
+theta
+EOF
+  cmp_out "grep -A1 -n" \
+    "$ROOT/f00-grep" --core -A1 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -A1 -n hello "$WORKDIR/gc.txt"
+  cmp_out "grep -B1 -n" \
+    "$ROOT/f00-grep" --core -B1 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -B1 -n hello "$WORKDIR/gc.txt"
+  cmp_out "grep -C2 -n" \
+    "$ROOT/f00-grep" --core -C2 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -C2 -n hello "$WORKDIR/gc.txt"
+  cmp_out "grep -C1" \
+    "$ROOT/f00-grep" --core -C1 hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -C1 hello "$WORKDIR/gc.txt"
+  cmp_out "grep -nC1" \
+    "$ROOT/f00-grep" --core -nC1 hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -nC1 hello "$WORKDIR/gc.txt"
+  cmp_out "grep --context=1 -n" \
+    "$ROOT/f00-grep" --core --context=1 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" --context=1 -n hello "$WORKDIR/gc.txt"
+  cmp_out "grep -A1 multi" \
+    "$ROOT/f00-grep" --core -A1 -n hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt" ::: \
+    "$CORE/grep" -A1 -n hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt"
+  cmp_out "grep -m1 -A2 -n" \
+    "$ROOT/f00-grep" --core -m1 -A2 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -m1 -A2 -n hello "$WORKDIR/gc.txt"
+  cmp_out "grep -2 -n" \
+    "$ROOT/f00-grep" --core -2 -n hello "$WORKDIR/gc.txt" ::: \
+    "$CORE/grep" -2 -n hello "$WORKDIR/gc.txt"
 fi
 if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
   printf 'abc\n' > "$WORKDIR/c1"
@@ -604,6 +644,30 @@ fi
 if [[ -x "$ROOT/f00-xargs" && -x "$CORE/xargs" ]]; then
   cmp_out "xargs echo"          bash -c "printf 'a\nb\n' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf 'a\nb\n' | \"$CORE/xargs\""
   cmp_out "xargs -n1"           bash -c "printf 'a\nb\n' | \"$ROOT/f00-xargs\" --core -n1" :::     bash -c "printf 'a\nb\n' | \"$CORE/xargs\" -n1"
+  cmp_out "xargs -n2"           bash -c "printf 'a b c d' | \"$ROOT/f00-xargs\" --core -n2" :::     bash -c "printf 'a b c d' | \"$CORE/xargs\" -n2"
+  cmp_out "xargs quotes"        bash -c "printf \"%s\" \"'a b'\" | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf \"%s\" \"'a b'\" | \"$CORE/xargs\""
+  cmp_out "xargs dquotes"       bash -c "printf '%s' '\"a b\"' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf '%s' '\"a b\"' | \"$CORE/xargs\""
+  cmp_out "xargs backslash"     bash -c "printf '%s' 'a\\ b' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf '%s' 'a\\ b' | \"$CORE/xargs\""
+  cmp_out "xargs -0"            bash -c "printf 'a\0b\0' | \"$ROOT/f00-xargs\" --core -0" :::     bash -c "printf 'a\0b\0' | \"$CORE/xargs\" -0"
+  cmp_out "xargs -0 -n1"        bash -c "printf 'a\0b\0' | \"$ROOT/f00-xargs\" --core -0 -n1" :::     bash -c "printf 'a\0b\0' | \"$CORE/xargs\" -0 -n1"
+  cmp_out "xargs -r empty"      bash -c "printf '' | \"$ROOT/f00-xargs\" --core -r" :::     bash -c "printf '' | \"$CORE/xargs\" -r"
+  cmp_out "xargs empty echo"    bash -c "printf '' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf '' | \"$CORE/xargs\""
+  cmp_out "xargs -d:"           bash -c "printf 'a:b:c' | \"$ROOT/f00-xargs\" --core -d:" :::     bash -c "printf 'a:b:c' | \"$CORE/xargs\" -d:"
+  cmp_out "xargs -d empty mid"  bash -c "printf 'a::b' | \"$ROOT/f00-xargs\" --core -d:" :::     bash -c "printf 'a::b' | \"$CORE/xargs\" -d:"
+  cmp_out "xargs -I"            bash -c "printf 'one\ntwo\n' | \"$ROOT/f00-xargs\" --core -I{} echo X{}Y" :::     bash -c "printf 'one\ntwo\n' | \"$CORE/xargs\" -I{} echo X{}Y"
+  cmp_out "xargs -I multi"      bash -c "printf 'z\n' | \"$ROOT/f00-xargs\" --core -I{} echo {}-{}" :::     bash -c "printf 'z\n' | \"$CORE/xargs\" -I{} echo {}-{}"
+  cmp_out "xargs -s12"          bash -c "printf 'aa bb cc dd ee ff' | \"$ROOT/f00-xargs\" --core -s 12" :::     bash -c "printf 'aa bb cc dd ee ff' | \"$CORE/xargs\" -s 12"
+  cmp_out "xargs --max-args=2"  bash -c "printf 'a b c' | \"$ROOT/f00-xargs\" --core --max-args=2" :::     bash -c "printf 'a b c' | \"$CORE/xargs\" --max-args=2"
+  set +e
+  fo=$(printf 'x' | "$ROOT/f00-xargs" --core /bin/false 2>/dev/null); fr=$?
+  co=$(printf 'x' | "$CORE/xargs" /bin/false 2>/dev/null); cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "xargs false exit" || bad "xargs false f00=$fr gnu=$cr"
+  set +e
+  fo=$(printf "'abc" | "$ROOT/f00-xargs" --core 2>/dev/null); fr=$?
+  co=$(printf "'abc" | "$CORE/xargs" 2>/dev/null); cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "xargs unmatched quote exit" || bad "xargs unmatched f00=$fr gnu=$cr"
 fi
 # --- GNU userland (grep / findutils / diffutils) progressive ---
 if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then

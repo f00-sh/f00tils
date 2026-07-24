@@ -23,17 +23,19 @@ extern err_str
 %define DF_QUIET     8
 %define DF_MERGE     16
 %define DF_SUPPRESS  32
+%define DF_CONTEXT   64
 
 %define LINE_CAP     65536
 %define MAX_LINES    4096
 %define POOL_CAP     (2*1024*1024)
 %define LCS_MAX      512
-%define CTX_LINES    3
+%define CTX_DEFAULT  3
 %define STAT_SIZE_OFF 48
 
 section .bss
 alignb 8
 g_flags:        resd 1
+ctx_lines:      resd 1              ; context lines for -u/-c (default 3)
 diff_a:         resq 1
 diff_b:         resq 1
 diff_c:         resq 1
@@ -68,6 +70,11 @@ sdiff_col2:     resd 1              ; tab-aligned right column start (core)
 sdiff_midcol:   resd 1              ; column of mid marker (core)
 sdiff_suppress: resb 1
 d3_merge:       resb 1
+; final-newline flags: 1 = file ends with \n (or empty)
+eol_a:          resb 1
+eol_b:          resb 1
+eol_c:          resb 1
+load_eol:       resb 1              ; set by load_lines
 ; LCS / edit script
 lcs_pred:       resb (LCS_MAX+1)*(LCS_MAX+1)
 ; mark array per line of a/b: 0=common 1=changed
@@ -93,9 +100,10 @@ v_sdiff: db "f00-sdiff (f00) 0.16.3", 10, "License: MIT · https://f00.sh", 10, 
 h_diff:
     db "Usage: f00-diff [OPTION]... FILE1 FILE2", 10
     db "Compare files line by line.", 10, 10
-    db "  -u, --unified    unified diff (default)", 10
-    db "  -q, --brief      report only when files differ", 10
-    db "      --core       plain GNU-oriented unified output", 10
+    db "  -u, -U NUM  unified context (modern default; NUM default 3)", 10
+    db "  -c, -C NUM  context format", 10
+    db "  -q, --brief report only when files differ", 10
+    db "      --core  GNU-oriented (default format = normal)", 10
     db "  --help  --version", 10
     db "Modern TTY: themed -/+ lines (delta-class).", 10, 0
 
@@ -129,6 +137,7 @@ opt_silent:  db "--silent", 0
 s_help:      db "help", 0
 s_version:   db "version", 0
 s_unified:   db "unified", 0
+s_context:   db "context", 0
 s_brief:     db "brief", 0
 s_merge:     db "merge", 0
 s_width:     db "width", 0
@@ -141,6 +150,15 @@ diff_hdr_b:  db "+++ ", 0
 diff_hunk_o: db "@@ -", 0
 diff_hunk_m: db " +", 0
 diff_hunk_c: db " @@", 10, 0
+ctx_hdr_a:   db "*** ", 0
+ctx_hdr_b:   db "--- ", 0
+ctx_sep:     db "***************", 10, 0
+ctx_old_pre: db "*** ", 0
+ctx_old_suf: db " ****", 10, 0
+ctx_new_pre: db "--- ", 0
+ctx_new_suf: db " ----", 10, 0
+norm_sep:    db "---", 10, 0
+msg_nonl:    db "\ No newline at end of file", 10, 0
 files_differ: db " differ", 10, 0
 files_pre:    db "Files ", 0
 files_and:    db " and ", 0
@@ -230,11 +248,50 @@ memcmp_n:
     ret
 .eq: ret
 
-; lines_equal(ia in r8, ib in r9) → al  (uses lines_* tables)
+; line_has_nl_a(index r8) → al 1 if line ends with newline
+line_has_nl_a:
+    mov rax, [diff_na]
+    test rax, rax
+    jz .yes
+    dec rax
+    cmp r8, rax
+    jb .yes
+    mov al, [eol_a]
+    ret
+.yes: mov al, 1
+    ret
+
+line_has_nl_b:
+    mov rax, [diff_nb]
+    test rax, rax
+    jz .yes
+    dec rax
+    cmp r8, rax
+    jb .yes
+    mov al, [eol_b]
+    ret
+.yes: mov al, 1
+    ret
+
+line_has_nl_c:
+    mov rax, [diff_nc]
+    test rax, rax
+    jz .yes
+    dec rax
+    cmp r8, rax
+    jb .yes
+    mov al, [eol_c]
+    ret
+.yes: mov al, 1
+    ret
+
+; lines_equal(ia in r8, ib in r9) → al  (content + final-newline bit)
 lines_equal_ab:
     push rdi
     push rsi
     push rdx
+    push r8
+    push r9
     mov rdi, [lines_a_ptr + r8*8]
     mov rsi, [lines_b_ptr + r9*8]
     mov rdx, [lines_a_len + r8*8]
@@ -243,10 +300,95 @@ lines_equal_ab:
     call memcmp_n
     test eax, eax
     jnz .no
+    ; newline property must match (GNU treats missing final \n as part of last line)
+    pop r9
+    pop r8
+    push r8
+    push r9
+    call line_has_nl_a
+    mov dil, al
+    mov r8, r9
+    call line_has_nl_b
+    cmp dil, al
+    jne .no
     mov al, 1
     jmp .out
 .no: xor al, al
 .out:
+    pop r9
+    pop r8
+    pop rdx
+    pop rsi
+    pop rdi
+    ret
+
+; lines_equal_ac(ia=r8, ic=r9)
+lines_equal_ac:
+    push rdi
+    push rsi
+    push rdx
+    push r8
+    push r9
+    mov rdi, [lines_a_ptr + r8*8]
+    mov rsi, [lines_c_ptr + r9*8]
+    mov rdx, [lines_a_len + r8*8]
+    cmp rdx, [lines_c_len + r9*8]
+    jne .no
+    call memcmp_n
+    test eax, eax
+    jnz .no
+    pop r9
+    pop r8
+    push r8
+    push r9
+    call line_has_nl_a
+    mov dil, al
+    mov r8, r9
+    call line_has_nl_c
+    cmp dil, al
+    jne .no
+    mov al, 1
+    jmp .out
+.no: xor al, al
+.out:
+    pop r9
+    pop r8
+    pop rdx
+    pop rsi
+    pop rdi
+    ret
+
+; lines_equal_bc(ib=r8, ic=r9)
+lines_equal_bc:
+    push rdi
+    push rsi
+    push rdx
+    push r8
+    push r9
+    mov rdi, [lines_b_ptr + r8*8]
+    mov rsi, [lines_c_ptr + r9*8]
+    mov rdx, [lines_b_len + r8*8]
+    cmp rdx, [lines_c_len + r9*8]
+    jne .no
+    call memcmp_n
+    test eax, eax
+    jnz .no
+    pop r9
+    pop r8
+    push r8
+    push r9
+    call line_has_nl_b
+    mov dil, al
+    mov r8, r9
+    call line_has_nl_c
+    cmp dil, al
+    jne .no
+    mov al, 1
+    jmp .out
+.no: xor al, al
+.out:
+    pop r9
+    pop r8
     pop rdx
     pop rsi
     pop rdi
@@ -254,6 +396,7 @@ lines_equal_ab:
 
 ; load_lines(rdi=path, rsi=pool, rdx=ptr_table, rcx=len_table, r8=*count)
 ; Strips trailing newline from line length (GNU line content without \n).
+; Sets load_eol: 1 if file ends with \n or is empty; 0 if last line has no \n.
 ; → rax=0 ok, rax=errno (positive) on open failure. count cleared always.
 load_lines:
     push rbx
@@ -267,6 +410,7 @@ load_lines:
     mov r14, rcx                    ; len table
     mov r15, r8                     ; count ptr
     mov qword [r15], 0
+    mov byte [load_eol], 1
     mov rax, SYS_openat
     mov rsi, rdi
     mov rdi, AT_FDCWD
@@ -314,6 +458,8 @@ load_lines:
 .eof:
     cmp r8, rbp
     jae .cl
+    ; incomplete last line (no trailing newline)
+    mov byte [load_eol], 0
     mov rax, [r15]
     cmp rax, MAX_LINES-1
     jae .cl
@@ -340,6 +486,39 @@ load_lines:
     pop rbx
     ret
 
+; emit "\ No newline at end of file\n" if index is last line and file lacks \n
+; emit_nonl_a(index in rbx)
+emit_nonl_a:
+    mov rax, [diff_na]
+    test rax, rax
+    jz .r
+    dec rax
+    cmp rbx, rax
+    jne .r
+    cmp byte [eol_a], 0
+    jne .r
+    push rsi
+    lea rsi, [msg_nonl]
+    call out_str
+    pop rsi
+.r: ret
+
+; emit_nonl_b(index in rbp or rbx — use rbp)
+emit_nonl_b:
+    mov rax, [diff_nb]
+    test rax, rax
+    jz .r
+    dec rax
+    cmp rbp, rax
+    jne .r
+    cmp byte [eol_b], 0
+    jne .r
+    push rsi
+    lea rsi, [msg_nonl]
+    call out_str
+    pop rsi
+.r: ret
+
 ; emit_tool_path_err(rsi=prefix "diff: ", rdi=path, rax=errno)
 emit_tool_path_err:
     push rbx
@@ -365,24 +544,25 @@ emit_tool_path_err:
     pop rbx
     ret
 
-; files_equal_ab → al
+; files_equal_ab → al (content + final-newline bits via lines_equal_ab)
 files_equal_ab:
     push rbx
     mov rax, [diff_na]
     cmp rax, [diff_nb]
     jne .no
+    ; whole-file trailing newline must match when both empty or as last lines
+    mov al, [eol_a]
+    cmp al, [eol_b]
+    jne .no
     xor ebx, ebx
 .lp:
     cmp rbx, [diff_na]
     jae .yes
-    mov rdi, [lines_a_ptr + rbx*8]
-    mov rsi, [lines_b_ptr + rbx*8]
-    mov rdx, [lines_a_len + rbx*8]
-    cmp rdx, [lines_b_len + rbx*8]
-    jne .no
-    call memcmp_n
-    test eax, eax
-    jnz .no
+    mov r8, rbx
+    mov r9, rbx
+    call lines_equal_ab
+    test al, al
+    jz .no
     inc rbx
     jmp .lp
 .yes: mov al, 1
@@ -405,7 +585,8 @@ diff_main:
     push r15
     mov r12, rdi
     mov r13, rsi
-    mov dword [g_flags], DF_UNIFIED
+    mov dword [g_flags], 0
+    mov dword [ctx_lines], CTX_DEFAULT
     mov r14, 1
     xor r15, r15
     mov qword [diff_a], 0
@@ -428,15 +609,67 @@ diff_main:
     test al, al
     jz .dn
     cmp al, 'u'
-    jne .sq
+    jne .sU
     or dword [g_flags], DF_UNIFIED
+    and dword [g_flags], ~DF_CONTEXT
     jmp .sn
+.sU: cmp al, 'U'
+    jne .sc
+    or dword [g_flags], DF_UNIFIED
+    and dword [g_flags], ~DF_CONTEXT
+    ; optional attached digits or next argv
+    inc rsi
+    cmp byte [rsi], 0
+    je .U_next
+    mov rdi, rsi
+    call parse_u64
+    mov [ctx_lines], eax
+    jmp .dn
+.U_next:
+    inc r14
+    cmp r14, r12
+    jge .drun
+    mov rdi, [r13 + r14*8]
+    cmp byte [rdi], '-'
+    je .U_unget
+    call parse_u64
+    mov [ctx_lines], eax
+    jmp .dn
+.U_unget:
+    dec r14
+    jmp .dn
+.sc: cmp al, 'c'
+    jne .sC
+    or dword [g_flags], DF_CONTEXT
+    and dword [g_flags], ~DF_UNIFIED
+    jmp .sn
+.sC: cmp al, 'C'
+    jne .sq
+    or dword [g_flags], DF_CONTEXT
+    and dword [g_flags], ~DF_UNIFIED
+    inc rsi
+    cmp byte [rsi], 0
+    je .C_next
+    mov rdi, rsi
+    call parse_u64
+    mov [ctx_lines], eax
+    jmp .dn
+.C_next:
+    inc r14
+    cmp r14, r12
+    jge .drun
+    mov rdi, [r13 + r14*8]
+    cmp byte [rdi], '-'
+    je .C_unget
+    call parse_u64
+    mov [ctx_lines], eax
+    jmp .dn
+.C_unget:
+    dec r14
+    jmp .dn
 .sq: cmp al, 'q'
-    jne .dnskip
+    jne .sn
     or dword [g_flags], DF_BRIEF
-    jmp .sn
-.dnskip:
-    jmp .sn
 .sn: inc rsi
     jmp .sh
 .dl:
@@ -452,40 +685,28 @@ diff_main:
     lea rsi, [s_unified]
     call strcmp
     test eax, eax
-    jnz .db
+    jnz .dctx
     or dword [g_flags], DF_UNIFIED
+    and dword [g_flags], ~DF_CONTEXT
+    jmp .dn
+.dctx:
+    lea rsi, [s_context]
+    call strcmp
+    test eax, eax
+    jnz .db
+    or dword [g_flags], DF_CONTEXT
+    and dword [g_flags], ~DF_UNIFIED
     jmp .dn
 .db: lea rsi, [s_brief]
     call strcmp
     test eax, eax
-    jnz .dcore2
+    jnz .dn
     or dword [g_flags], DF_BRIEF
     jmp .dn
-.dcore2:
-    ; --core already as full token
-    jmp .dn
-.dcore:
-    lea rsi, [opt_core]
-    call strcmp
-    test eax, eax
-    jnz .dhelp2
-    or dword [g_flags], DF_CORE
-    mov byte [g_color], 0
-    jmp .dn
-.dhelp2:
-    lea rsi, [opt_help]
-    call strcmp
-    test eax, eax
-    jnz .dver2
 .dhelp:
     lea rsi, [h_diff]
     call out_str
     jmp .dex0
-.dver2:
-    lea rsi, [opt_version]
-    call strcmp
-    test eax, eax
-    jnz .dn
 .dver:
     lea rsi, [v_diff]
     call out_str
@@ -501,7 +722,7 @@ diff_main:
 .dn: inc r14
     jmp .dp
 .drun:
-    ; re-parse for --core/--help as full argv tokens (short path missed full --core)
+    ; re-parse for --core/--help as full argv tokens
     mov r14, 1
 .rp:
     cmp r14, r12
@@ -540,6 +761,13 @@ diff_main:
     mov dword [g_exit], 2
     jmp .dex
 .okf:
+    ; default format: --core → normal; modern → unified
+    test dword [g_flags], DF_UNIFIED | DF_CONTEXT | DF_BRIEF
+    jnz .fmt_ok
+    test dword [g_flags], DF_CORE
+    jnz .fmt_ok
+    or dword [g_flags], DF_UNIFIED
+.fmt_ok:
     call diff_files
 .dex:
     call out_flush
@@ -576,6 +804,8 @@ diff_files:
     mov dword [g_exit], 2
     jmp .out
 .lb:
+    mov al, [load_eol]
+    mov [eol_a], al
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -590,8 +820,10 @@ diff_files:
     mov dword [g_exit], 2
     jmp .out
 .okload:
+    mov al, [load_eol]
+    mov [eol_b], al
     test dword [g_flags], DF_BRIEF
-    jz .uni
+    jz .cmp
     call files_equal_ab
     test al, al
     jnz .same
@@ -610,10 +842,42 @@ diff_files:
 .same:
     mov dword [g_exit], 0
     jmp .out
-.uni:
+.cmp:
     call files_equal_ab
     test al, al
     jnz .same
+    call compute_marks_ab
+    test dword [g_flags], DF_CONTEXT
+    jnz .ctx
+    test dword [g_flags], DF_UNIFIED
+    jnz .uni
+    ; normal (default under --core)
+    call emit_normal_from_marks
+    mov dword [g_exit], 1
+    jmp .out
+.ctx:
+    test dword [g_flags], DF_CORE
+    jnz .ctxh
+    cmp byte [g_color], 0
+    je .ctxh
+    call color_dim
+.ctxh:
+    lea rsi, [ctx_hdr_a]
+    mov rdi, [diff_a]
+    call emit_unified_path_hdr
+    lea rsi, [ctx_hdr_b]
+    mov rdi, [diff_b]
+    call emit_unified_path_hdr
+    test dword [g_flags], DF_CORE
+    jnz .ctxb
+    cmp byte [g_color], 0
+    je .ctxb
+    call color_reset
+.ctxb:
+    call emit_context_from_marks
+    mov dword [g_exit], 1
+    jmp .out
+.uni:
     ; headers --- / +++ with tab + mtime (GNU unified)
     test dword [g_flags], DF_CORE
     jnz .h
@@ -632,7 +896,7 @@ diff_files:
     je .body
     call color_reset
 .body:
-    call emit_unified_lcs
+    call emit_hunks_from_marks
     mov dword [g_exit], 1
 .out:
     pop r15
@@ -642,10 +906,9 @@ diff_files:
     pop rbx
     ret
 
-; ── unified LCS / prefix-suffix diff ───────────────────────
+; ── LCS / prefix-suffix marks for files A/B ────────────────
 ; mark_a/mark_b: 0 common, 1 changed
-; Then emit GNU-style hunks with CTX_LINES context.
-emit_unified_lcs:
+compute_marks_ab:
     push rbx
     push r12
     push r13
@@ -709,11 +972,9 @@ emit_unified_lcs:
     sub rax, r12                    ; na_mid
     mov rbx, r15
     sub rbx, r13                    ; nb_mid
-    ; if both zero — identical (shouldn't reach)
     mov rcx, rax
     or rcx, rbx
     jz .marked
-    ; try LCS if both sides small and non-trivial
     cmp rax, LCS_MAX
     ja .bulk
     cmp rbx, LCS_MAX
@@ -722,11 +983,9 @@ emit_unified_lcs:
     jz .only_ins
     test rbx, rbx
     jz .only_del
-    ; run LCS on middle (r12,r13,r14,r15 live)
     call lcs_mark_solid
     jmp .marked
 .only_ins:
-    ; mark all b middle as changed
     mov rcx, r13
 .oi:
     cmp rcx, r15
@@ -743,7 +1002,6 @@ emit_unified_lcs:
     inc rcx
     jmp .od
 .bulk:
-    ; mark entire middle as change
     mov rcx, r12
 .ba:
     cmp rcx, r14
@@ -760,7 +1018,6 @@ emit_unified_lcs:
     inc rcx
     jmp .bb
 .marked:
-    call emit_hunks_from_marks
     pop r15
     pop r14
     pop r13
@@ -915,6 +1172,550 @@ lcs_mark_solid:
     pop rbx
     ret
 
+; ── normal format (ed-style) from marks ────────────────────
+; no context; pure change blocks: Na,MbXc,Yd / Nd / Na
+emit_normal_from_marks:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    xor r12, r12                    ; ia
+    xor r13, r13                    ; ib
+    mov r14, [diff_na]
+    mov r15, [diff_nb]
+.scan:
+.skip:
+    cmp r12, r14
+    jae .tail_b
+    cmp r13, r15
+    jae .tail_a
+    cmp byte [mark_a + r12], 0
+    jne .chg
+    cmp byte [mark_b + r13], 0
+    jne .chg
+    inc r12
+    inc r13
+    jmp .skip
+.tail_b:
+    cmp r13, r15
+    jae .done
+    jmp .chg
+.tail_a:
+    cmp r12, r14
+    jae .done
+.chg:
+    mov rax, r12                    ; a0
+    mov rbx, r13                    ; b0
+    mov r8, r12
+    mov r9, r13
+.ca:
+    cmp r8, r14
+    jae .cb
+    cmp byte [mark_a + r8], 0
+    je .cb
+    inc r8
+    jmp .ca
+.cb:
+    cmp r9, r15
+    jae .emit
+    cmp byte [mark_b + r9], 0
+    je .emit
+    inc r9
+    jmp .cb
+.emit:
+    ; a0=rax a1=r8 b0=rbx b1=r9  (exclusive ends)
+    push r12
+    push r13
+    mov r12, rax
+    mov r13, rbx
+    mov r10, r8
+    mov r11, r9
+    call emit_normal_block
+    pop r13
+    pop r12
+    mov r12, r8
+    mov r13, r9
+    jmp .scan
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_normal_block: r12=a0 r13=b0 r10=a1 r11=b1 exclusive
+emit_normal_block:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r14, r10
+    sub r14, r12                    ; acnt
+    mov r15, r11
+    sub r15, r13                    ; bcnt
+    ; left range
+    test r14, r14
+    jnz .left_chg
+    ; empty left → append after line r12 (0-based count)
+    mov rdi, r12
+    call out_u64
+    mov dil, 'a'
+    call out_byte
+    jmp .right
+.left_chg:
+    lea rdi, [r12 + 1]
+    call out_u64
+    cmp r14, 1
+    je .lop
+    mov dil, ','
+    call out_byte
+    mov rdi, r12
+    add rdi, r14
+    call out_u64
+.lop:
+    test r15, r15
+    jnz .is_c
+    mov dil, 'd'
+    call out_byte
+    ; right attachment = b0
+    mov rdi, r13
+    call out_u64
+    mov dil, 10
+    call out_byte
+    jmp .body_del
+.is_c:
+    mov dil, 'c'
+    call out_byte
+.right:
+    test r15, r15
+    jnz .right_chg
+    ; empty right with left changes already handled as d
+    mov dil, 10
+    call out_byte
+    jmp .body_del
+.right_chg:
+    lea rdi, [r13 + 1]
+    call out_u64
+    cmp r15, 1
+    je .rop
+    mov dil, ','
+    call out_byte
+    mov rdi, r13
+    add rdi, r15
+    call out_u64
+.rop:
+    mov dil, 10
+    call out_byte
+    test r14, r14
+    jz .body_add_only
+.body_del:
+    mov rbx, r12
+.dl:
+    cmp rbx, r10
+    jae .after_del
+    mov dil, '<'
+    call out_byte
+    mov dil, ' '
+    call out_byte
+    mov rsi, [lines_a_ptr + rbx*8]
+    mov rdx, [lines_a_len + rbx*8]
+    call out_strn
+    mov dil, 10
+    call out_byte
+    call emit_nonl_a
+    inc rbx
+    jmp .dl
+.after_del:
+    test r15, r15
+    jz .nb_done
+    lea rsi, [norm_sep]
+    call out_str
+.body_add_only:
+    mov rbp, r13
+.al:
+    cmp rbp, r11
+    jae .nb_done
+    mov dil, '>'
+    call out_byte
+    mov dil, ' '
+    call out_byte
+    mov rsi, [lines_b_ptr + rbp*8]
+    mov rdx, [lines_b_len + rbp*8]
+    call out_strn
+    mov dil, 10
+    call out_byte
+    call emit_nonl_b
+    inc rbp
+    jmp .al
+.nb_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+; ── context format (-c/-C) from marks ──────────────────────
+emit_context_from_marks:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    xor r12, r12
+    xor r13, r13
+    mov r14, [diff_na]
+    mov r15, [diff_nb]
+.scan:
+.skip:
+    cmp r12, r14
+    jae .tb
+    cmp r13, r15
+    jae .ta
+    cmp byte [mark_a + r12], 0
+    jne .found
+    cmp byte [mark_b + r13], 0
+    jne .found
+    inc r12
+    inc r13
+    jmp .skip
+.tb:
+    cmp r13, r15
+    jae .done
+    jmp .found
+.ta:
+    cmp r12, r14
+    jae .done
+.found:
+    mov eax, [ctx_lines]
+    movsxd rcx, eax
+    mov rax, r12
+    mov rbx, r13
+.bk:
+    test rcx, rcx
+    jz .bkd
+    test rax, rax
+    jz .bkd
+    test rbx, rbx
+    jz .bkd
+    cmp byte [mark_a + rax - 1], 0
+    jne .bkd
+    cmp byte [mark_b + rbx - 1], 0
+    jne .bkd
+    dec rax
+    dec rbx
+    dec rcx
+    jmp .bk
+.bkd:
+    push rax
+    push rbx
+    mov r8, r12
+    mov r9, r13
+.ch:
+    mov dil, 0
+.ca:
+    cmp r8, r14
+    jae .cb
+    cmp byte [mark_a + r8], 0
+    je .cb
+    inc r8
+    mov dil, 1
+    jmp .ca
+.cb:
+    cmp r9, r15
+    jae .chc
+    cmp byte [mark_b + r9], 0
+    je .chc
+    inc r9
+    mov dil, 1
+    jmp .cb
+.chc:
+    test dil, dil
+    jnz .ch
+    mov eax, [ctx_lines]
+    mov ecx, eax
+.fw:
+    test ecx, ecx
+    jz .lm
+    cmp r8, r14
+    jae .fwb
+    cmp r9, r15
+    jae .fwa
+    cmp byte [mark_a + r8], 0
+    jne .ch
+    cmp byte [mark_b + r9], 0
+    jne .ch
+    inc r8
+    inc r9
+    dec ecx
+    jmp .fw
+.fwb:
+    cmp r9, r15
+    jae .fwd
+    cmp byte [mark_b + r9], 0
+    jne .ch
+    jmp .fwd
+.fwa:
+    cmp r8, r14
+    jae .fwd
+    cmp byte [mark_a + r8], 0
+    jne .ch
+    jmp .fwd
+.lm:
+    push r8
+    push r9
+    mov eax, [ctx_lines]
+    mov ecx, eax
+.lmlp:
+    test ecx, ecx
+    jz .lmno
+    cmp r8, r14
+    jae .lmtb
+    cmp r9, r15
+    jae .lmta
+    cmp byte [mark_a + r8], 0
+    jne .lmyes
+    cmp byte [mark_b + r9], 0
+    jne .lmyes
+    inc r8
+    inc r9
+    dec ecx
+    jmp .lmlp
+.lmtb:
+    cmp r9, r15
+    jae .lmno
+    cmp byte [mark_b + r9], 0
+    jne .lmyes
+    jmp .lmno
+.lmta:
+    cmp r8, r14
+    jae .lmno
+    cmp byte [mark_a + r8], 0
+    jne .lmyes
+    jmp .lmno
+.lmyes:
+    add rsp, 16
+    jmp .ch
+.lmno:
+    pop r9
+    pop r8
+.fwd:
+    pop rbx                         ; b0
+    pop rax                         ; a0
+    push r12
+    push r13
+    mov r12, rax
+    mov r13, rbx
+    mov r10, r8
+    sub r10, r12                    ; acnt
+    mov r11, r9
+    sub r11, r13                    ; bcnt
+    push r8
+    push r9
+    call emit_one_context_hunk
+    pop r9
+    pop r8
+    pop r13
+    pop r12
+    mov r12, r8
+    mov r13, r9
+    jmp .scan
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_one_context_hunk: r12=a0 r13=b0 r10=acnt r11=bcnt
+; GNU: omit old body if no deletions/changes; omit new body if no insertions/changes.
+emit_one_context_hunk:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r14, r10
+    mov r15, r11
+    ; has_old_chg / has_new_chg in num_tmp
+    xor eax, eax
+    mov rcx, r12
+    lea rdx, [r12 + r14]
+.sca:
+    cmp rcx, rdx
+    jae .scb0
+    cmp byte [mark_a + rcx], 0
+    je .sca1
+    mov al, 1
+    jmp .scb0
+.sca1:
+    inc rcx
+    jmp .sca
+.scb0:
+    mov [num_tmp], al
+    xor eax, eax
+    mov rcx, r13
+    lea rdx, [r13 + r15]
+.scb:
+    cmp rcx, rdx
+    jae .scd
+    cmp byte [mark_b + rcx], 0
+    je .scb1
+    mov al, 1
+    jmp .scd
+.scb1:
+    inc rcx
+    jmp .scb
+.scd:
+    mov [num_tmp + 1], al
+    lea rsi, [ctx_sep]
+    call out_str
+    ; *** old range ****
+    lea rsi, [ctx_old_pre]
+    call out_str
+    call emit_ctx_range_a
+    lea rsi, [ctx_old_suf]
+    call out_str
+    ; omit old body if no a-side changes (pure insert)
+    cmp byte [num_tmp], 0
+    je .newsec
+    test r14, r14
+    jz .newsec
+    ; chg marker: '!' if both sides changed, else '-'
+    mov al, '!'
+    cmp byte [num_tmp + 1], 0
+    jne .omark
+    mov al, '-'
+.omark:
+    mov [num_tmp + 2], al
+    mov rbx, r12
+    lea r8, [r12 + r14]
+.owalk:
+    cmp rbx, r8
+    jae .newsec
+    cmp byte [mark_a + rbx], 0
+    jne .ochg
+    mov dil, ' '
+    jmp .oemit
+.ochg:
+    mov dil, [num_tmp + 2]
+.oemit:
+    call out_byte
+    mov dil, ' '
+    call out_byte
+    mov rsi, [lines_a_ptr + rbx*8]
+    mov rdx, [lines_a_len + rbx*8]
+    call out_strn
+    mov dil, 10
+    call out_byte
+    call emit_nonl_a
+    inc rbx
+    jmp .owalk
+.newsec:
+    lea rsi, [ctx_new_pre]
+    call out_str
+    call emit_ctx_range_b
+    lea rsi, [ctx_new_suf]
+    call out_str
+    cmp byte [num_tmp + 1], 0
+    je .ctxdone
+    test r15, r15
+    jz .ctxdone
+    mov al, '!'
+    cmp byte [num_tmp], 0
+    jne .nmark
+    mov al, '+'
+.nmark:
+    mov [num_tmp + 2], al
+    mov rbp, r13
+    lea r9, [r13 + r15]
+.nwalk:
+    cmp rbp, r9
+    jae .ctxdone
+    cmp byte [mark_b + rbp], 0
+    jne .nchg
+    mov dil, ' '
+    jmp .nemit
+.nchg:
+    mov dil, [num_tmp + 2]
+.nemit:
+    call out_byte
+    mov dil, ' '
+    call out_byte
+    mov rsi, [lines_b_ptr + rbp*8]
+    mov rdx, [lines_b_len + rbp*8]
+    call out_strn
+    mov dil, 10
+    call out_byte
+    call emit_nonl_b
+    inc rbp
+    jmp .nwalk
+.ctxdone:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+; emit_ctx_range_a: r12=a0 r14=acnt → "START" or "START,END" (1-based inclusive)
+emit_ctx_range_a:
+    test r14, r14
+    jnz .nz
+    ; empty: print line before insert point (like unified)
+    mov rdi, r12
+    test rdi, rdi
+    jnz .e0
+    xor edi, edi
+    call out_u64
+    ret
+.e0: call out_u64
+    ret
+.nz:
+    lea rdi, [r12 + 1]
+    call out_u64
+    cmp r14, 1
+    je .one
+    mov dil, ','
+    call out_byte
+    mov rdi, r12
+    add rdi, r14
+    call out_u64
+.one:
+    ret
+
+emit_ctx_range_b:
+    test r15, r15
+    jnz .nz
+    mov rdi, r13
+    test rdi, rdi
+    jnz .e0
+    xor edi, edi
+    call out_u64
+    ret
+.e0: call out_u64
+    ret
+.nz:
+    lea rdi, [r13 + 1]
+    call out_u64
+    cmp r15, 1
+    je .one
+    mov dil, ','
+    call out_byte
+    mov rdi, r13
+    add rdi, r15
+    call out_u64
+.one:
+    ret
+
 ; emit_hunks_from_marks — GNU unified with context
 emit_hunks_from_marks:
     push rbx
@@ -958,7 +1759,8 @@ emit_hunks_from_marks:
     ; expand context backward
     mov rax, r12                    ; a_start
     mov rbx, r13                    ; b_start
-    mov rcx, CTX_LINES
+    mov ecx, [ctx_lines]
+    movsxd rcx, ecx
 .bk:
     test rcx, rcx
     jz .bk_done
@@ -1008,7 +1810,7 @@ emit_hunks_from_marks:
     jmp .ch_consume
 .fwd_ctx:
     ; take up to CTX common lines; merge further changes within 2*CTX gap
-    mov ecx, CTX_LINES
+    mov ecx, [ctx_lines]
 .fw:
     test ecx, ecx
     jz .look_more
@@ -1040,7 +1842,7 @@ emit_hunks_from_marks:
     ; After CTX commons, look up to CTX more lines for a nearby change (merge).
     push r8
     push r9
-    mov ecx, CTX_LINES
+    mov ecx, [ctx_lines]
 .lm:
     test ecx, ecx
     jz .lm_no
@@ -1210,6 +2012,7 @@ emit_one_hunk:
     call out_strn
     mov dil, 10
     call out_byte
+    call emit_nonl_a
     inc rbx
     inc rbp
     jmp .walk
@@ -1266,6 +2069,7 @@ emit_line_del:
     call color_reset
 .n: mov dil, 10
     call out_byte
+    call emit_nonl_a
     pop rdx
     pop rsi
     ret
@@ -1290,6 +2094,7 @@ emit_line_add:
     call color_reset
 .n: mov dil, 10
     call out_byte
+    call emit_nonl_b
     pop rdx
     pop rsi
     ret
@@ -2396,6 +3201,8 @@ diff3_files:
     mov dword [g_exit], 2
     jmp .done
 .lb:
+    mov al, [load_eol]
+    mov [eol_a], al
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -2410,6 +3217,8 @@ diff3_files:
     mov dword [g_exit], 2
     jmp .done
 .lc:
+    mov al, [load_eol]
+    mov [eol_b], al
     mov rdi, [diff_c]
     lea rsi, [pool_c]
     lea rdx, [lines_c_ptr]
@@ -2424,264 +3233,744 @@ diff3_files:
     mov dword [g_exit], 2
     jmp .done
 .okl:
-    mov r12, [diff_na]
-    cmp r12, [diff_nb]
-    jae .m1
-    mov r12, [diff_nb]
-.m1: cmp r12, [diff_nc]
-    jae .m2
-    mov r12, [diff_nc]
-.m2:
-    xor r13, r13
+    mov al, [load_eol]
+    mov [eol_c], al
     mov dword [g_exit], 0
-.lp:
-    cmp r13, r12
-    jae .done
-    call d3_line_a
-    mov r8, rdi
-    mov r9, rdx
-    call d3_line_b
-    mov r10, rdi
-    mov r11, rdx
-    call d3_line_c
-    mov rbx, rdi
-    mov rbp, rdx
-    ; presence flags in [num_tmp]: bit0 A bit1 B bit2 C for lines that exist
-    xor eax, eax
-    cmp r13, [diff_na]
-    jae .p1
-    or al, 1
-.p1: cmp r13, [diff_nb]
-    jae .p2
-    or al, 2
-.p2: cmp r13, [diff_nc]
-    jae .p3
-    or al, 4
-.p3: mov [num_tmp + 16], al
-    mov rdi, r8
-    mov rdx, r9
-    mov rsi, r10
-    mov rcx, r11
-    call d3_eq
-    mov r14b, al
-    mov rdi, r8
-    mov rdx, r9
-    mov rsi, rbx
-    mov rcx, rbp
-    call d3_eq
-    mov r15b, al
-    mov rdi, r10
-    mov rdx, r11
-    mov rsi, rbx
-    mov rcx, rbp
-    call d3_eq
-    ; al = bc_eq
-    ; If all three equal (or all missing empty): merge print / skip
-    test r14b, r14b
-    jz .differs
-    test r15b, r15b
-    jz .differs
-    ; all equal
     cmp byte [d3_merge], 0
-    je .next
-    ; only print if at least one side has the line (avoid trailing empties from max)
-    test byte [num_tmp + 16], 7
-    jz .next
-    test r9, r9
-    jz .nl_only
-    mov rsi, r8
-    mov rdx, r9
-    call out_strn
-.nl_only:
-    mov dil, 10
-    call out_byte
-    jmp .next
-.differs:
-    cmp byte [d3_merge], 0
-    jne .merge_logic
-    ; classic report — GNU exits 0 for successful non-merge report
-    ; type marker: ==== / ====1 / ====2 / ====3
+    jne .do_merge
+    call d3_classic
+    jmp .done
+.do_merge:
+    call d3_merge_out
+.done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ── diff3 classic: range blocks with GNU type headers ──────
+; Multi-zone: find nearest triple-line sync after each conflict.
+d3_classic:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    xor r12, r12                    ; ia
+    xor r13, r13                    ; ib
+    xor r14, r14                    ; ic
+.loop:
+    ; skip common lines
+.sk:
+    cmp r12, [diff_na]
+    jae .sk_check
+    cmp r13, [diff_nb]
+    jae .sk_check
+    cmp r14, [diff_nc]
+    jae .sk_check
+    mov r8, r12
+    mov r9, r13
+    call lines_equal_ab
+    test al, al
+    jz .sk_done
+    mov r8, r12
+    mov r9, r14
+    call lines_equal_ac
+    test al, al
+    jz .sk_done
+    inc r12
+    inc r13
+    inc r14
+    jmp .sk
+.sk_check:
+    cmp r12, [diff_na]
+    jb .sk_done
+    cmp r13, [diff_nb]
+    jb .sk_done
+    cmp r14, [diff_nc]
+    jb .sk_done
+    jmp .out
+.sk_done:
+    mov rax, [diff_na]
+    cmp r12, rax
+    jne .have
+    mov rax, [diff_nb]
+    cmp r13, rax
+    jne .have
+    mov rax, [diff_nc]
+    cmp r14, rax
+    je .out
+.have:
+    ; conflict starts at r12,r13,r14 — nearest sync → r8,r9,r10
+    call d3_find_sync
     push r8
     push r9
     push r10
-    push r11
-    push rbx
-    push rbp
-    push rax
-    ; determine type: only A differs => ====1 if B==C; only B => ====2 if A==C; only C => ====3 if A==B
-    pop rax
-    push rax
-    test r14b, r14b                 ; A==B?
-    jz .t_check2
-    ; A==B, not all equal => C differs
-    lea rsi, [diff3_eq3]
-    jmp .t_emit
-.t_check2:
-    test r15b, r15b                 ; A==C?
-    jz .t_check3
-    lea rsi, [diff3_eq2]
-    jmp .t_emit
-.t_check3:
-    test al, al                     ; B==C?
-    jz .t_all
-    lea rsi, [diff3_eq1]
-    jmp .t_emit
-.t_all:
-    lea rsi, [diff3_aaaa]
-.t_emit:
-    call out_str
-    pop rax
-    pop rbp
-    pop rbx
-    pop r11
+    mov rax, r12
+    mov rbx, r13
+    mov rbp, r14
+    call d3_emit_classic_block
     pop r10
     pop r9
     pop r8
-    ; emit file sections with line number: "1:LINEc\n  text\n"
-    ; For type 1 (only A differs): show 1 and then 2/3 once if B==C
-    ; Simplified: always show each file's line with number (r13+1)
-    push r8
+    mov r12, r8
+    mov r13, r9
+    mov r14, r10
+    jmp .loop
+.out:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; d3_find_sync: r12=a0,r13=b0,r14=c0 → r8=a1,r9=b1,r10=c1
+; Nearest (a1,b1,c1) where either EOF or A[a1]==B[b1]==C[c1] and
+; the conflict region [a0,a1)×… is non-empty. Minimizes sum of lengths.
+d3_find_sync:
+    push rbx
+    push r15
+    push rbp
+    mov rbp, rsp
+    ; best defaults = EOF
+    mov rax, [diff_na]
+    push rax                        ; [rbp-8] best_a
+    mov rax, [diff_nb]
+    push rax                        ; [rbp-16] best_b
+    mov rax, [diff_nc]
+    push rax                        ; [rbp-24] best_c
+    mov rax, [diff_na]
+    sub rax, r12
+    mov rcx, [diff_nb]
+    sub rcx, r13
+    add rax, rcx
+    mov rcx, [diff_nc]
+    sub rcx, r14
+    add rax, rcx
+    push rax                        ; [rbp-32] best_cost
+    mov rbx, r12                    ; i
+.for_i:
+    cmp rbx, [diff_na]
+    jae .ret
+    mov r15, r13                    ; j
+.for_j:
+    cmp r15, [diff_nb]
+    jae .next_i
+    mov r8, rbx
+    mov r9, r15
+    call lines_equal_ab
+    test al, al
+    jz .jinc
+    ; first matching j for this i; find first k
+    mov r11, r14
+.for_k:
+    cmp r11, [diff_nc]
+    jae .jinc
+    mov r8, rbx
+    mov r9, r11
+    push r11
+    call lines_equal_ac
+    pop r11
+    test al, al
+    jz .kinc
+    ; sync at (rbx,r15,r11); skip empty
+    cmp rbx, r12
+    jne .cost
+    cmp r15, r13
+    jne .cost
+    cmp r11, r14
+    je .kinc
+.cost:
+    mov rax, rbx
+    sub rax, r12
+    mov rcx, r15
+    sub rcx, r13
+    add rax, rcx
+    mov rcx, r11
+    sub rcx, r14
+    add rax, rcx
+    test rax, rax
+    jz .kinc
+    cmp rax, [rbp-32]
+    jae .next_i                     ; not better; next i (earliest j done)
+    mov [rbp-32], rax
+    mov [rbp-8], rbx
+    mov [rbp-16], r15
+    mov [rbp-24], r11
+    jmp .next_i                     ; earliest j+k for this i is enough
+.kinc:
+    inc r11
+    jmp .for_k
+.jinc:
+    inc r15
+    jmp .for_j
+.next_i:
+    inc rbx
+    jmp .for_i
+.ret:
+    mov r8, [rbp-8]
+    mov r9, [rbp-16]
+    mov r10, [rbp-24]
+    mov rsp, rbp
+    pop rbp
+    pop r15
+    pop rbx
+    ret
+
+; d3_emit_classic_block: a0=rax b0=rbx c0=rbp a1=r8 b1=r9 c1=r10
+d3_emit_classic_block:
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rax                    ; a0
+    mov r13, rbx                    ; b0
+    mov r14, rbp                    ; c0
+    mov r15, r8                     ; a1
+    ; stash b1,c1 on stack
     push r9
     push r10
-    push r11
+    ; compare middles for type
+    ; ab_eq: ranges equal?
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r15
+    mov rcx, r9                     ; b1
+    call d3_range_eq_ab
+    mov [num_tmp], al               ; ab_eq
+    mov rdi, r12
+    mov rsi, r14
+    mov rdx, r15
+    mov rcx, r10                    ; c1 — but r10 may be live; use stack
+    mov rcx, [rsp]                  ; c1
+    call d3_range_eq_ac
+    mov [num_tmp + 1], al           ; ac_eq
+    mov rdi, r13
+    mov rsi, r14
+    mov rdx, [rsp+8]                ; b1
+    mov rcx, [rsp]                  ; c1
+    call d3_range_eq_bc
+    mov [num_tmp + 2], al           ; bc_eq
+    ; type header
+    cmp byte [num_tmp], 0
+    je .t2
+    ; ab equal → ====3
+    lea rsi, [diff3_eq3]
+    jmp .th
+.t2: cmp byte [num_tmp + 1], 0
+    je .t1
+    lea rsi, [diff3_eq2]
+    jmp .th
+.t1: cmp byte [num_tmp + 2], 0
+    je .tall
+    lea rsi, [diff3_eq1]
+    jmp .th
+.tall:
+    lea rsi, [diff3_aaaa]
+.th: call out_str
+    ; emit sections by type order
+    cmp byte [num_tmp], 0
+    jne .type3                      ; ab equal
+    cmp byte [num_tmp + 1], 0
+    jne .type2                      ; ac equal
+    cmp byte [num_tmp + 2], 0
+    jne .type1                      ; bc equal
+    ; all differ: 1, 2, 3 each with content
+    mov edi, 1
+    mov rsi, r12
+    mov rdx, r15
+    call d3_emit_sec_a
+    mov edi, 2
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_sec_b
+    mov edi, 3
+    mov rsi, r14
+    mov rdx, [rsp]
+    call d3_emit_sec_c
+    jmp .blk_done
+.type3:
+    ; 1+2 share content, then 3
+    mov edi, 1
+    mov rsi, r12
+    mov rdx, r15
+    xor ecx, ecx                    ; no content yet
+    call d3_emit_sec_hdr_a
+    mov edi, 2
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_sec_hdr_b
+    ; shared content from A (same as B)
+    mov rsi, r12
+    mov rdx, r15
+    call d3_emit_lines_a
+    mov edi, 3
+    mov rsi, r14
+    mov rdx, [rsp]
+    call d3_emit_sec_c
+    jmp .blk_done
+.type1:
+    ; 1 alone, then 2+3 share
+    mov edi, 1
+    mov rsi, r12
+    mov rdx, r15
+    call d3_emit_sec_a
+    mov edi, 2
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    xor ecx, ecx
+    call d3_emit_sec_hdr_b
+    mov edi, 3
+    mov rsi, r14
+    mov rdx, [rsp]
+    call d3_emit_sec_hdr_c
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_lines_b
+    jmp .blk_done
+.type2:
+    ; 1+3 share, then 2
+    mov edi, 1
+    mov rsi, r12
+    mov rdx, r15
+    xor ecx, ecx
+    call d3_emit_sec_hdr_a
+    mov edi, 3
+    mov rsi, r14
+    mov rdx, [rsp]
+    call d3_emit_sec_hdr_c
+    mov rsi, r12
+    mov rdx, r15
+    call d3_emit_lines_a
+    mov edi, 2
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_sec_b
+.blk_done:
+    pop r10
+    pop r9
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; range equality helpers: rdi=i0, rsi=j0, rdx=i1, rcx=j1
+d3_range_eq_ab:
     push rbx
-    push rbp
-    push rax
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rax, r14
+    sub rax, r12
+    mov rbx, r15
+    sub rbx, r13
+    cmp rax, rbx
+    jne .no
+.lp:
+    cmp r12, r14
+    jae .yes
+    mov r8, r12
+    mov r9, r13
+    call lines_equal_ab
+    test al, al
+    jz .no
+    inc r12
+    inc r13
+    jmp .lp
+.yes: mov al, 1
+    jmp .d
+.no: xor al, al
+.d: pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+d3_range_eq_ac:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rax, r14
+    sub rax, r12
+    mov rbx, r15
+    sub rbx, r13
+    cmp rax, rbx
+    jne .no
+.lp:
+    cmp r12, r14
+    jae .yes
+    mov r8, r12
+    mov r9, r13
+    call lines_equal_ac
+    test al, al
+    jz .no
+    inc r12
+    inc r13
+    jmp .lp
+.yes: mov al, 1
+    jmp .d
+.no: xor al, al
+.d: pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+d3_range_eq_bc:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+    mov rax, r14
+    sub rax, r12
+    mov rbx, r15
+    sub rbx, r13
+    cmp rax, rbx
+    jne .no
+.lp:
+    cmp r12, r14
+    jae .yes
+    mov r8, r12
+    mov r9, r13
+    call lines_equal_bc
+    test al, al
+    jz .no
+    inc r12
+    inc r13
+    jmp .lp
+.yes: mov al, 1
+    jmp .d
+.no: xor al, al
+.d: pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; d3_emit_sec_a: edi=fileno unused style; rsi=a0 rdx=a1 — hdr+content
+; Actually: emit "N:range\n" + lines
+d3_emit_sec_a:
+    push rsi
+    push rdx
+    call d3_emit_sec_hdr_a
+    pop rdx
+    pop rsi
+    call d3_emit_lines_a
+    ret
+d3_emit_sec_b:
+    push rsi
+    push rdx
+    call d3_emit_sec_hdr_b
+    pop rdx
+    pop rsi
+    call d3_emit_lines_b
+    ret
+d3_emit_sec_c:
+    push rsi
+    push rdx
+    call d3_emit_sec_hdr_c
+    pop rdx
+    pop rsi
+    call d3_emit_lines_c
+    ret
+
+; hdr only: rsi=start rdx=end → "N:LO[,HI]c|a\n"
+d3_emit_sec_hdr_a:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
     lea rsi, [diff3_1]
     call out_str
-    lea rdi, [r13 + 1]
-    call out_u64
-    lea rsi, [diff3_c]
-    call out_str
-    pop rax
-    pop rbp
+    call d3_emit_range_cmd
+    pop r13
+    pop r12
     pop rbx
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    ; print A line if present or content
-    test byte [num_tmp + 16], 1
-    jz .o2
-    lea rsi, [diff3_ind]
-    call out_str
-    test r9, r9
-    jz .o1nl
-    mov rsi, r8
-    mov rdx, r9
-    call out_strn
-.o1nl:
-    mov dil, 10
-    call out_byte
-.o2:
-    push r10
-    push r11
+    ret
+d3_emit_sec_hdr_b:
     push rbx
-    push rbp
-    push rax
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
     lea rsi, [diff3_2]
     call out_str
-    lea rdi, [r13 + 1]
-    call out_u64
-    lea rsi, [diff3_c]
-    call out_str
-    pop rax
-    pop rbp
+    call d3_emit_range_cmd
+    pop r13
+    pop r12
     pop rbx
-    pop r11
-    pop r10
-    test byte [num_tmp + 16], 2
-    jz .o3
-    lea rsi, [diff3_ind]
-    call out_str
-    test r11, r11
-    jz .o2nl
-    mov rsi, r10
-    mov rdx, r11
-    call out_strn
-.o2nl:
-    mov dil, 10
-    call out_byte
-.o3:
+    ret
+d3_emit_sec_hdr_c:
     push rbx
-    push rbp
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
     lea rsi, [diff3_3]
     call out_str
-    lea rdi, [r13 + 1]
-    call out_u64
-    lea rsi, [diff3_c]
-    call out_str
-    pop rbp
+    call d3_emit_range_cmd
+    pop r13
+    pop r12
     pop rbx
-    test byte [num_tmp + 16], 4
-    jz .next
+    ret
+
+; r12=start r13=end → print range+cmd+nl. empty → Na (append after start)
+d3_emit_range_cmd:
+    mov rbx, r13
+    sub rbx, r12                    ; count
+    test rbx, rbx
+    jnz .chg
+    ; empty: append after line r12
+    mov rdi, r12
+    call out_u64
+    mov dil, 'a'
+    call out_byte
+    mov dil, 10
+    call out_byte
+    ret
+.chg:
+    lea rdi, [r12 + 1]
+    call out_u64
+    cmp rbx, 1
+    je .one
+    mov dil, ','
+    call out_byte
+    mov rdi, r13                    ; inclusive end == exclusive end as 1-based
+    call out_u64
+.one:
+    mov dil, 'c'
+    call out_byte
+    mov dil, 10
+    call out_byte
+    ret
+
+d3_emit_lines_a:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
     lea rsi, [diff3_ind]
     call out_str
-    test rbp, rbp
-    jz .o3nl
-    mov rsi, rbx
-    mov rdx, rbp
+    mov rsi, [lines_a_ptr + r12*8]
+    mov rdx, [lines_a_len + r12*8]
+    test rdx, rdx
+    jz .nl
     call out_strn
-.o3nl:
-    mov dil, 10
+.nl: mov dil, 10
     call out_byte
-    jmp .next
-.merge_logic:
-    ; r14b=ab_eq, r15b=ac_eq, al=bc_eq
-    test r14b, r14b
-    jz .chk_mine
-    test r15b, r15b
-    jnz .next
-    ; only yours changed: take C
-    test byte [num_tmp + 16], 4
-    jz .next
-    test rbp, rbp
-    jz .m_nl
-    mov rsi, rbx
-    mov rdx, rbp
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
+    pop rbx
+    ret
+
+d3_emit_lines_b:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
+    lea rsi, [diff3_ind]
+    call out_str
+    mov rsi, [lines_b_ptr + r12*8]
+    mov rdx, [lines_b_len + r12*8]
+    test rdx, rdx
+    jz .nl
     call out_strn
-.m_nl:
-    mov dil, 10
+.nl: mov dil, 10
     call out_byte
-    jmp .next
-.chk_mine:
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
+    pop rbx
+    ret
+
+d3_emit_lines_c:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
+    lea rsi, [diff3_ind]
+    call out_str
+    mov rsi, [lines_c_ptr + r12*8]
+    mov rdx, [lines_c_len + r12*8]
+    test rdx, rdx
+    jz .nl
+    call out_strn
+.nl: mov dil, 10
+    call out_byte
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ── diff3 -m merge output ──────────────────────────────────
+d3_merge_out:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    xor r12, r12
+    xor r13, r13
+    xor r14, r14
+.loop:
+.sk:
+    cmp r12, [diff_na]
+    jae .skc
+    cmp r13, [diff_nb]
+    jae .skc
+    cmp r14, [diff_nc]
+    jae .skc
+    mov r8, r12
+    mov r9, r13
+    call lines_equal_ab
     test al, al
-    jz .conflict
-    test byte [num_tmp + 16], 1
-    jz .next
-    test r9, r9
-    jz .m_nl2
-    mov rsi, r8
-    mov rdx, r9
+    jz .skd
+    mov r8, r12
+    mov r9, r14
+    call lines_equal_ac
+    test al, al
+    jz .skd
+    ; emit common line from A
+    mov rsi, [lines_a_ptr + r12*8]
+    mov rdx, [lines_a_len + r12*8]
+    test rdx, rdx
+    jz .sknl
     call out_strn
-.m_nl2:
+.sknl:
     mov dil, 10
     call out_byte
-    jmp .next
-.conflict:
-    test r15b, r15b
-    jz .conf_out
-    ; A==C != B → same change both sides
-    test byte [num_tmp + 16], 1
-    jz .next
-    test r9, r9
-    jz .m_nl3
-    mov rsi, r8
-    mov rdx, r9
-    call out_strn
-.m_nl3:
-    mov dil, 10
-    call out_byte
-    jmp .next
-.conf_out:
-    ; conflict: exit 1 for merge
-    mov dword [g_exit], 1
+    inc r12
+    inc r13
+    inc r14
+    jmp .sk
+.skc:
+    cmp r12, [diff_na]
+    jb .skd
+    cmp r13, [diff_nb]
+    jb .skd
+    cmp r14, [diff_nc]
+    jb .skd
+    jmp .mout
+.skd:
+    cmp r12, [diff_na]
+    jne .mh
+    cmp r13, [diff_nb]
+    jne .mh
+    cmp r14, [diff_nc]
+    je .mout
+.mh:
+    call d3_find_sync
+    ; r8=a1 r9=b1 r10=c1; stack: c1,b1,a1 for classify
     push r8
     push r9
     push r10
-    push r11
-    push rbx
-    push rbp
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r8
+    mov rcx, r9
+    call d3_range_eq_ab
+    mov [num_tmp], al
+    mov rdi, r12
+    mov rsi, r14
+    mov rdx, [rsp+16]               ; a1
+    mov rcx, [rsp]                  ; c1
+    call d3_range_eq_ac
+    mov [num_tmp + 1], al
+    mov rdi, r13
+    mov rsi, r14
+    mov rdx, [rsp+8]                ; b1
+    mov rcx, [rsp]                  ; c1
+    call d3_range_eq_bc
+    mov [num_tmp + 2], al
+    ; decide action
+    cmp byte [num_tmp], 0
+    je .m_chk1
+    ; A==B, C differs → take C
+    mov rsi, r14
+    mov rdx, [rsp]                  ; c1
+    call d3_emit_plain_c
+    jmp .madv
+.m_chk1:
+    cmp byte [num_tmp + 2], 0
+    je .m_chk2
+    ; B==C, A differs → take A
+    mov rsi, r12
+    mov rdx, [rsp+16]
+    call d3_emit_plain_a
+    jmp .madv
+.m_chk2:
+    cmp byte [num_tmp + 1], 0
+    je .m_conf
+    ; A==C != B: GNU -m overlap conflict (no |||||||)
+    mov dword [g_exit], 1
+    lea rsi, [conf_l]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    mov dil, 10
+    call out_byte
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_plain_b
+    lea rsi, [conf_m]
+    call out_str
+    mov rsi, r12
+    mov rdx, [rsp+16]
+    call d3_emit_plain_a
+    lea rsi, [conf_r]
+    call out_str
+    mov rsi, [diff_c]
+    call out_str
+    mov dil, 10
+    call out_byte
+    jmp .madv
+.m_conf:
+    mov dword [g_exit], 1
     test dword [g_flags], DF_CORE
     jnz .cl0
     cmp byte [g_color], 0
@@ -2694,58 +3983,23 @@ diff3_files:
     call out_str
     mov dil, 10
     call out_byte
-    pop rbp
-    pop rbx
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    ; mine lines
-    test r9, r9
-    jz .ancestor
-    mov rsi, r8
-    mov rdx, r9
-    call out_strn
-    mov dil, 10
-    call out_byte
-.ancestor:
-    ; ||||||| oldfile (GNU -m / -A style)
-    push r10
-    push r11
-    push rbx
-    push rbp
+    mov rsi, r12
+    mov rdx, [rsp+16]
+    call d3_emit_plain_a
     lea rsi, [conf_o]
     call out_str
     mov rsi, [diff_b]
     call out_str
     mov dil, 10
     call out_byte
-    pop rbp
-    pop rbx
-    pop r11
-    pop r10
-    test r11, r11
-    jz .cmid
-    mov rsi, r10
-    mov rdx, r11
-    call out_strn
-    mov dil, 10
-    call out_byte
-.cmid:
-    push rbx
-    push rbp
+    mov rsi, r13
+    mov rdx, [rsp+8]
+    call d3_emit_plain_b
     lea rsi, [conf_m]
     call out_str
-    pop rbp
-    pop rbx
-    test rbp, rbp
-    jz .cr
-    mov rsi, rbx
-    mov rdx, rbp
-    call out_strn
-    mov dil, 10
-    call out_byte
-.cr:
+    mov rsi, r14
+    mov rdx, [rsp]
+    call d3_emit_plain_c
     test dword [g_flags], DF_CORE
     jnz .cr0
     cmp byte [g_color], 0
@@ -2759,14 +4013,19 @@ diff3_files:
     mov dil, 10
     call out_byte
     test dword [g_flags], DF_CORE
-    jnz .next
+    jnz .madv
     cmp byte [g_color], 0
-    je .next
+    je .madv
     call color_reset
-.next:
-    inc r13
-    jmp .lp
-.done:
+.madv:
+    pop r10
+    pop r9
+    pop r8
+    mov r12, r8
+    mov r13, r9
+    mov r14, r10
+    jmp .loop
+.mout:
     pop rbp
     pop r15
     pop r14
@@ -2775,32 +4034,67 @@ diff3_files:
     pop rbx
     ret
 
-d3_line_a:
-    cmp r13, [diff_na]
-    jae .e
-    mov rdi, [lines_a_ptr + r13*8]
-    mov rdx, [lines_a_len + r13*8]
+d3_emit_plain_a:
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
+    mov rsi, [lines_a_ptr + r12*8]
+    mov rdx, [lines_a_len + r12*8]
+    test rdx, rdx
+    jz .nl
+    call out_strn
+.nl: mov dil, 10
+    call out_byte
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
     ret
-.e: xor edi, edi
-    xor edx, edx
+
+d3_emit_plain_b:
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
+    mov rsi, [lines_b_ptr + r12*8]
+    mov rdx, [lines_b_len + r12*8]
+    test rdx, rdx
+    jz .nl
+    call out_strn
+.nl: mov dil, 10
+    call out_byte
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
     ret
-d3_line_b:
-    cmp r13, [diff_nb]
-    jae .e
-    mov rdi, [lines_b_ptr + r13*8]
-    mov rdx, [lines_b_len + r13*8]
-    ret
-.e: xor edi, edi
-    xor edx, edx
-    ret
-d3_line_c:
-    cmp r13, [diff_nc]
-    jae .e
-    mov rdi, [lines_c_ptr + r13*8]
-    mov rdx, [lines_c_len + r13*8]
-    ret
-.e: xor edi, edi
-    xor edx, edx
+
+d3_emit_plain_c:
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+.lp:
+    cmp r12, r13
+    jae .d
+    mov rsi, [lines_c_ptr + r12*8]
+    mov rdx, [lines_c_len + r12*8]
+    test rdx, rdx
+    jz .nl
+    call out_strn
+.nl: mov dil, 10
+    call out_byte
+    inc r12
+    jmp .lp
+.d: pop r13
+    pop r12
     ret
 
 ; d3_eq(rdi=a, rdx=lena, rsi=b, rcx=lenb) → al
@@ -2809,7 +4103,6 @@ d3_eq:
     jne .no
     test rdx, rdx
     jz .yes
-    ; empty ptr both
     test rdi, rdi
     jnz .cmp
     test rsi, rsi
@@ -2984,6 +4277,8 @@ sdiff_files:
     mov dword [g_exit], 2
     jmp .done
 .lb:
+    mov al, [load_eol]
+    mov [eol_a], al
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -2998,6 +4293,8 @@ sdiff_files:
     mov dword [g_exit], 2
     jmp .done
 .okl:
+    mov al, [load_eol]
+    mov [eol_b], al
     ; half = (width - 3) / 2
     mov eax, [sdiff_width]
     sub eax, 3
@@ -3027,52 +4324,143 @@ sdiff_files:
     mov edx, ebx
 .mid:
     mov [sdiff_midcol], edx
-    mov r12, [diff_na]
-    cmp r12, [diff_nb]
-    jae .m
-    mov r12, [diff_nb]
-.m: xor r13, r13
+    call files_equal_ab
+    test al, al
+    jz .differs
     mov dword [g_exit], 0
-.lp:
-    cmp r13, r12
-    jae .done
-    xor r8, r8
-    xor r9, r9
-    xor r10, r10
-    xor r11, r11
-    xor ebx, ebx                    ; bl: bit0=has_left bit1=has_right
+    cmp byte [sdiff_suppress], 0
+    jne .done
+    ; emit all as common
+    xor r13, r13
+.eqlp:
     cmp r13, [diff_na]
-    jae .b
+    jae .done
     mov r8, [lines_a_ptr + r13*8]
     mov r9, [lines_a_len + r13*8]
-    or bl, 1
-.b: cmp r13, [diff_nb]
-    jae .cmp
     mov r10, [lines_b_ptr + r13*8]
     mov r11, [lines_b_len + r13*8]
-    or bl, 2
-.cmp:
-    ; both present and equal?
-    cmp bl, 3
-    jne .diff
-    mov rdi, r8
-    mov rdx, r9
-    mov rsi, r10
-    mov rcx, r11
-    call d3_eq
-    test al, al
-    jz .diff
-    cmp byte [sdiff_suppress], 0
-    jne .next
     call sdiff_emit_common
-    jmp .next
-.diff:
-    mov dword [g_exit], 1
-    ; bl: 1=left only, 2=right only, 3=both differ, 0=impossible
-    call sdiff_emit_diff
-.next:
     inc r13
-    jmp .lp
+    jmp .eqlp
+.differs:
+    call compute_marks_ab
+    mov dword [g_exit], 0
+    xor r12, r12                    ; ia
+    xor r13, r13                    ; ib
+    mov r14, [diff_na]
+    mov r15, [diff_nb]
+.walk:
+    cmp r12, r14
+    jae .rest_b
+    cmp r13, r15
+    jae .rest_a
+    cmp byte [mark_a + r12], 0
+    jne .chg
+    cmp byte [mark_b + r13], 0
+    jne .chg
+    ; common
+    cmp byte [sdiff_suppress], 0
+    jne .adv_c
+    mov r8, [lines_a_ptr + r12*8]
+    mov r9, [lines_a_len + r12*8]
+    mov r10, [lines_b_ptr + r13*8]
+    mov r11, [lines_b_len + r13*8]
+    call sdiff_emit_common
+.adv_c:
+    inc r12
+    inc r13
+    jmp .walk
+.chg:
+    mov dword [g_exit], 1
+    ; consume run of changes; pair min(dels,adds) as | then leftovers < or >
+    ; ends saved on stack: [rsp]=b_end [rsp+8]=a_end
+    mov rax, r12
+.ca:
+    cmp rax, r14
+    jae .cb0
+    cmp byte [mark_a + rax], 0
+    je .cb0
+    inc rax
+    jmp .ca
+.cb0:
+    mov rbx, r13
+.cb:
+    cmp rbx, r15
+    jae .pair
+    cmp byte [mark_b + rbx], 0
+    je .pair
+    inc rbx
+    jmp .cb
+.pair:
+    push rax                        ; a_end
+    push rbx                        ; b_end
+.pair_lp:
+    mov rax, [rsp+8]
+    mov rbx, [rsp]
+    cmp r12, rax
+    jae .only_b
+    cmp r13, rbx
+    jae .only_a
+    mov r8, [lines_a_ptr + r12*8]
+    mov r9, [lines_a_len + r12*8]
+    mov r10, [lines_b_ptr + r13*8]
+    mov r11, [lines_b_len + r13*8]
+    mov ebx, 3
+    call sdiff_emit_diff
+    inc r12
+    inc r13
+    jmp .pair_lp
+.only_a:
+    mov rax, [rsp+8]
+    cmp r12, rax
+    jae .pair_done
+    mov r8, [lines_a_ptr + r12*8]
+    mov r9, [lines_a_len + r12*8]
+    xor r10, r10
+    xor r11, r11
+    mov ebx, 1
+    call sdiff_emit_diff
+    inc r12
+    jmp .only_a
+.only_b:
+    mov rbx, [rsp]
+    cmp r13, rbx
+    jae .pair_done
+    xor r8, r8
+    xor r9, r9
+    mov r10, [lines_b_ptr + r13*8]
+    mov r11, [lines_b_len + r13*8]
+    mov ebx, 2
+    call sdiff_emit_diff
+    inc r13
+    jmp .only_b
+.pair_done:
+    add rsp, 16
+    jmp .walk
+.rest_b:
+    cmp r13, r15
+    jae .done
+    mov dword [g_exit], 1
+    xor r8, r8
+    xor r9, r9
+    mov r10, [lines_b_ptr + r13*8]
+    mov r11, [lines_b_len + r13*8]
+    mov ebx, 2
+    call sdiff_emit_diff
+    inc r13
+    jmp .rest_b
+.rest_a:
+    cmp r12, r14
+    jae .done
+    mov dword [g_exit], 1
+    mov r8, [lines_a_ptr + r12*8]
+    mov r9, [lines_a_len + r12*8]
+    xor r10, r10
+    xor r11, r11
+    mov ebx, 1
+    call sdiff_emit_diff
+    inc r12
+    jmp .rest_a
 .done:
     pop r15
     pop r14

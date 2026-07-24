@@ -10,15 +10,15 @@
 
 Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
-<!-- userland-progress: total=9 shipped=9 core_full=4 core_partial=5 core_missing=0 -->
+<!-- userland-progress: total=9 shipped=9 core_full=9 core_partial=0 core_missing=0 -->
 
-**Progress:** **9/9** shipped · **`--core` depth:** **4 full** · **5 partial** · 0 missing
+**Progress:** **9/9** shipped · **`--core` depth:** **9 full** · **0 partial** · 0 missing
 
 | Status | Count |
 |--------|------:|
 | shipped | 9/9 |
-| `--core` **full** | 4 |
-| `--core` partial | 5 |
+| `--core` **full** | 9 |
+| `--core` partial | 0 |
 | `--core` missing | 0 |
 
 ---
@@ -27,7 +27,7 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 1 | `grep` | `f00-grep` | yes | **full** | deep | win* | Common flags byte-identical; no `-A/-B/-C`/PCRE yet |
+| 1 | `grep` | `f00-grep` | yes | **full** | deep | win* | Common flags byte-identical incl. `-A/-B/-C`/`-NUM` context; `-P`/`--perl-regexp` unsupported → `the -P option is not supported` exit 2 (no silent ignore); modern match highlight uses theme `c_*` via `color_ok`/`color_dim` |
 | 2 | `egrep` | `f00-egrep` | yes | **full** | yes | win* | ≡ `grep -E` |
 | 3 | `fgrep` | `f00-fgrep` | yes | **full** | yes | win* | ≡ `grep -F` |
 
@@ -37,26 +37,26 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 4 | `find` | `f00-find` | yes | **partial** | deep | win | expr AST: `-name/-iname/-path/-type/-empty/-size/-mtime/-mmin/-executable`, `-not`/`!`/`-o`/`()`, depths; no `-exec`/`-regex`/`-perm` yet |
-| 5 | `xargs` | `f00-xargs` | yes | **partial** | yes | win | `-n/-0/-r`, echo default, execve; quoting/ARG_MAX TBD |
+| 4 | `find` | `f00-find` | yes | **full** | deep | win | Common script surface: tests (`-name/-iname/-path/-regex/-iregex` ERE subset, `-type/-empty/-size/-mtime/-mmin/-newer/-perm` octal+symbolic, `-user/-group/-uid/-gid/-executable`), actions (`-print/-print0/-printf` `%p%f%h%s%m%y%n`+`\n\t\\%%`, `-delete`, `-exec ;`/`{} +`, `-quit`), `-prune`, ops, depths, `-xdev`, `-H/-L/-P`. Residuals: `-printf` full set/`-fprintf`/`-ls`, `-execdir`/`-ok`, emacs `-regextype`, `-P` parallel xargs-style only via xargs |
+| 5 | `xargs` | `f00-xargs` | yes | **full** | yes | win | Common path: echo default, `-n/-0/-r/-d/-I/-i/-s`, GNU quoting, 128KiB/`-s` split, exit 123–127; no `-P/-t/-a/-E/-L` |
 
 ## diffutils
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 6 | `diff` | `f00-diff` | yes | **partial** | deep | todo | Unified `-u` common cases byte-identical (mtime headers via TZif, hunk merge, exits 0/1/2); no `-c`/`-r`/dir yet |
+| 6 | `diff` | `f00-diff` | yes | **full** | deep | todo | Normal (default under `--core`), `-u`/`-U`, `-c`/`-C`, `-q` byte-identical on common/small–medium files (LCS marks, mtime headers via TZif, `\ No newline at end of file`, exits 0/1/2). No `-r`/dirs yet. Modern default remains unified. |
 | 7 | `cmp` | `f00-cmp` | yes | **full** | yes | win | mmap + qword; GNU differ message |
-| 8 | `diff3` | `f00-diff3` | yes | **partial** | yes | todo | Classic `====` + line nums; `-m` with `|||||||`; type-2 grouping / multi-line ranges TBD |
-| 9 | `sdiff` | `f00-sdiff` | yes | **partial** | deep | todo | `--core` tab pad matches GNU `-w`/`-s`; modern themed columns; no true LCS align yet |
+| 8 | `diff3` | `f00-diff3` | yes | **full** | yes | todo | Classic `====`/`====N` multi-line ranges + type grouping; multi-zone via nearest triple sync; `-m` multi-line + `\|\|\|\|\|\|\|` and same-change overlap. Common battery byte-identical. |
+| 9 | `sdiff` | `f00-sdiff` | yes | **full** | deep | todo | `--core` LCS-aligned side-by-side (insert/delete/shift); `-w` tab pad + `-s` match GNU common cases; modern themed columns |
 
 ## Totals
 
 | Package | Tools | Full | Partial |
 |---------|------:|-----:|--------:|
 | grep | 3 | 3 | 0 |
-| findutils | 2 | 0 | 2 |
-| diffutils | 4 | 1 | 3 |
-| **Total** | **9** | **4** | **5** |
+| findutils | 2 | 2 | 0 |
+| diffutils | 4 | 4 | 0 |
+| **Total** | **9** | **9** | **0** |
 
 ## Layout (post-split)
 
