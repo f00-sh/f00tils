@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.16] - 2026-07-24
+
+### Fixed
+- **config TUI**: left/right arrows no longer exit/crash (ESC sequences handled; bare ESC ignored)
+- **config TUI**: Enter reliably **applies + saves** theme to `~/.config/f00/config` (stable name buffer)
+
+### Changed
+- **config TUI multi-tab**: **Themes** · **Plugins** · **Settings**
+  - `Tab` / `←` `→` / `h` `l` / `1`–`3` switch tabs
+  - Themes: browse, live preview, Enter save, `i` seed files
+  - Settings: replace on/off
+  - Plugins: local `~/.config/f00/plugins/` help (no network)
+
 ## [0.15.15] - 2026-07-24
 
 ### Added

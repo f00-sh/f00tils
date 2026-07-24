@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MAN1="${ROOT}/man/man1"
 MK="${ROOT}/Makefile"
-VERSION="${VERSION:-0.15.15}"
+VERSION="${VERSION:-0.15.16}"
 YEAR="${YEAR:-2026}"
 
 mkdir -p "$MAN1"
