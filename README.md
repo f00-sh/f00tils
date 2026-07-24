@@ -15,7 +15,7 @@ One multicall x86-64 Linux binary (no libc). Modern defaults for interactive wor
 | **Scripts** | `--core` — strict coreutils-compatible presentation |
 | **Engine** | Pure ASM multicall · ~650K static · no libc |
 | **License** | MIT |
-| **Status** | Released `v0.15.17` |
+| **Status** | Released `v0.15.18` |
 | **Site** | [https://f00.sh](https://f00.sh) |
 | **Repo** | [github.com/theesfeld/f00](https://github.com/theesfeld/f00) |
 
@@ -282,7 +282,7 @@ curl -fsSL https://f00.sh/install.sh | bash
 
 ```bash
 # pin version
-curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.15.17 bash
+curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.15.18 bash
 
 # local build
 curl -fsSL https://f00.sh/install.sh | F00_LOCAL=$PWD/asm bash
@@ -314,7 +314,7 @@ Requires: `nasm`, `ld` (binutils). Target: **Linux x86-64**.
 
 ## Package managers
 
-Release assets for `v0.15.17` include tarball, **deb**, **rpm**, and **Arch** packages.
+Release assets for `v0.15.18` include tarball, **deb**, **rpm**, and **Arch** packages.
 
 | Channel | Status | Notes |
 |---------|--------|-------|
@@ -329,16 +329,16 @@ Release assets for `v0.15.17` include tarball, **deb**, **rpm**, and **Arch** pa
 
 ```bash
 # Debian / Ubuntu example
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.17/f00_0.15.17_amd64.deb
-sudo dpkg -i f00_0.15.17_amd64.deb
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.18/f00_0.15.18_amd64.deb
+sudo dpkg -i f00_0.15.18_amd64.deb
 
 # Fedora / RHEL example
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.17/f00-0.15.17-1.x86_64.rpm
-sudo rpm -Uvh f00-0.15.17-1.x86_64.rpm
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.18/f00-0.15.18-1.x86_64.rpm
+sudo rpm -Uvh f00-0.15.18-1.x86_64.rpm
 
 # Arch example (release package)
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.17/f00-0.15.17-1-x86_64.pkg.tar.zst
-sudo pacman -U f00-0.15.17-1-x86_64.pkg.tar.zst
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.15.18/f00-0.15.18-1-x86_64.pkg.tar.zst
+sudo pacman -U f00-0.15.18-1-x86_64.pkg.tar.zst
 ```
 
 ---
@@ -413,7 +413,7 @@ same file as an asset. Keep monospaced when you view it.
 
 ```text
 ░▒▓████████████████████████████████████████████▓▒░░░
-█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.15.17 ░▒▓█ 
+█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.15.18 ░▒▓█ 
 ████████████████████████████████████████████████████
 █  ▄████████▄   ▄███████▄   ▄███████▄              █
 █  ███▀▀▀▀███   ███▀▀▀▀███  ███▀▀▀▀███  freest.    █

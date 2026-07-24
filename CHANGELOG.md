@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.18] - 2026-07-24
+
+### Changed
+- **`f00` dashboard is the full plain-English configuration UI** for f00tils
+  - **Themes** / **Settings** / **Plugins** pages
+  - Settings: replace, core, color, icons, animations, spinner, git — each change **writes `~/.config/f00/config`**
+  - Themes: Enter saves `theme = …` to the same file; `i` seeds local theme files
+  - ←→ always switch pages (no accidental quit/cycle)
+
 ## [0.15.17] - 2026-07-24
 
 ### Changed

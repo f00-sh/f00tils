@@ -1,5 +1,5 @@
-; f00-config TUI — multi-tab settings (Themes / Plugins / Settings)
-; pure freestanding x86-64 Linux ASM
+; f00-config dashboard TUI — full suite configuration without hand-editing
+; Tabs: Themes | Settings | Plugins
 BITS 64
 DEFAULT REL
 %include "syscalls.inc"
@@ -8,12 +8,17 @@ global config_tui_run
 
 extern out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern g_exit, g_tty, g_color, g_cols, g_envp
+extern g_cfg_core, g_cfg_animations, g_cfg_spinner
+extern g_cfg_color_when, g_cfg_icons_when, g_cfg_git, g_cfg_theme
+extern g_icons_when, g_icons_style
 extern is_tty, get_winsize, strlen, strcmp, memcpy
 extern theme_apply_name, theme_current_name, theme_count_builtins, theme_name_by_index
 extern theme_seed_user_dir, theme_init
 extern color_path, color_num, color_ok, color_err, color_hdr, color_dim, color_reset
-extern config_upsert_theme, config_upsert_replace, replace_is_off
+extern config_upsert_theme, config_upsert_replace, replace_is_off, config_upsert_kv
+extern config_load
 extern env_key_match
+extern icon_set_style_from_str
 
 %define KEY_UP    16
 %define KEY_DOWN  14
@@ -22,26 +27,38 @@ extern env_key_match
 %define KEY_TAB   9
 
 %define TAB_THEMES   0
-%define TAB_PLUGINS  1
-%define TAB_SETTINGS 2
+%define TAB_SETTINGS 1
+%define TAB_PLUGINS  2
 %define TAB_COUNT    3
 
-%define SET_REPLACE  0
-%define SET_COUNT    1
+; settings rows
+%define S_REPLACE 0
+%define S_CORE    1
+%define S_COLOR   2
+%define S_ICONS   3
+%define S_ANIM    4
+%define S_SPIN    5
+%define S_GIT     6
+%define S_COUNT   7
+
+%define CFG_AUTO   0
+%define CFG_ALWAYS 1
+%define CFG_NEVER  2
 
 section .bss
 alignb 8
 tios_orig:  resb TIOS_SIZE
 tios_raw:   resb TIOS_SIZE
 keybuf:     resb 32
-tab:        resd 1                  ; active tab
+tab:        resd 1
 theme_sel:  resd 1
 theme_cnt:  resd 1
 theme_scr:  resd 1
-set_sel:    resd 1                  ; settings row
-status:     resb 160
+set_sel:    resd 1
+status:     resb 192
 path_th:    resb 1024
 msg_tmp:    resb 128
+val_tmp:    resb 32
 
 section .rodata
 ansi_clear: db 27,"[H",27,"[2J",0
@@ -51,7 +68,8 @@ ansi_show:  db 27,"[?25h",0
 ansi_alt:   db 27,"[?1049h",0
 ansi_alt0:  db 27,"[?1049l",0
 ansi_rev:   db 27,"[7m",0
-title:      db " f00-config ", 0
+title:      db " f00 ", 0
+title_sub:  db "configuration dashboard", 0
 nl:         db 10, 0
 sep:        db " · ", 0
 rule:       db "────────────────────────────────────────────────────────────", 10, 0
@@ -59,39 +77,69 @@ mark_sel:   db "▸ ", 0
 mark_pad:   db "  ", 0
 mark_cur:   db "  *", 0
 tab_themes: db " Themes ", 0
-tab_plug:   db " Plugins ", 0
 tab_set:    db " Settings ", 0
+tab_plug:   db " Plugins ", 0
 lbl_prev:   db "Preview  ", 0
-lbl_cur:    db "saved theme: ", 0
-lbl_rep:    db "replace coreutils (bare ls/cat on PATH)", 0
-lbl_on:     db "[ ON ]", 0
-lbl_off:    db "[ OFF ]", 0
-lbl_plug0:  db "Plugin directory: ~/.config/f00/plugins/", 0
-lbl_plug1:  db "Drop .so modules here (optional).", 0
-lbl_plug2:  db "No network install — copy plugins locally.", 0
-lbl_plug3:  db "LS_COLORS / dircolors stay orthogonal to suite themes.", 0
-help_th:    db " Tab tabs · j/k↑↓ theme · ←→ tab · Enter apply+save · i seed · q quit ", 0
-help_pl:    db " Tab tabs · ←→ tab · q quit ", 0
-help_se:    db " Tab tabs · j/k row · Enter/Space toggle · ←→ tab · q quit ", 0
-msg_applied: db "saved theme to ~/.config/f00/config", 0
-msg_seeded:  db "seeded theme files → ~/.config/f00/themes/", 0
-msg_rep_on:  db "replace = true", 0
-msg_rep_off: db "replace = false", 0
-msg_need_tty: db "f00-config tui: need a TTY", 10, 0
-msg_fail:    db "could not apply/save theme", 0
+lbl_cur:    db "saved: ", 0
+lbl_s0:     db "Use f00 instead of system tools", 0
+lbl_s1:     db "Strict coreutils mode by default", 0
+lbl_s2:     db "Color output", 0
+lbl_s3:     db "File icons", 0
+lbl_s4:     db "Animations", 0
+lbl_s5:     db "Progress spinners", 0
+lbl_s6:     db "Git status in ls", 0
+hint_set:   db "Changes save immediately to ~/.config/f00/config", 0
+lbl_on:     db "yes", 0
+lbl_off:    db "no", 0
+lbl_auto:   db "auto (TTY)", 0
+lbl_always: db "always", 0
+lbl_never:  db "never", 0
+lbl_nerd:   db "nerd fonts", 0
+lbl_emoji:  db "emoji", 0
+lbl_glyph:  db "glyphs", 0
+lbl_ascii:  db "ascii", 0
+help_th:    db " Tab/←→ pages · j/k pick theme · Enter save · i install theme files · q quit ", 0
+help_se:    db " Tab/←→ pages · j/k pick setting · Enter/Space change · auto-saves config · q quit ", 0
+help_pl:    db " Tab/←→ pages · q quit ", 0
+msg_applied: db "Wrote theme to ~/.config/f00/config → ", 0
+msg_seeded:  db "Installed theme files into ~/.config/f00/themes/", 0
+msg_wrote:   db "Wrote ~/.config/f00/config → ", 0
+msg_fail:    db "Could not write ~/.config/f00/config", 0
+msg_need_tty: db "f00: need a TTY for the dashboard", 10, 0
 samp:       db "sample", 0
 s_true:     db "true", 0
 s_false:    db "false", 0
+s_auto:     db "auto", 0
+s_always:   db "always", 0
+s_never:    db "never", 0
+s_nerd:     db "nerd", 0
+s_emoji:    db "emoji", 0
+s_glyph:    db "glyph", 0
+s_ascii:    db "ascii", 0
+k_replace:  db "replace", 0
+k_core:     db "core", 0
+k_color:    db "color", 0
+k_icons:    db "icons", 0
+k_anim:     db "animations", 0
+k_spin:     db "spinner", 0
+k_git:      db "git", 0
+k_theme:    db "theme", 0
 env_xdg:    db "XDG_CONFIG_HOME", 0
 env_home:   db "HOME", 0
 suf_th:     db "/.config/f00/themes", 0
 suf_xdg_th: db "/f00/themes", 0
+plug0:      db "Plugin directory:  ~/.config/f00/plugins/", 0
+plug1:      db "Copy local .so modules here. No network install.", 0
+plug2:      db "Env: F00_PLUGIN_DIR overrides the search path.", 0
+plug3:      db "Config tree: ~/.config/f00/{config,themes,plugins}", 0
 pv_path:    db "path ", 0
 pv_num:     db "num ", 0
 pv_ok:      db "ok ", 0
 pv_err:     db "err ", 0
 pv_hdr:     db "hdr ", 0
 pv_dim:     db "dim", 0
+br_open:    db "[", 0
+br_close:   db "]", 0
 
 section .text
 
@@ -119,6 +167,7 @@ config_tui_run:
     call out_init
     call get_winsize
     mov [g_cols], eax
+    call config_load                 ; load all g_cfg_* from XDG
     call theme_init
 
     call theme_count_builtins
@@ -132,32 +181,8 @@ config_tui_run:
     mov dword [theme_scr], 0
     mov dword [set_sel], 0
     mov byte [status], 0
+    call select_current_theme
 
-    ; sync selection to current theme
-    call theme_current_name
-    test rax, rax
-    jz .nosel
-    cmp byte [rax], 0
-    je .nosel
-    mov r12, rax
-    xor ebx, ebx
-.find:
-    cmp ebx, [theme_cnt]
-    jae .nosel
-    mov edi, ebx
-    call theme_name_by_index
-    test rax, rax
-    jz .nf
-    mov rdi, rax
-    mov rsi, r12
-    call strcmp
-    test eax, eax
-    jnz .nf
-    mov [theme_sel], ebx
-    jmp .nosel
-.nf: inc ebx
-    jmp .find
-.nosel:
     call raw_on
     lea rsi, [ansi_alt]
     call out_str
@@ -174,7 +199,6 @@ config_tui_run:
     je .quit
     cmp al, 3
     je .quit
-    ; ESC alone ignored (arrow keys start with ESC — don't quit)
     cmp al, KEY_TAB
     je .next_tab
     cmp al, KEY_LEFT
@@ -186,19 +210,42 @@ config_tui_run:
     cmp al, 'l'
     je .next_tab
     cmp al, '1'
-    je .tab1
+    je .tab0
     cmp al, '2'
-    je .tab2
+    je .tab1
     cmp al, '3'
-    je .tab3
+    je .tab2
 
     mov ecx, [tab]
     cmp ecx, TAB_THEMES
     je .k_themes
     cmp ecx, TAB_SETTINGS
     je .k_settings
-    ; plugins: only tab/quit
     jmp .loop
+
+.tab0: mov dword [tab], TAB_THEMES
+    jmp .redraw
+.tab1: mov dword [tab], TAB_SETTINGS
+    jmp .redraw
+.tab2: mov dword [tab], TAB_PLUGINS
+    jmp .redraw
+
+.next_tab:
+    mov eax, [tab]
+    inc eax
+    cmp eax, TAB_COUNT
+    jb .st
+    xor eax, eax
+.st: mov [tab], eax
+    jmp .redraw
+.prev_tab:
+    mov eax, [tab]
+    test eax, eax
+    jnz .pt
+    mov eax, TAB_COUNT
+.pt: dec eax
+    mov [tab], eax
+    jmp .redraw
 
 .k_themes:
     cmp al, KEY_UP
@@ -235,41 +282,12 @@ config_tui_run:
     cmp al, 'j'
     je .se_dn
     cmp al, 10
-    je .se_tog
+    je .se_act
     cmp al, 13
-    je .se_tog
+    je .se_act
     cmp al, ' '
-    je .se_tog
-    cmp al, 'r'
-    je .se_tog
+    je .se_act
     jmp .loop
-
-.tab1:
-    mov dword [tab], TAB_THEMES
-    jmp .redraw
-.tab2:
-    mov dword [tab], TAB_PLUGINS
-    jmp .redraw
-.tab3:
-    mov dword [tab], TAB_SETTINGS
-    jmp .redraw
-
-.next_tab:
-    mov eax, [tab]
-    inc eax
-    cmp eax, TAB_COUNT
-    jb .st
-    xor eax, eax
-.st: mov [tab], eax
-    jmp .redraw
-.prev_tab:
-    mov eax, [tab]
-    test eax, eax
-    jnz .pt
-    mov eax, TAB_COUNT
-.pt: dec eax
-    mov [tab], eax
-    jmp .redraw
 
 .th_up:
     mov eax, [theme_sel]
@@ -301,13 +319,11 @@ config_tui_run:
     call ensure_visible
     call live_preview
     jmp .redraw
-
 .th_apply:
     mov edi, [theme_sel]
     call theme_name_by_index
     test rax, rax
     jz .afail
-    ; copy name to msg_tmp first (stable across calls)
     mov rsi, rax
     lea rdi, [msg_tmp]
     call strcpy_local
@@ -319,18 +335,15 @@ config_tui_run:
     call config_upsert_theme
     test eax, eax
     jz .afail
+    ; also mirror into g_cfg_theme
+    lea rdi, [g_cfg_theme]
+    lea rsi, [msg_tmp]
+    call strcpy_local
     lea rsi, [msg_applied]
     call set_status
-    ; append theme name
     lea rdi, [status]
     call strlen
     lea rdi, [status + rax]
-    mov byte [rdi], ' '
-    inc rdi
-    mov byte [rdi], '='
-    inc rdi
-    mov byte [rdi], ' '
-    inc rdi
     lea rsi, [msg_tmp]
     call strcpy_local
     jmp .redraw
@@ -338,7 +351,6 @@ config_tui_run:
     lea rsi, [msg_fail]
     call set_status
     jmp .redraw
-
 .th_seed:
     call resolve_themes_dir
     test eax, eax
@@ -359,25 +371,12 @@ config_tui_run:
 .se_dn:
     mov eax, [set_sel]
     inc eax
-    cmp eax, SET_COUNT
+    cmp eax, S_COUNT
     jae .redraw
     mov [set_sel], eax
     jmp .redraw
-.se_tog:
-    ; only replace for now
-    call replace_is_off
-    test eax, eax
-    jnz .rep_on
-    lea rdi, [s_false]
-    call config_upsert_replace
-    lea rsi, [msg_rep_off]
-    call set_status
-    jmp .redraw
-.rep_on:
-    lea rdi, [s_true]
-    call config_upsert_replace
-    lea rsi, [msg_rep_on]
-    call set_status
+.se_act:
+    call settings_cycle_next
     jmp .redraw
 
 .redraw:
@@ -400,6 +399,308 @@ config_tui_run:
     pop rbp
     ret
 
+; ── settings cycle ────────────────────────────────────────
+settings_cycle_next:
+    mov eax, [set_sel]
+    cmp eax, S_REPLACE
+    je .rep
+    cmp eax, S_CORE
+    je .core
+    cmp eax, S_COLOR
+    je .col
+    cmp eax, S_ICONS
+    je .ico
+    cmp eax, S_ANIM
+    je .anim
+    cmp eax, S_SPIN
+    je .spin
+    cmp eax, S_GIT
+    je .git
+    ret
+.rep:
+    call replace_is_off
+    test eax, eax
+    jnz .rep_on
+    lea rdi, [k_replace]
+    lea rsi, [s_false]
+    call save_kv_status
+    ret
+.rep_on:
+    lea rdi, [k_replace]
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.core:
+    xor byte [g_cfg_core], 1
+    lea rdi, [k_core]
+    cmp byte [g_cfg_core], 0
+    je .core_f
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.core_f:
+    lea rsi, [s_false]
+    call save_kv_status
+    ret
+.anim:
+    xor byte [g_cfg_animations], 1
+    lea rdi, [k_anim]
+    cmp byte [g_cfg_animations], 0
+    je .af
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.af: lea rsi, [s_false]
+    call save_kv_status
+    ret
+.spin:
+    xor byte [g_cfg_spinner], 1
+    lea rdi, [k_spin]
+    cmp byte [g_cfg_spinner], 0
+    je .sf
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.sf: lea rsi, [s_false]
+    call save_kv_status
+    ret
+.col:
+    movzx eax, byte [g_cfg_color_when]
+    inc eax
+    cmp eax, 3
+    jb .cs
+    xor eax, eax
+.cs: mov [g_cfg_color_when], al
+    lea rdi, [k_color]
+    call when_to_str
+    call save_kv_status
+    ret
+.git:
+    movzx eax, byte [g_cfg_git]
+    inc eax
+    cmp eax, 3
+    jb .gs
+    xor eax, eax
+.gs: mov [g_cfg_git], al
+    lea rdi, [k_git]
+    call when_to_str_git
+    call save_kv_status
+    ret
+.ico:
+    call icons_cycle_next
+    lea rdi, [k_icons]
+    lea rsi, [val_tmp]
+    call save_kv_status
+    ret
+
+; rdi=key rsi=value → upsert + status "Wrote ~/.config/f00/config → key = value"
+save_kv_status:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    call config_upsert_kv
+    test eax, eax
+    jnz .ok
+    lea rsi, [msg_fail]
+    call set_status
+    jmp .out
+.ok:
+    lea rsi, [msg_wrote]
+    call set_status
+    lea rdi, [status]
+    call strlen
+    lea rdi, [status + rax]
+    mov rsi, r12
+    call strcpy_local
+    lea rdi, [status]
+    call strlen
+    lea rdi, [status + rax]
+    mov byte [rdi], ' '
+    inc rdi
+    mov byte [rdi], '='
+    inc rdi
+    mov byte [rdi], ' '
+    inc rdi
+    mov rsi, r13
+    call strcpy_local
+.out:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+settings_cycle_prev:
+    ; same as next for bools; reverse for enums
+    mov eax, [set_sel]
+    cmp eax, S_COLOR
+    je .colp
+    cmp eax, S_GIT
+    je .gitp
+    cmp eax, S_ICONS
+    je .icop
+    jmp settings_cycle_next
+.colp:
+    movzx eax, byte [g_cfg_color_when]
+    test eax, eax
+    jnz .cd
+    mov eax, 3
+.cd: dec eax
+    mov [g_cfg_color_when], al
+    lea rdi, [k_color]
+    call when_to_str
+    call save_kv_status
+    ret
+.gitp:
+    movzx eax, byte [g_cfg_git]
+    test eax, eax
+    jnz .gd
+    mov eax, 3
+.gd: dec eax
+    mov [g_cfg_git], al
+    lea rdi, [k_git]
+    call when_to_str_git
+    call save_kv_status
+    ret
+.icop:
+    call icons_cycle_prev
+    lea rdi, [k_icons]
+    lea rsi, [val_tmp]
+    call save_kv_status
+    ret
+
+; when_to_str: al = when → rsi = string (also for upsert rdi already key)
+when_to_str:
+    movzx eax, byte [g_cfg_color_when]
+when_al_to_rsi:
+    cmp al, CFG_ALWAYS
+    je .a
+    cmp al, CFG_NEVER
+    je .n
+    lea rsi, [s_auto]
+    ret
+.a: lea rsi, [s_always]
+    ret
+.n: lea rsi, [s_never]
+    ret
+
+when_to_str_git:
+    movzx eax, byte [g_cfg_git]
+    jmp when_al_to_rsi
+
+; icons_cycle_next → val_tmp filled, g_cfg_icons_when/g_icons_style updated
+icons_cycle_next:
+    ; states encoded in val_tmp as string we also apply
+    ; detect current roughly from g_cfg_icons_when + style
+    cmp byte [g_cfg_icons_when], CFG_NEVER
+    je .to_auto
+    cmp byte [g_cfg_icons_when], CFG_AUTO
+    jne .style
+    ; auto → nerd
+    mov byte [g_cfg_icons_when], CFG_ALWAYS
+    mov byte [g_icons_style], ICONS_STYLE_NERD
+    lea rsi, [s_nerd]
+    jmp .store
+.style:
+    ; always: cycle styles then never
+    movzx eax, byte [g_icons_style]
+    cmp al, ICONS_STYLE_NERD
+    je .em
+    cmp al, ICONS_STYLE_EMOJI
+    je .gl
+    cmp al, ICONS_STYLE_GLYPH
+    je .as
+    ; ascii → never
+    mov byte [g_cfg_icons_when], CFG_NEVER
+    lea rsi, [s_never]
+    jmp .store
+.em: mov byte [g_icons_style], ICONS_STYLE_EMOJI
+    lea rsi, [s_emoji]
+    jmp .store
+.gl: mov byte [g_icons_style], ICONS_STYLE_GLYPH
+    lea rsi, [s_glyph]
+    jmp .store
+.as: mov byte [g_icons_style], ICONS_STYLE_ASCII
+    lea rsi, [s_ascii]
+    jmp .store
+.to_auto:
+    mov byte [g_cfg_icons_when], CFG_AUTO
+    mov byte [g_icons_style], ICONS_STYLE_NERD
+    lea rsi, [s_auto]
+.store:
+    lea rdi, [val_tmp]
+    call strcpy_local
+    ; apply style string for runtime
+    lea rdi, [val_tmp]
+    call icon_set_style_from_str
+    ret
+
+icons_cycle_prev:
+    ; reverse: never→ascii→glyph→emoji→nerd→auto→never
+    cmp byte [g_cfg_icons_when], CFG_NEVER
+    je .to_ascii
+    cmp byte [g_cfg_icons_when], CFG_AUTO
+    je .to_never
+    movzx eax, byte [g_icons_style]
+    cmp al, ICONS_STYLE_ASCII
+    je .to_glyph
+    cmp al, ICONS_STYLE_GLYPH
+    je .to_emoji
+    cmp al, ICONS_STYLE_EMOJI
+    je .to_nerd
+    ; nerd → auto
+    mov byte [g_cfg_icons_when], CFG_AUTO
+    lea rsi, [s_auto]
+    jmp icons_cycle_next.store
+.to_never:
+    mov byte [g_cfg_icons_when], CFG_NEVER
+    lea rsi, [s_never]
+    jmp icons_cycle_next.store
+.to_ascii:
+    mov byte [g_cfg_icons_when], CFG_ALWAYS
+    mov byte [g_icons_style], ICONS_STYLE_ASCII
+    lea rsi, [s_ascii]
+    jmp icons_cycle_next.store
+.to_glyph:
+    mov byte [g_icons_style], ICONS_STYLE_GLYPH
+    lea rsi, [s_glyph]
+    jmp icons_cycle_next.store
+.to_emoji:
+    mov byte [g_icons_style], ICONS_STYLE_EMOJI
+    lea rsi, [s_emoji]
+    jmp icons_cycle_next.store
+.to_nerd:
+    mov byte [g_icons_style], ICONS_STYLE_NERD
+    lea rsi, [s_nerd]
+    jmp icons_cycle_next.store
+
+; ── theme helpers ─────────────────────────────────────────
+select_current_theme:
+    call theme_current_name
+    test rax, rax
+    jz .r
+    cmp byte [rax], 0
+    je .r
+    mov r12, rax
+    xor ebx, ebx
+.lp:
+    cmp ebx, [theme_cnt]
+    jae .r
+    mov edi, ebx
+    call theme_name_by_index
+    test rax, rax
+    jz .n
+    mov rdi, rax
+    mov rsi, r12
+    call strcmp
+    test eax, eax
+    jnz .n
+    mov [theme_sel], ebx
+    ret
+.n: inc ebx
+    jmp .lp
+.r: ret
+
 live_preview:
     push rbx
     mov edi, [theme_sel]
@@ -419,8 +720,7 @@ ensure_visible:
     mov [theme_scr], eax
     ret
 .lo:
-    mov edx, 12
-    add ecx, edx
+    add ecx, 12
     cmp eax, ecx
     jb .ok
     sub eax, 11
@@ -452,8 +752,6 @@ draw:
     push r13
     lea rsi, [ansi_clear]
     call out_str
-
-    ; title
     call color_hdr
     lea rsi, [ansi_rev]
     call out_str
@@ -463,18 +761,11 @@ draw:
     call color_dim
     lea rsi, [sep]
     call out_str
-    call theme_current_name
-    test rax, rax
-    jz .tn
-    cmp byte [rax], 0
-    je .tn
-    mov rsi, rax
+    lea rsi, [title_sub]
     call out_str
-.tn: call color_reset
+    call color_reset
     mov dil, 10
     call out_byte
-
-    ; tab bar
     call draw_tabs
     call color_dim
     lea rsi, [rule]
@@ -483,18 +774,15 @@ draw:
 
     mov eax, [tab]
     cmp eax, TAB_THEMES
-    je .d_th
-    cmp eax, TAB_PLUGINS
-    je .d_pl
-    call draw_settings
-    jmp .d_foot
-.d_th:
-    call draw_themes
-    jmp .d_foot
-.d_pl:
+    je .th
+    cmp eax, TAB_SETTINGS
+    je .se
     call draw_plugins
-.d_foot:
-    ; status + help
+    jmp .foot
+.th: call draw_themes
+    jmp .foot
+.se: call draw_settings
+.foot:
     cmp byte [status], 0
     je .nost
     call color_ok
@@ -509,16 +797,15 @@ draw:
     call color_dim
     mov eax, [tab]
     cmp eax, TAB_THEMES
+    je .h0
+    cmp eax, TAB_SETTINGS
     je .h1
-    cmp eax, TAB_PLUGINS
-    je .h2
-    lea rsi, [help_se]
-    jmp .hgo
-.h1: lea rsi, [help_th]
-    jmp .hgo
-.h2: lea rsi, [help_pl]
-.hgo:
-    call out_str
+    lea rsi, [help_pl]
+    jmp .hg
+.h0: lea rsi, [help_th]
+    jmp .hg
+.h1: lea rsi, [help_se]
+.hg: call out_str
     call color_reset
     mov dil, 10
     call out_byte
@@ -529,53 +816,47 @@ draw:
     ret
 
 draw_tabs:
-    push rbx
-    ; themes
+    ; Themes
     cmp dword [tab], TAB_THEMES
-    jne .t0
+    jne .a0
     lea rsi, [ansi_rev]
     call out_str
     call color_hdr
-    jmp .t0b
-.t0: call color_dim
-.t0b:
-    lea rsi, [tab_themes]
+    jmp .a0b
+.a0: call color_dim
+.a0b: lea rsi, [tab_themes]
     call out_str
     call color_reset
-    ; plugins
-    cmp dword [tab], TAB_PLUGINS
-    jne .t1
-    lea rsi, [ansi_rev]
-    call out_str
-    call color_hdr
-    jmp .t1b
-.t1: call color_dim
-.t1b:
-    lea rsi, [tab_plug]
-    call out_str
-    call color_reset
-    ; settings
+    ; Settings
     cmp dword [tab], TAB_SETTINGS
-    jne .t2
+    jne .a1
     lea rsi, [ansi_rev]
     call out_str
     call color_hdr
-    jmp .t2b
-.t2: call color_dim
-.t2b:
-    lea rsi, [tab_set]
+    jmp .a1b
+.a1: call color_dim
+.a1b: lea rsi, [tab_set]
+    call out_str
+    call color_reset
+    ; Plugins
+    cmp dword [tab], TAB_PLUGINS
+    jne .a2
+    lea rsi, [ansi_rev]
+    call out_str
+    call color_hdr
+    jmp .a2b
+.a2: call color_dim
+.a2b: lea rsi, [tab_plug]
     call out_str
     call color_reset
     mov dil, 10
     call out_byte
-    pop rbx
     ret
 
 draw_themes:
     push rbx
     push r12
     push r13
-    ; current saved
     call color_dim
     lea rsi, [lbl_cur]
     call out_str
@@ -597,13 +878,12 @@ draw_themes:
     mov r12d, [theme_scr]
     xor r13d, r13d
 .lp:
-    cmp r13d, 14
+    cmp r13d, 12
     jae .done
     mov ebx, r12d
     add ebx, r13d
     cmp ebx, [theme_cnt]
     jae .done
-    ; selected row?
     cmp ebx, [theme_sel]
     jne .ns
     lea rsi, [ansi_rev]
@@ -612,18 +892,16 @@ draw_themes:
     lea rsi, [mark_sel]
     call out_str
     jmp .nm
-.ns:
-    call color_dim
+.ns: call color_dim
     lea rsi, [mark_pad]
     call out_str
 .nm:
     mov edi, ebx
     call theme_name_by_index
     test rax, rax
-    jz .skip
+    jz .sk
     mov rsi, rax
     call out_str
-    ; * if saved current
     push rbx
     call theme_current_name
     mov r8, rax
@@ -644,7 +922,7 @@ draw_themes:
     call out_str
 .ncur:
     pop rbx
-.skip:
+.sk:
     call color_reset
     lea rsi, [ansi_el]
     call out_str
@@ -655,7 +933,6 @@ draw_themes:
 .done:
     mov dil, 10
     call out_byte
-    ; preview
     call color_hdr
     lea rsi, [lbl_prev]
     call out_str
@@ -719,74 +996,14 @@ draw_swatches:
     call color_reset
     ret
 
-draw_plugins:
-    push rbx
-    mov dil, 10
-    call out_byte
-    call color_path
-    lea rsi, [lbl_plug0]
-    call out_str
-    call color_reset
-    mov dil, 10
-    call out_byte
-    call color_dim
-    lea rsi, [lbl_plug1]
-    call out_str
-    call color_reset
-    mov dil, 10
-    call out_byte
-    call color_dim
-    lea rsi, [lbl_plug2]
-    call out_str
-    call color_reset
-    mov dil, 10
-    call out_byte
-    call color_dim
-    lea rsi, [lbl_plug3]
-    call out_str
-    call color_reset
-    mov dil, 10
-    call out_byte
-    mov dil, 10
-    call out_byte
-    pop rbx
-    ret
-
 draw_settings:
     push rbx
+    push r12
     mov dil, 10
     call out_byte
-    ; row 0: replace
-    cmp dword [set_sel], SET_REPLACE
-    jne .ns
-    lea rsi, [ansi_rev]
-    call out_str
-    call color_hdr
-    lea rsi, [mark_sel]
-    call out_str
-    jmp .lab
-.ns:
     call color_dim
-    lea rsi, [mark_pad]
+    lea rsi, [hint_set]
     call out_str
-.lab:
-    lea rsi, [lbl_rep]
-    call out_str
-    call color_reset
-    lea rsi, [sep]
-    call out_str
-    call replace_is_off
-    test eax, eax
-    jnz .off
-    call color_ok
-    lea rsi, [lbl_on]
-    call out_str
-    jmp .done
-.off:
-    call color_err
-    lea rsi, [lbl_off]
-    call out_str
-.done:
     call color_reset
     lea rsi, [ansi_el]
     call out_str
@@ -794,8 +1011,184 @@ draw_settings:
     call out_byte
     mov dil, 10
     call out_byte
+    xor ebx, ebx
+.lp:
+    cmp ebx, S_COUNT
+    jae .done
+    cmp ebx, [set_sel]
+    jne .ns
+    lea rsi, [ansi_rev]
+    call out_str
+    call color_hdr
+    lea rsi, [mark_sel]
+    call out_str
+    jmp .lab
+.ns: call color_dim
+    lea rsi, [mark_pad]
+    call out_str
+.lab:
+    ; label
+    cmp ebx, S_REPLACE
+    je .l0
+    cmp ebx, S_CORE
+    je .l1
+    cmp ebx, S_COLOR
+    je .l2
+    cmp ebx, S_ICONS
+    je .l3
+    cmp ebx, S_ANIM
+    je .l4
+    cmp ebx, S_SPIN
+    je .l5
+    lea rsi, [lbl_s6]
+    jmp .lo
+.l0: lea rsi, [lbl_s0]
+    jmp .lo
+.l1: lea rsi, [lbl_s1]
+    jmp .lo
+.l2: lea rsi, [lbl_s2]
+    jmp .lo
+.l3: lea rsi, [lbl_s3]
+    jmp .lo
+.l4: lea rsi, [lbl_s4]
+    jmp .lo
+.l5: lea rsi, [lbl_s5]
+.lo: call out_str
+    call color_reset
+    ; pad + value
     call color_dim
-    lea rsi, [lbl_plug2]
+    lea rsi, [sep]
+    call out_str
+    call color_reset
+    call color_ok
+    lea rsi, [br_open]
+    call out_str
+    ; value text
+    mov eax, ebx
+    call settings_value_str         ; → rsi
+    call out_str
+    lea rsi, [br_close]
+    call out_str
+    call color_reset
+    lea rsi, [ansi_el]
+    call out_str
+    mov dil, 10
+    call out_byte
+    inc ebx
+    jmp .lp
+.done:
+    mov dil, 10
+    call out_byte
+    call color_dim
+    lea rsi, [plug3]
+    call out_str
+    call color_reset
+    mov dil, 10
+    call out_byte
+    pop r12
+    pop rbx
+    ret
+
+; eax = row → rsi = value cstr
+settings_value_str:
+    cmp eax, S_REPLACE
+    je .rep
+    cmp eax, S_CORE
+    je .core
+    cmp eax, S_COLOR
+    je .col
+    cmp eax, S_ICONS
+    je .ico
+    cmp eax, S_ANIM
+    je .anim
+    cmp eax, S_SPIN
+    je .spin
+    ; git
+    movzx eax, byte [g_cfg_git]
+    jmp .when
+.rep:
+    call replace_is_off
+    test eax, eax
+    jnz .off
+    lea rsi, [lbl_on]
+    ret
+.off: lea rsi, [lbl_off]
+    ret
+.core:
+    cmp byte [g_cfg_core], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
+.anim:
+    cmp byte [g_cfg_animations], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
+.spin:
+    cmp byte [g_cfg_spinner], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
+.col:
+    movzx eax, byte [g_cfg_color_when]
+.when:
+    cmp al, CFG_ALWAYS
+    je .wa
+    cmp al, CFG_NEVER
+    je .wn
+    lea rsi, [lbl_auto]
+    ret
+.wa: lea rsi, [lbl_always]
+    ret
+.wn: lea rsi, [lbl_never]
+    ret
+.ico:
+    cmp byte [g_cfg_icons_when], CFG_NEVER
+    je .wn
+    cmp byte [g_cfg_icons_when], CFG_AUTO
+    je .ia
+    movzx eax, byte [g_icons_style]
+    cmp al, ICONS_STYLE_EMOJI
+    je .ie
+    cmp al, ICONS_STYLE_GLYPH
+    je .ig
+    cmp al, ICONS_STYLE_ASCII
+    je .is
+    lea rsi, [lbl_nerd]
+    ret
+.ia: lea rsi, [lbl_auto]
+    ret
+.ie: lea rsi, [lbl_emoji]
+    ret
+.ig: lea rsi, [lbl_glyph]
+    ret
+.is: lea rsi, [lbl_ascii]
+    ret
+
+draw_plugins:
+    push rbx
+    mov dil, 10
+    call out_byte
+    call color_path
+    lea rsi, [plug0]
+    call out_str
+    call color_reset
+    mov dil, 10
+    call out_byte
+    call color_dim
+    lea rsi, [plug1]
+    call out_str
+    call color_reset
+    mov dil, 10
+    call out_byte
+    call color_dim
+    lea rsi, [plug2]
+    call out_str
+    call color_reset
+    mov dil, 10
+    call out_byte
+    call color_dim
+    lea rsi, [plug3]
     call out_str
     call color_reset
     mov dil, 10
@@ -803,9 +1196,7 @@ draw_settings:
     pop rbx
     ret
 
-; ── keys / termios ────────────────────────────────────────
-; read_key: returns key code in al
-; arrows mapped to KEY_*; bare ESC returns 0 (not quit)
+; ── termios ───────────────────────────────────────────────
 read_key:
     mov rax, SYS_read
     xor rdi, rdi
@@ -817,15 +1208,10 @@ read_key:
     mov al, [keybuf]
     cmp al, 27
     jne .plain
-    ; escape sequence
-    cmp rax, 1
-    je .bare_esc                    ; lone ESC → ignore (0)
-    cmp rax, 2
-    jb .bare_esc
-    cmp byte [keybuf+1], '['
-    jne .bare_esc
     cmp rax, 3
-    jb .bare_esc
+    jb .bare
+    cmp byte [keybuf+1], '['
+    jne .bare
     mov cl, [keybuf+2]
     cmp cl, 'A'
     jne .b
@@ -840,16 +1226,15 @@ read_key:
     mov al, KEY_RIGHT
     ret
 .d: cmp cl, 'D'
-    jne .bare_esc
+    jne .bare
     mov al, KEY_LEFT
     ret
-.bare_esc:
+.bare:
     xor al, al
     ret
 .plain:
     ret
-.z:
-    xor al, al
+.z: xor al, al
     ret
 
 raw_on:

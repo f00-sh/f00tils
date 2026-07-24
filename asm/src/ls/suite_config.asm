@@ -8,6 +8,7 @@ DEFAULT REL
 
 global config_main
 global config_upsert_theme, config_upsert_replace, replace_is_off
+global config_upsert_kv
 extern out_init, out_flush, out_str, out_byte, out_strn
 extern g_exit, g_tty, g_color, g_envp
 extern is_tty
@@ -57,7 +58,7 @@ usage:
     db "Default theme 'terminal' = ANSI 16 colors (your palette).", 10
     db 10
     db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
-v_cfg: db "f00-config (f00) 0.15.17", 10, "License: MIT · https://f00.sh", 10, 0
+v_cfg: db "f00-config (f00) 0.15.18", 10, "License: MIT · https://f00.sh", 10, 0
 s_theme: db "theme", 0
 s_themes: db "themes", 0
 s_show: db "show", 0
@@ -1578,5 +1579,220 @@ line_is_theme_key:
     ret
 .no:
     xor eax, eax
+    pop rbx
+    ret
+
+; ── generic upsert: key = value  (global section lines only) ──
+; rdi = key cstr, rsi = value cstr → eax=1 ok
+; Replaces first matching bare key (not inside [section] logic — whole-file key match)
+config_upsert_kv:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r14, rdi                    ; key
+    mov r15, rsi                    ; value
+    call mkdir_p_f00
+    call resolve_cfg_path
+    test eax, eax
+    jz .fail
+    mov qword [rw_buf], 0
+    xor r12, r12                    ; use r12 as read len later carefully
+    mov r13, 0                      ; len
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    lea rsi, [path_cfg]
+    mov rdx, O_RDONLY
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .build
+    mov rbx, rax                    ; fd
+    mov rax, SYS_read
+    mov rdi, rbx
+    lea rsi, [rw_buf]
+    mov rdx, 16000
+    syscall
+    mov r13, rax
+    mov rdi, rbx
+    mov rax, SYS_close
+    syscall
+    test r13, r13
+    jg .okrd
+    xor r13, r13
+.okrd:
+    cmp r13, 16000
+    jb .cap
+    mov r13, 15999
+.cap:
+    mov byte [rw_buf + r13], 0
+.build:
+    lea r12, [rw_buf]               ; src cursor
+    lea r13, [out_buf]              ; dst cursor  (reuse r13 as dst!)
+    xor ebx, ebx                    ; replaced flag
+.line:
+    cmp byte [r12], 0
+    je .eof
+    mov rdi, r12
+    mov rsi, r14
+    call line_is_key
+    test eax, eax
+    jz .copyl
+    test ebx, ebx
+    jnz .skipl
+    call write_kv_line_to_r13
+    mov ebx, 1
+    jmp .skipl
+.copyl:
+.clp:
+    mov al, [r12]
+    test al, al
+    jz .line
+    mov [r13], al
+    inc r12
+    inc r13
+    cmp al, 10
+    je .line
+    jmp .clp
+.skipl:
+.sk:
+    mov al, [r12]
+    test al, al
+    jz .line
+    inc r12
+    cmp al, 10
+    je .line
+    jmp .sk
+.eof:
+    test ebx, ebx
+    jnz .wfile
+    cmp r13, out_buf
+    je .app
+    cmp byte [r13-1], 10
+    je .app
+    mov byte [r13], 10
+    inc r13
+.app:
+    call write_kv_line_to_r13
+.wfile:
+    mov byte [r13], 0
+    lea rdi, [out_buf]
+    call strlen
+    mov r14, rax                    ; length (key was in r14 — ok done)
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    lea rsi, [path_cfg]
+    mov rdx, O_WRONLY|O_CREAT|O_TRUNC
+    mov r10, 0o644
+    syscall
+    cmp rax, -4096
+    jae .fail
+    mov rbx, rax
+    mov rax, SYS_write
+    mov rdi, rbx
+    lea rsi, [out_buf]
+    mov rdx, r14
+    syscall
+    mov rdi, rbx
+    mov rax, SYS_close
+    syscall
+    mov eax, 1
+    jmp .out
+.fail:
+    xor eax, eax
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; write "key = value\n" using r14=key r15=value, r13=dest
+write_kv_line_to_r13:
+    push rsi
+    mov rsi, r14
+.k:
+    mov al, [rsi]
+    test al, al
+    jz .eq
+    mov [r13], al
+    inc rsi
+    inc r13
+    jmp .k
+.eq:
+    mov byte [r13], ' '
+    inc r13
+    mov byte [r13], '='
+    inc r13
+    mov byte [r13], ' '
+    inc r13
+    mov rsi, r15
+.v:
+    mov al, [rsi]
+    test al, al
+    jz .nl
+    mov [r13], al
+    inc rsi
+    inc r13
+    jmp .v
+.nl:
+    mov byte [r13], 10
+    inc r13
+    pop rsi
+    ret
+
+; line_is_key(rdi=line, rsi=key) → eax=1 if line is key = ...
+line_is_key:
+    push rbx
+    push r12
+    mov rbx, rdi
+    mov r12, rsi
+.sk:
+    mov al, [rbx]
+    cmp al, ' '
+    je .s
+    cmp al, 9
+    jne .k
+.s: inc rbx
+    jmp .sk
+.k:
+    mov rsi, r12
+.m:
+    mov al, [rsi]
+    test al, al
+    jz .after
+    cmp al, [rbx]
+    jne .no
+    inc rsi
+    inc rbx
+    jmp .m
+.after:
+    mov al, [rbx]
+    cmp al, '='
+    je .yes
+    cmp al, ' '
+    je .sp
+    cmp al, 9
+    je .sp
+    jmp .no
+.sp:
+    inc rbx
+    mov al, [rbx]
+    cmp al, ' '
+    je .sp
+    cmp al, 9
+    je .sp
+    cmp al, '='
+    je .yes
+    jmp .no
+.yes:
+    mov eax, 1
+    jmp .o
+.no:
+    xor eax, eax
+.o:
+    pop r12
     pop rbx
     ret

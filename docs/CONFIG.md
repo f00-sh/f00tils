@@ -88,6 +88,18 @@ Section name is the **short util name** (`ls`, `cat`, `sha256sum`), not `f00-ls`
 Bare keys (no section) act as `[global]`.
 
 
+## Dashboard (no hand-editing)
+
+Run **`f00`** (or `f00-config`) on a TTY. That is the full configuration UI:
+
+| Page | What you do |
+|------|-------------|
+| **Themes** | Browse built-in palettes, live preview, **Enter** writes `theme = …` |
+| **Settings** | Plain-English toggles for replace, core, color, icons, animations, spinner, git — each change **writes** `~/.config/f00/config` immediately |
+| **Plugins** | Where local plugins live (`~/.config/f00/plugins/`) |
+
+There is **no network theme store**. `i` on Themes seeds builtin `.theme` files under `~/.config/f00/themes/` so you can copy/edit them offline.
+
 ## Themes
 
 > **f00tils uses your terminal palette by default; run `f00-config theme list`, then `f00-config theme set <name>` to lock a look into `~/.config/f00/config` — or `F00_THEME=…` for one shot.**
