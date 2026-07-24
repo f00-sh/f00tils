@@ -105,7 +105,7 @@ def_c_reset: db 27, "[0m", 0
 env_nocolor: db "NO_COLOR", 0
 j_schema:   db "{", 10, '  "schema": "f00/v1",', 10, 0
 j_suite:    db '  "suite": "f00",', 10, 0
-j_ver:      db '  "version": "0.16.2",', 10, 0
+j_ver:      db '  "version": "0.16.3",', 10, 0
 j_util_a:   db '  "util": "', 0
 j_util_b:   db '",', 10, 0
 j_mode_m:   db '  "mode": "modern",', 10, 0
@@ -220,29 +220,31 @@ out_flush:
     ret
 
 ; out_write(rsi=ptr, rdx=len)
+; NOTE: memcpy clobbers rcx (and uses cl); never reuse rcx after memcpy.
 out_write:
     push rbx
     push r12
     push r13
+    push r14
     mov r12, rsi
     mov r13, rdx
 .loop:
     test r13, r13
     jz .done
     mov rax, [g_out_len]
-    mov rcx, 262144
-    sub rcx, rax                    ; free space
-    cmp rcx, r13
+    mov r14, 262144
+    sub r14, rax                    ; free space
+    cmp r14, r13
     jae .fit
     ; fill buffer then flush
-    test rcx, rcx
+    test r14, r14
     jz .flush_only
     lea rdi, [g_out_buf + rax]
     mov rsi, r12
-    mov rdx, rcx
+    mov rdx, r14
     call memcpy
-    add r12, rcx
-    sub r13, rcx
+    add r12, r14
+    sub r13, r14
     mov qword [g_out_len], 262144
 .flush_only:
     call out_flush
@@ -254,6 +256,7 @@ out_write:
     call memcpy
     add qword [g_out_len], r13
 .done:
+    pop r14
     pop r13
     pop r12
     pop rbx

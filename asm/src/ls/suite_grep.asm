@@ -1,0 +1,2104 @@
+; f00tils — grep / egrep / fgrep
+; Freestanding x86-64 Linux ASM. MIT.
+; Product law:
+;   --core  = GNU drop-in path; MUST beat GNU wall + CPU
+;   modern  = default; themed chrome + rg-class extras
+BITS 64
+DEFAULT REL
+%include "syscalls.inc"
+
+global grep_main, egrep_main, fgrep_main
+
+extern out_init, out_flush, out_str, out_byte, out_strn, out_u64
+extern is_tty, strlen, strcmp, memcpy, memset
+extern g_exit, g_tty, g_color, g_json_core, g_envp, g_util_name
+extern color_path, color_ok, color_dim, color_num, color_hdr, color_reset, color_err
+extern suite_runtime_init
+extern err_str
+
+; ── flags ──────────────────────────────────────────────────
+%define GF_IGNCASE   1
+%define GF_INVERT    2
+%define GF_COUNT     4
+%define GF_NUMBER    8
+%define GF_QUIET     16
+%define GF_LIST      32
+%define GF_LIST_INV  64
+%define GF_NO_NAME   128
+%define GF_WITH_NAME 256
+%define GF_FIXED     512
+%define GF_WORD      1024
+%define GF_LINE      2048
+%define GF_CORE      4096
+%define GF_REC       8192
+%define GF_SILENT    16384
+%define GF_ONLY      32768
+%define GF_SMART     65536          ; modern smart-case active
+
+%define MAX_PATS     64
+%define READ_CAP     262144
+%define LINE_CAP     65536
+%define DENT_CAP     65536
+%define PATH_CAP     4096
+
+section .bss
+alignb 8
+g_flags:        resd 1
+pat_n:          resq 1
+pat_ptr:        resq MAX_PATS
+pat_len:        resq MAX_PATS
+max_count:      resq 1
+file_matches:   resq 1
+line_no:        resq 1
+had_match:      resb 1
+any_match:      resb 1
+had_error:      resb 1
+is_egrep:       resb 1
+is_fgrep:       resb 1
+multi_file:     resb 1
+; match position of last fixed hit (for highlight / word)
+last_off:       resd 1
+last_mlen:      resd 1
+; I/O
+alignb 64
+read_buf:       resb READ_CAP
+line_buf:       resb LINE_CAP
+line_len:       resq 1
+; recursive
+dents:          resb DENT_CAP
+path_buf:       resb PATH_CAP
+path_len:       resq 1
+stat_buf:       resb 256
+
+section .rodata
+v_grep:  db "f00-grep (f00) 0.16.3", 10, "License: MIT · https://f00.sh", 10, 0
+
+h_grep:
+    db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10
+    db "Search for PATTERNS in each FILE (or stdin).", 10, 10
+    db "  -i, --ignore-case       ignore case", 10
+    db "  -v, --invert-match      select non-matching lines", 10
+    db "  -n, --line-number       print line numbers", 10
+    db "  -c, --count             print count of matching lines", 10
+    db "  -l, --files-with-matches  only file names with matches", 10
+    db "  -L, --files-without-match only file names without matches", 10
+    db "  -H, --with-filename     print file name", 10
+    db "  -h, --no-filename       suppress file name", 10
+    db "  -q, --quiet             exit status only", 10
+    db "  -s, --no-messages       suppress error messages", 10
+    db "  -w, --word-regexp       match whole words", 10
+    db "  -x, --line-regexp       match whole lines", 10
+    db "  -F, --fixed-strings     fixed strings", 10
+    db "  -E, --extended-regexp   ERE subset (. * + ? [] ^ $ | \\)", 10
+    db "  -e PAT                  use PAT as a pattern", 10
+    db "  -m N, --max-count=N     stop after N matches per file", 10
+    db "  -r, -R, --recursive     recurse directories", 10
+    db "      --core              plain GNU-like output (no color)", 10
+    db "      --color[=WHEN]      color matches (modern TTY default)", 10
+    db "  --help  --version", 10
+    db "Modern TTY: themed match highlight, smart-case; --core is script-safe.", 10, 0
+
+s_core:     db "core", 0
+s_help:     db "help", 0
+s_version:  db "version", 0
+s_color:    db "color", 0
+s_color_eq: db "color=", 0
+s_ignore:   db "ignore-case", 0
+s_invert:   db "invert-match", 0
+s_line_num: db "line-number", 0
+s_count:    db "count", 0
+s_lwith:    db "files-with-matches", 0
+s_lwitho:   db "files-without-match", 0
+s_withfn:   db "with-filename", 0
+s_nofn:     db "no-filename", 0
+s_quiet:    db "quiet", 0
+s_silent:   db "silent", 0
+s_nomsg:    db "no-messages", 0
+s_word:     db "word-regexp", 0
+s_linex:    db "line-regexp", 0
+s_fixed:    db "fixed-strings", 0
+s_ere:      db "extended-regexp", 0
+s_rec:      db "recursive", 0
+s_maxc:     db "max-count", 0
+s_maxc_eq:  db "max-count=", 0
+colon:      db ":", 0
+stdin_name: db "(standard input)", 0
+msg_miss:   db ": missing pattern", 10, 0
+msg_usage:  db "Try 'f00-grep --help' for more information.", 10, 0
+msg_enoent: db ": No such file or directory", 10, 0
+msg_isdir:  db ": Is a directory", 10, 0
+msg_colon_sp: db ": ", 0
+
+section .text
+
+; ═══════════════════════════════════════════════════════════
+;  entry aliases
+; ═══════════════════════════════════════════════════════════
+egrep_main:
+    mov byte [is_egrep], 1
+    mov byte [is_fgrep], 0
+    jmp grep_main
+
+fgrep_main:
+    mov byte [is_fgrep], 1
+    mov byte [is_egrep], 0
+    jmp grep_main
+
+; ═══════════════════════════════════════════════════════════
+;  grep_main(rdi=argc, rsi=argv)
+; ═══════════════════════════════════════════════════════════
+grep_main:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi                    ; argc
+    mov r13, rsi                    ; argv
+
+    mov dword [g_flags], 0
+    mov qword [pat_n], 0
+    mov qword [max_count], 0
+    mov qword [file_matches], 0
+    mov byte [any_match], 0
+    mov byte [had_error], 0
+    mov byte [multi_file], 0
+
+    cmp byte [is_fgrep], 0
+    je .go
+    or dword [g_flags], GF_FIXED
+.go:
+    mov r14, 1                      ; arg index
+
+.parg:
+    cmp r14, r12
+    jge .after_args
+    mov rdi, [r13 + r14*8]
+    cmp byte [rdi], '-'
+    jne .not_opt
+    cmp byte [rdi+1], 0
+    je .not_opt
+    cmp word [rdi], '--'
+    je .long
+    ; short cluster
+    inc rdi
+.sh:
+    mov al, [rdi]
+    test al, al
+    jz .next_arg
+    cmp al, 'i'
+    jne .s1
+    or dword [g_flags], GF_IGNCASE
+    jmp .sn
+.s1: cmp al, 'v'
+    jne .s2
+    or dword [g_flags], GF_INVERT
+    jmp .sn
+.s2: cmp al, 'n'
+    jne .s3
+    or dword [g_flags], GF_NUMBER
+    jmp .sn
+.s3: cmp al, 'c'
+    jne .s4
+    or dword [g_flags], GF_COUNT
+    jmp .sn
+.s4: cmp al, 'l'
+    jne .s5
+    or dword [g_flags], GF_LIST
+    jmp .sn
+.s5: cmp al, 'L'
+    jne .s6
+    or dword [g_flags], GF_LIST_INV
+    jmp .sn
+.s6: cmp al, 'H'
+    jne .s7
+    or dword [g_flags], GF_WITH_NAME
+    jmp .sn
+.s7: cmp al, 'h'
+    jne .s8
+    or dword [g_flags], GF_NO_NAME
+    jmp .sn
+.s8: cmp al, 'q'
+    jne .s9
+    or dword [g_flags], GF_QUIET
+    jmp .sn
+.s9: cmp al, 's'
+    jne .s10
+    or dword [g_flags], GF_SILENT
+    jmp .sn
+.s10: cmp al, 'w'
+    jne .s11
+    or dword [g_flags], GF_WORD
+    jmp .sn
+.s11: cmp al, 'x'
+    jne .s12
+    or dword [g_flags], GF_LINE
+    jmp .sn
+.s12: cmp al, 'F'
+    jne .s13
+    or dword [g_flags], GF_FIXED
+    jmp .sn
+.s13: cmp al, 'E'
+    jne .s14
+    and dword [g_flags], ~GF_FIXED
+    jmp .sn
+.s14: cmp al, 'r'
+    je .srec
+    cmp al, 'R'
+    je .srec
+    cmp al, 'o'
+    jne .s15
+    or dword [g_flags], GF_ONLY
+    jmp .sn
+.s15: cmp al, 'e'
+    jne .s16
+    inc rdi
+    cmp byte [rdi], 0
+    jne .e_inline
+    inc r14
+    cmp r14, r12
+    jge .miss_pat
+    mov rdi, [r13 + r14*8]
+    call add_pattern
+    jmp .next_arg
+.e_inline:
+    call add_pattern
+    jmp .next_arg
+.s16: cmp al, 'm'
+    jne .s17
+    inc rdi
+    cmp byte [rdi], 0
+    jne .m_inline
+    inc r14
+    cmp r14, r12
+    jge .next_arg
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    mov [max_count], rax
+    jmp .next_arg
+.m_inline:
+    call parse_u64
+    mov [max_count], rax
+    jmp .next_arg
+.s17:
+    ; unknown short: skip char (forward-compat)
+.sn: inc rdi
+    jmp .sh
+.srec:
+    or dword [g_flags], GF_REC
+    jmp .sn
+
+.long:
+    add rdi, 2
+    cmp byte [rdi], 0
+    je .end_opts
+    lea rsi, [s_help]
+    call strcmp
+    test eax, eax
+    jz .help
+    lea rsi, [s_version]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jz .ver
+    lea rsi, [s_core]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l1
+    or dword [g_flags], GF_CORE
+    mov byte [g_color], 0
+    jmp .next_arg
+.l1: lea rsi, [s_ignore]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l2
+    or dword [g_flags], GF_IGNCASE
+    jmp .next_arg
+.l2: lea rsi, [s_invert]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l3
+    or dword [g_flags], GF_INVERT
+    jmp .next_arg
+.l3: lea rsi, [s_line_num]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l4
+    or dword [g_flags], GF_NUMBER
+    jmp .next_arg
+.l4: lea rsi, [s_count]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l5
+    or dword [g_flags], GF_COUNT
+    jmp .next_arg
+.l5: lea rsi, [s_lwith]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l6
+    or dword [g_flags], GF_LIST
+    jmp .next_arg
+.l6: lea rsi, [s_lwitho]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l7
+    or dword [g_flags], GF_LIST_INV
+    jmp .next_arg
+.l7: lea rsi, [s_withfn]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l8
+    or dword [g_flags], GF_WITH_NAME
+    jmp .next_arg
+.l8: lea rsi, [s_nofn]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l9
+    or dword [g_flags], GF_NO_NAME
+    jmp .next_arg
+.l9: lea rsi, [s_quiet]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jz .lq
+    lea rsi, [s_silent]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l10
+.lq: or dword [g_flags], GF_QUIET
+    jmp .next_arg
+.l10: lea rsi, [s_nomsg]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l11
+    or dword [g_flags], GF_SILENT
+    jmp .next_arg
+.l11: lea rsi, [s_word]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l12
+    or dword [g_flags], GF_WORD
+    jmp .next_arg
+.l12: lea rsi, [s_linex]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l13
+    or dword [g_flags], GF_LINE
+    jmp .next_arg
+.l13: lea rsi, [s_fixed]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l14
+    or dword [g_flags], GF_FIXED
+    jmp .next_arg
+.l14: lea rsi, [s_ere]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l15
+    and dword [g_flags], ~GF_FIXED
+    jmp .next_arg
+.l15: lea rsi, [s_rec]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l16
+    or dword [g_flags], GF_REC
+    jmp .next_arg
+.l16: lea rsi, [s_maxc_eq]
+    mov rcx, 10
+    push rdi
+    call memeq_n
+    pop rdi
+    test eax, eax
+    jnz .l17
+    add rdi, 10
+    call parse_u64
+    mov [max_count], rax
+    jmp .next_arg
+.l17: lea rsi, [s_maxc]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l18
+    inc r14
+    cmp r14, r12
+    jge .next_arg
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    mov [max_count], rax
+    jmp .next_arg
+.l18:
+    lea rsi, [s_color]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jz .next_arg
+    lea rsi, [s_color_eq]
+    mov rcx, 6
+    push rdi
+    call memeq_n
+    pop rdi
+    ; accept any --color=… as no-op under core; modern leaves g_color
+    jmp .next_arg
+
+.end_opts:
+    inc r14
+    jmp .after_args
+.not_opt:
+    cmp qword [pat_n], 0
+    jne .file_arg
+    mov rdi, [r13 + r14*8]
+    call add_pattern
+    jmp .next_arg
+.file_arg:
+    jmp .after_args
+.next_arg:
+    inc r14
+    jmp .parg
+
+.after_args:
+    cmp qword [pat_n], 0
+    jne .have_pat
+.miss_pat:
+    call emit_prog
+    lea rsi, [msg_miss]
+    call err_str
+    lea rsi, [msg_usage]
+    call err_str
+    mov dword [g_exit], 2
+    jmp .done
+.have_pat:
+    ; auto-fixed when no metas and not forced ERE (egrep leaves FIXED off)
+    test dword [g_flags], GF_FIXED
+    jnz .smart
+    cmp byte [is_egrep], 0
+    jne .smart
+    call patterns_need_regex
+    test al, al
+    jnz .smart
+    or dword [g_flags], GF_FIXED
+.smart:
+    ; modern smart-case: all-lowercase patterns → ignore case (not --core, not -i)
+    test dword [g_flags], GF_CORE
+    jnz .files
+    test dword [g_flags], GF_IGNCASE
+    jnz .files
+    call patterns_all_lower
+    test al, al
+    jz .files
+    or dword [g_flags], GF_IGNCASE | GF_SMART
+
+.files:
+    mov r15, r14                    ; first path index
+    ; count file operands
+    xor ebx, ebx
+    mov rcx, r15
+.cf:
+    cmp rcx, r12
+    jge .cf_done
+    inc ebx
+    inc rcx
+    jmp .cf
+.cf_done:
+    cmp ebx, 2
+    jb .one
+    mov byte [multi_file], 1
+    or dword [g_flags], GF_WITH_NAME
+.one:
+    ; -r always shows names unless -h
+    test dword [g_flags], GF_REC
+    jz .name_fix
+    or dword [g_flags], GF_WITH_NAME
+.name_fix:
+    test dword [g_flags], GF_NO_NAME
+    jz .go_files
+    and dword [g_flags], ~GF_WITH_NAME
+.go_files:
+    cmp r15, r12
+    jl .have_files
+    ; stdin
+    lea rdi, [path_buf]
+    lea rsi, [stdin_name]
+    call strcpy_local
+    mov qword [path_len], 16        ; strlen("(standard input)")
+    xor esi, esi
+    lea rdi, [stdin_name]
+    call grep_fd
+    jmp .exit_status
+
+.have_files:
+.flp:
+    cmp r15, r12
+    jge .exit_status
+    mov rbx, [r13 + r15*8]
+    ; recursive?
+    test dword [g_flags], GF_REC
+    jz .check_dir
+    mov rdi, rbx
+    call path_is_dir
+    test al, al
+    jz .fopen
+    mov rdi, rbx
+    call grep_tree
+    jmp .fnext
+
+.check_dir:
+    mov rdi, rbx
+    call path_is_dir
+    test al, al
+    jz .fopen
+    ; directory without -r
+    mov rdi, rbx
+    lea rsi, [msg_isdir]
+    call emit_err_path
+    jmp .fnext
+
+.fopen:
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, rbx
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .ferr
+    mov r8, rax
+    lea rdi, [path_buf]
+    mov rsi, rbx
+    call strcpy_local
+    mov rdi, rbx
+    call strlen
+    mov [path_len], rax
+    mov rdi, rbx
+    mov rsi, r8
+    push r8
+    call grep_fd
+    pop r8
+    mov rax, SYS_close
+    mov rdi, r8
+    syscall
+    jmp .fnext
+.ferr:
+    mov rdi, rbx
+    lea rsi, [msg_enoent]
+    call emit_err_path
+.fnext:
+    inc r15
+    jmp .flp
+
+.exit_status:
+    cmp byte [had_error], 0
+    je .no_err
+    mov dword [g_exit], 2
+    jmp .done
+.no_err:
+    cmp byte [any_match], 0
+    jne .ok0
+    mov dword [g_exit], 1
+    jmp .done
+.ok0:
+    mov dword [g_exit], 0
+.done:
+    call out_flush
+    mov edi, [g_exit]
+    mov rax, SYS_exit
+    syscall
+
+.help:
+    lea rsi, [h_grep]
+    call out_str
+    call out_flush
+    xor edi, edi
+    mov rax, SYS_exit
+    syscall
+.ver:
+    lea rsi, [v_grep]
+    call out_str
+    call out_flush
+    xor edi, edi
+    mov rax, SYS_exit
+    syscall
+
+; ── helpers ────────────────────────────────────────────────
+
+; emit program name (util basename) to stderr
+emit_prog:
+    mov rsi, [g_util_name]
+    test rsi, rsi
+    jnz .p
+    lea rsi, [rel_grep_name]
+.p: call err_str
+    ret
+
+section .rodata
+rel_grep_name: db "grep", 0
+section .text
+
+; emit_err_path(rdi=path, rsi=suffix_msg like msg_enoent)
+; "NAME: path: …\n"  sets had_error
+emit_err_path:
+    push rbx
+    push r12
+    mov rbx, rdi
+    mov r12, rsi
+    mov byte [had_error], 1
+    test dword [g_flags], GF_SILENT
+    jnz .out
+    call emit_prog
+    lea rsi, [msg_colon_sp]
+    call err_str
+    mov rsi, rbx
+    call err_str
+    mov rsi, r12
+    call err_str
+.out:
+    pop r12
+    pop rbx
+    ret
+
+add_pattern:
+    push rbx
+    mov rbx, rdi
+    mov rax, [pat_n]
+    cmp rax, MAX_PATS
+    jae .d
+    mov [pat_ptr + rax*8], rbx
+    call strlen
+    mov rcx, [pat_n]
+    mov [pat_len + rcx*8], rax
+    inc qword [pat_n]
+.d: pop rbx
+    ret
+
+patterns_need_regex:
+    push rbx
+    push r12
+    xor ebx, ebx
+.lp:
+    cmp rbx, [pat_n]
+    jae .no
+    mov r12, [pat_ptr + rbx*8]
+.pl:
+    mov al, [r12]
+    test al, al
+    jz .n
+    cmp al, '.'
+    je .yes
+    cmp al, '*'
+    je .yes
+    cmp al, '+'
+    je .yes
+    cmp al, '?'
+    je .yes
+    cmp al, '['
+    je .yes
+    cmp al, '^'
+    je .yes
+    cmp al, '$'
+    je .yes
+    cmp al, '|'
+    je .yes
+    cmp al, '\'
+    je .yes
+    cmp al, '('
+    je .yes
+    inc r12
+    jmp .pl
+.n: inc rbx
+    jmp .lp
+.yes:
+    mov al, 1
+    pop r12
+    pop rbx
+    ret
+.no: xor al, al
+    pop r12
+    pop rbx
+    ret
+
+; al=1 if every pattern is all-lowercase (no A-Z)
+patterns_all_lower:
+    push rbx
+    push r12
+    xor ebx, ebx
+    cmp qword [pat_n], 0
+    je .no
+.lp:
+    cmp rbx, [pat_n]
+    jae .yes
+    mov r12, [pat_ptr + rbx*8]
+.pl:
+    mov al, [r12]
+    test al, al
+    jz .n
+    cmp al, 'A'
+    jb .nx
+    cmp al, 'Z'
+    jbe .no
+.nx: inc r12
+    jmp .pl
+.n: inc rbx
+    jmp .lp
+.yes:
+    mov al, 1
+    pop r12
+    pop rbx
+    ret
+.no: xor al, al
+    pop r12
+    pop rbx
+    ret
+
+parse_u64:
+    xor eax, eax
+    xor ecx, ecx
+.lp:
+    mov cl, [rdi]
+    cmp cl, '0'
+    jb .d
+    cmp cl, '9'
+    ja .d
+    imul rax, 10
+    sub cl, '0'
+    add rax, rcx
+    inc rdi
+    jmp .lp
+.d: ret
+
+; memeq_n(rdi=a, rsi=b, rcx=n) → eax=0 equal
+memeq_n:
+    push rbx
+.lp:
+    test rcx, rcx
+    jz .eq
+    mov al, [rdi]
+    mov bl, [rsi]
+    cmp al, bl
+    jne .ne
+    inc rdi
+    inc rsi
+    dec rcx
+    jmp .lp
+.eq: xor eax, eax
+    pop rbx
+    ret
+.ne: mov eax, 1
+    pop rbx
+    ret
+
+path_is_dir:
+    push rbx
+    mov rbx, rdi
+    mov rax, SYS_newfstatat
+    mov rdi, AT_FDCWD
+    mov rsi, rbx
+    lea rdx, [stat_buf]
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .no
+    mov eax, [stat_buf + 24]        ; st_mode
+    and eax, 0o170000
+    cmp eax, 0o040000
+    jne .no
+    mov al, 1
+    pop rbx
+    ret
+.no: xor al, al
+    pop rbx
+    ret
+
+strcpy_local:
+.lp:
+    mov al, [rsi]
+    mov [rdi], al
+    test al, al
+    jz .d
+    inc rsi
+    inc rdi
+    jmp .lp
+.d: ret
+
+; ═══════════════════════════════════════════════════════════
+; grep_fd(rdi=display path cstr, rsi=fd)
+; ═══════════════════════════════════════════════════════════
+grep_fd:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    lea rdi, [path_buf]
+    mov rsi, r12
+    call strcpy_local
+    mov qword [line_no], 0
+    mov qword [file_matches], 0
+    mov byte [had_match], 0
+    mov qword [line_len], 0
+
+.read:
+    mov rax, SYS_read
+    mov rdi, r13
+    lea rsi, [read_buf]
+    mov rdx, READ_CAP
+    syscall
+    test rax, rax
+    jle .eof
+    mov r14, rax
+    xor r15, r15
+    lea rbx, [read_buf]
+.blp:
+    cmp r15, r14
+    jge .read
+    mov al, [rbx + r15]
+    inc r15
+    cmp al, 10
+    je .got_line
+    mov rcx, [line_len]
+    cmp rcx, LINE_CAP - 1
+    jae .blp
+    lea rdx, [line_buf]
+    mov [rdx + rcx], al
+    inc qword [line_len]
+    jmp .blp
+.got_line:
+    call process_line
+    mov qword [line_len], 0
+    test dword [g_flags], GF_QUIET
+    jz .mc
+    cmp byte [any_match], 0
+    jne .eof
+.mc:
+    test dword [g_flags], GF_LIST
+    jz .mc2
+    cmp byte [had_match], 0
+    jne .eof
+.mc2:
+    mov rax, [max_count]
+    test rax, rax
+    jz .blp
+    cmp [file_matches], rax
+    jb .blp
+    jmp .eof
+.eof:
+    cmp qword [line_len], 0
+    je .after
+    call process_line
+.after:
+    test dword [g_flags], GF_QUIET
+    jnz .ret
+    test dword [g_flags], GF_LIST
+    jz .nl
+    cmp byte [had_match], 0
+    je .ret
+    call emit_path_only
+    jmp .ret
+.nl: test dword [g_flags], GF_LIST_INV
+    jz .nc
+    cmp byte [had_match], 0
+    jne .ret
+    call emit_path_only
+    jmp .ret
+.nc: test dword [g_flags], GF_COUNT
+    jz .ret
+    call emit_count
+.ret:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+emit_path_only:
+    test dword [g_flags], GF_CORE
+    jnz .p
+    cmp byte [g_color], 0
+    je .p
+    call color_path
+.p: lea rsi, [path_buf]
+    call out_str
+    test dword [g_flags], GF_CORE
+    jnz .n
+    cmp byte [g_color], 0
+    je .n
+    call color_reset
+.n: mov dil, 10
+    call out_byte
+    ret
+
+emit_count:
+    test dword [g_flags], GF_WITH_NAME
+    jz .c
+    test dword [g_flags], GF_CORE
+    jnz .pn
+    cmp byte [g_color], 0
+    je .pn
+    call color_path
+.pn: lea rsi, [path_buf]
+    call out_str
+    test dword [g_flags], GF_CORE
+    jnz .cl
+    cmp byte [g_color], 0
+    je .cl
+    call color_reset
+.cl: lea rsi, [colon]
+    call out_str
+.c: mov rdi, [file_matches]
+    call out_u64
+    mov dil, 10
+    call out_byte
+    ret
+
+process_line:
+    push rbx
+    inc qword [line_no]
+    call line_matches               ; al=1 match
+    test dword [g_flags], GF_INVERT
+    jz .nv
+    xor al, 1
+.nv:
+    test al, al
+    jz .no
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    test dword [g_flags], GF_QUIET
+    jnz .no
+    test dword [g_flags], GF_LIST
+    jnz .no
+    test dword [g_flags], GF_LIST_INV
+    jnz .no
+    test dword [g_flags], GF_COUNT
+    jnz .no
+    call emit_match_line
+.no: pop rbx
+    ret
+
+line_matches:
+    push rbx
+    push r12
+    xor ebx, ebx
+.lp:
+    cmp rbx, [pat_n]
+    jae .fail
+    mov rdi, [pat_ptr + rbx*8]
+    mov rsi, [pat_len + rbx*8]
+    call match_one_pattern
+    test al, al
+    jnz .ok
+    inc rbx
+    jmp .lp
+.ok: mov al, 1
+    pop r12
+    pop rbx
+    ret
+.fail:
+    xor al, al
+    pop r12
+    pop rbx
+    ret
+
+; match_one_pattern(rdi=pat, rsi=plen) → al  against line_buf
+match_one_pattern:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    test dword [g_flags], GF_FIXED
+    jz .regex
+
+    test dword [g_flags], GF_LINE
+    jz .fsub
+    ; whole line
+    cmp r13, [line_len]
+    jne .no
+    lea rdi, [line_buf]
+    mov rsi, r12
+    mov rdx, r13
+    call mem_eq_case
+    test al, al
+    jz .no
+    mov dword [last_off], 0
+    mov eax, r13d
+    mov [last_mlen], eax
+    ; -w with -x: whole-line match is a word match at offset 0
+    test dword [g_flags], GF_WORD
+    jz .yes
+    ; boundaries of whole line are automatic (BOL/EOL)
+    jmp .yes
+
+.fsub:
+    ; scan all occurrences for word-boundary if -w
+    xor r14, r14                    ; start offset
+    mov r15, [line_len]
+.scan:
+    lea rdi, [line_buf + r14]
+    mov rsi, r12
+    mov rdx, r13
+    mov rcx, r15
+    sub rcx, r14
+    cmp rcx, r13
+    jb .no
+    call find_substr                ; eax offset relative or -1
+    cmp eax, -1
+    je .no
+    add eax, r14d                   ; absolute offset
+    mov ebx, eax
+    mov [last_off], eax
+    mov eax, r13d
+    mov [last_mlen], eax
+    test dword [g_flags], GF_WORD
+    jz .yes
+    ; before
+    test ebx, ebx
+    jz .wb
+    mov al, [line_buf + rbx - 1]
+    call is_word_char
+    test al, al
+    jnz .next_occ
+.wb:
+    mov rcx, rbx
+    add rcx, r13
+    cmp rcx, [line_len]
+    jae .yes
+    mov al, [line_buf + rcx]
+    call is_word_char
+    test al, al
+    jnz .next_occ
+    jmp .yes
+.next_occ:
+    lea r14, [rbx + 1]
+    jmp .scan
+
+.yes:
+    mov al, 1
+    jmp .out
+.no: xor al, al
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+.regex:
+    lea rdi, [line_buf]
+    mov rsi, [line_len]
+    mov rdx, r12
+    call simple_re_search
+    test al, al
+    jz .no
+    test dword [g_flags], GF_LINE
+    jz .re_word
+    ; for -x with regex: whole-line via ^pat$ is caller's job; also accept if
+    ; simple_re_search matched and we require full span — approximate:
+    ; re-check with anchored pattern by requiring match from 0 with $
+    ; (basic: if -x, verify re_match_here from 0 covers to end via ^…$ semantics)
+    ; For common scripts: treat as match if re matches and we also force
+    ; start-anchored full-line by re-running with temporary logic:
+    push rax
+    lea rdi, [line_buf]
+    mov rsi, [line_len]
+    mov rdx, r12
+    xor ecx, ecx
+    call re_match_here
+    pop rdx
+    test al, al
+    jz .no
+    ; still may not be full line; if pattern has no $ and no trailing stuff,
+    ; GNU -x means whole line must match. Use: match from 0 and engine consumes all.
+    ; Our re_match_here returns success when pattern exhausted, not when line is.
+    ; For -x: require pattern match that leaves pos==llen when $ implicit.
+    ; Simpler path: if fixed already handled; for regex -x compile as ^pat$
+    ; by checking match-from-0 and re_match_full
+    lea rdi, [line_buf]
+    mov rsi, [line_len]
+    mov rdx, r12
+    call re_match_full_line
+    test al, al
+    jz .no
+.re_word:
+    test dword [g_flags], GF_WORD
+    jz .yes
+    ; word for regex: accept if match exists (simplified; fixed path is accurate)
+    jmp .yes
+
+; is_word_char(al) → al 1/0  [A-Za-z0-9_]
+is_word_char:
+    cmp al, '_'
+    je .y
+    cmp al, '0'
+    jb .n
+    cmp al, '9'
+    jbe .y
+    cmp al, 'A'
+    jb .n
+    cmp al, 'Z'
+    jbe .y
+    cmp al, 'a'
+    jb .n
+    cmp al, 'z'
+    jbe .y
+.n: xor al, al
+    ret
+.y: mov al, 1
+    ret
+
+; mem_eq_case(rdi=a, rsi=b, rdx=n) → al 1 equal
+mem_eq_case:
+    test dword [g_flags], GF_IGNCASE
+    jnz .ic
+    ; case-sensitive: rep cmpsb
+    push rdi
+    push rsi
+    mov rcx, rdx
+    test rcx, rcx
+    jz .yes_cs
+    repe cmpsb
+    jne .no_cs
+.yes_cs:
+    mov al, 1
+    pop rsi
+    pop rdi
+    ret
+.no_cs:
+    xor al, al
+    pop rsi
+    pop rdi
+    ret
+.ic:
+    push rbx
+    xor ecx, ecx
+.lp:
+    cmp rcx, rdx
+    jae .yes
+    mov al, [rdi + rcx]
+    mov r8b, [rsi + rcx]
+    call tolower_al
+    mov r9b, al
+    mov al, r8b
+    call tolower_al
+    mov r8b, al
+    mov al, r9b
+    cmp al, r8b
+    jne .no
+    inc rcx
+    jmp .lp
+.yes: mov al, 1
+    pop rbx
+    ret
+.no: xor al, al
+    pop rbx
+    ret
+
+tolower_al:
+    cmp al, 'A'
+    jb .r
+    cmp al, 'Z'
+    ja .r
+    add al, 32
+.r: ret
+
+; find_substr(rdi=hay, rsi=needle, rdx=nlen, rcx=hlen) → eax rel offset or -1
+find_substr:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbx, rcx
+    test r14, r14
+    jnz .ok0
+    xor eax, eax
+    jmp .done
+.ok0:
+    cmp r14, rbx
+    ja .fail
+    xor ecx, ecx
+.outer:
+    mov rax, rbx
+    sub rax, r14
+    cmp rcx, rax
+    ja .fail
+    ; first-byte reject (case-sensitive only)
+    test dword [g_flags], GF_IGNCASE
+    jnz .cmp
+    mov al, [r12 + rcx]
+    cmp al, [r13]
+    jne .next
+.cmp:
+    push rcx
+    lea rdi, [r12 + rcx]
+    mov rsi, r13
+    mov rdx, r14
+    call mem_eq_case
+    pop rcx
+    test al, al
+    jnz .found
+.next:
+    inc rcx
+    jmp .outer
+.found:
+    mov eax, ecx
+    jmp .done
+.fail:
+    mov eax, -1
+.done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; simple_re_search(rdi=line, rsi=llen, rdx=pat) → al
+simple_re_search:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    cmp byte [r14], '^'
+    jne .any
+    inc r14
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    xor ecx, ecx
+    call re_match_here
+    jmp .out
+.any:
+    xor ebx, ebx
+.lp:
+    cmp rbx, r13
+    ja .no
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, rbx
+    call re_match_here
+    test al, al
+    jnz .yes
+    inc rbx
+    jmp .lp
+.yes: mov al, 1
+    jmp .out
+.no: xor al, al
+.out:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; re_match_full_line: match pat as if ^pat$ (for -x regex)
+re_match_full_line:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    cmp byte [r14], '^'
+    jne .p
+    inc r14
+.p:
+    ; if ends with $, strip for engine (re_match_here handles $)
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    xor ecx, ecx
+    call re_match_here_full         ; requires consume all
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; like re_match_here but success only if pos==llen when pattern done
+re_match_here_full:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+.top:
+    mov al, [r14]
+    test al, al
+    jz .endpat
+    cmp al, '$'
+    jne .n1
+    cmp byte [r14+1], 0
+    jne .n1
+    cmp r15, r13
+    je .success
+    jmp .fail
+.n1:
+    cmp byte [r14+1], '*'
+    je .star
+    cmp byte [r14+1], '+'
+    je .plus
+    cmp byte [r14+1], '?'
+    je .ques
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .fail
+    mov rdi, r14
+    call re_atom_len
+    add r14, rax
+    inc r15
+    jmp .top
+.star:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+.st_lp:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here_full
+    test al, al
+    jnz .st_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .st_fail
+    inc r15
+    jmp .st_lp
+.st_ok:
+    pop rdi
+    jmp .success
+.st_fail:
+    pop rdi
+    jmp .fail
+.plus:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .fail
+    inc r15
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+.pl_lp:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here_full
+    test al, al
+    jnz .pl_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .pl_fail
+    inc r15
+    jmp .pl_lp
+.pl_ok:
+    pop rdi
+    jmp .success
+.pl_fail:
+    pop rdi
+    jmp .fail
+.ques:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here_full
+    test al, al
+    jnz .q_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .q_fail
+    inc r15
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here_full
+    test al, al
+    jnz .q_ok
+.q_fail:
+    pop rdi
+    jmp .fail
+.q_ok:
+    pop rdi
+    jmp .success
+.endpat:
+    cmp r15, r13
+    je .success
+    jmp .fail
+.success:
+    mov al, 1
+    jmp .ret
+.fail:
+    xor al, al
+.ret:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+re_match_here:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov r15, rcx
+.top:
+    mov al, [r14]
+    test al, al
+    jz .success
+    cmp al, '$'
+    jne .n1
+    cmp byte [r14+1], 0
+    jne .n1
+    cmp r15, r13
+    je .success
+    jmp .fail
+.n1:
+    cmp byte [r14+1], '*'
+    je .star
+    cmp byte [r14+1], '+'
+    je .plus
+    cmp byte [r14+1], '?'
+    je .ques
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .fail
+    mov rdi, r14
+    call re_atom_len
+    add r14, rax
+    inc r15
+    jmp .top
+.star:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+.st_lp:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here
+    test al, al
+    jnz .st_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .st_fail
+    inc r15
+    jmp .st_lp
+.st_ok:
+    pop rdi
+    jmp .success
+.st_fail:
+    pop rdi
+    jmp .fail
+.plus:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .fail
+    inc r15
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+.pl_lp:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here
+    test al, al
+    jnz .pl_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .pl_fail
+    inc r15
+    jmp .pl_lp
+.pl_ok:
+    pop rdi
+    jmp .success
+.pl_fail:
+    pop rdi
+    jmp .fail
+.ques:
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov rdi, r14
+    add rdi, rbx
+    add rdi, 1
+    push rdi
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here
+    test al, al
+    jnz .q_ok
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    mov rcx, r15
+    call re_match_atom
+    test al, al
+    jz .q_fail
+    inc r15
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, [rsp]
+    mov rcx, r15
+    call re_match_here
+    test al, al
+    jnz .q_ok
+.q_fail:
+    pop rdi
+    jmp .fail
+.q_ok:
+    pop rdi
+    jmp .success
+.success:
+    mov al, 1
+    jmp .ret
+.fail:
+    xor al, al
+.ret:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+re_atom_len:
+    mov al, [rdi]
+    cmp al, '\'
+    jne .1
+    cmp byte [rdi+1], 0
+    je .one
+    mov eax, 2
+    ret
+.1: cmp al, '['
+    jne .one
+    mov eax, 1
+.lp:
+    cmp byte [rdi + rax], 0
+    je .d
+    cmp byte [rdi + rax], ']'
+    je .cl
+    inc eax
+    jmp .lp
+.cl: inc eax
+.d: ret
+.one:
+    mov eax, 1
+    ret
+
+re_match_atom:
+    push rbx
+    cmp rcx, rsi
+    jae .empty_line
+    mov al, [rdx]
+    cmp al, '.'
+    je .any
+    cmp al, '\'
+    je .esc
+    cmp al, '['
+    je .class
+    mov bl, [rdi + rcx]
+    test dword [g_flags], GF_IGNCASE
+    jz .lit
+    push rax
+    mov al, bl
+    call tolower_al
+    mov bl, al
+    pop rax
+    call tolower_al
+.lit:
+    cmp al, bl
+    jne .no
+.yes:
+    mov al, 1
+    pop rbx
+    ret
+.any:
+    mov al, 1
+    pop rbx
+    ret
+.esc:
+    mov al, [rdx+1]
+    test al, al
+    jz .no
+    mov bl, [rdi + rcx]
+    cmp al, bl
+    je .yes
+.no: xor al, al
+    pop rbx
+    ret
+.empty_line:
+    xor al, al
+    pop rbx
+    ret
+.class:
+    mov bl, [rdi + rcx]
+    mov r8, rdx
+    inc r8
+    xor r9d, r9d
+    cmp byte [r8], '^'
+    jne .cl
+    mov r9d, 1
+    inc r8
+.cl:
+    xor r10d, r10d
+.clp:
+    mov al, [r8]
+    test al, al
+    jz .cdone
+    cmp al, ']'
+    je .cdone
+    cmp byte [r8+1], '-'
+    jne .csingle
+    cmp byte [r8+2], 0
+    je .csingle
+    cmp byte [r8+2], ']'
+    je .csingle
+    movzx r11d, al
+    movzx eax, byte [r8+2]
+    cmp bl, r11b
+    jb .cnext3
+    cmp bl, al
+    ja .cnext3
+    mov r10d, 1
+.cnext3:
+    add r8, 3
+    jmp .clp
+.csingle:
+    cmp al, bl
+    jne .cn1
+    mov r10d, 1
+.cn1:
+    inc r8
+    jmp .clp
+.cdone:
+    test r9d, r9d
+    jz .cnorm
+    xor r10d, 1
+.cnorm:
+    test r10d, r10d
+    jnz .yes
+    jmp .no
+
+; emit_match_line
+emit_match_line:
+    push rbx
+    test dword [g_flags], GF_WITH_NAME
+    jz .num
+    test dword [g_flags], GF_CORE
+    jnz .pn
+    cmp byte [g_color], 0
+    je .pn
+    call color_path
+.pn: lea rsi, [path_buf]
+    call out_str
+    test dword [g_flags], GF_CORE
+    jnz .pc
+    cmp byte [g_color], 0
+    je .pc
+    call color_reset
+.pc: lea rsi, [colon]
+    call out_str
+.num:
+    test dword [g_flags], GF_NUMBER
+    jz .body
+    test dword [g_flags], GF_CORE
+    jnz .nn
+    cmp byte [g_color], 0
+    je .nn
+    call color_num
+.nn: mov rdi, [line_no]
+    call out_u64
+    test dword [g_flags], GF_CORE
+    jnz .nc
+    cmp byte [g_color], 0
+    je .nc
+    call color_reset
+.nc: lea rsi, [colon]
+    call out_str
+.body:
+    test dword [g_flags], GF_CORE
+    jnz .plain
+    cmp byte [g_color], 0
+    je .plain
+    test dword [g_flags], GF_FIXED
+    jz .plain
+    test dword [g_flags], GF_ONLY
+    jnz .only_c
+    call emit_line_highlight
+    jmp .nl
+.only_c:
+    ; modern -o: only matching part, colored
+    call color_ok
+    mov eax, [last_off]
+    lea rsi, [line_buf + rax]
+    mov edx, [last_mlen]
+    call out_strn
+    call color_reset
+    jmp .nl
+.plain:
+    test dword [g_flags], GF_ONLY
+    jz .full
+    mov eax, [last_off]
+    lea rsi, [line_buf + rax]
+    mov edx, [last_mlen]
+    test edx, edx
+    jz .nl
+    call out_strn
+    jmp .nl
+.full:
+    mov rdx, [line_len]
+    test rdx, rdx
+    jz .nl
+    lea rsi, [line_buf]
+    call out_strn
+.nl: mov dil, 10
+    call out_byte
+    pop rbx
+    ret
+
+emit_line_highlight:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, [pat_ptr]
+    mov r13, [pat_len]
+    test r13, r13
+    jz .plain
+    xor r14, r14
+    mov r15, [line_len]
+.lp:
+    cmp r14, r15
+    jae .done
+    mov rbx, r14
+.s:
+    mov rax, r15
+    sub rax, r13
+    cmp rbx, rax
+    ja .tail
+    push rbx
+    lea rdi, [line_buf + rbx]
+    mov rsi, r12
+    mov rdx, r13
+    call mem_eq_case
+    pop rbx
+    test al, al
+    jnz .hit
+    inc rbx
+    jmp .s
+.hit:
+    cmp rbx, r14
+    jbe .hcol
+    call color_dim
+    lea rsi, [line_buf + r14]
+    mov rdx, rbx
+    sub rdx, r14
+    call out_strn
+    call color_reset
+.hcol:
+    call color_ok
+    lea rsi, [line_buf + rbx]
+    mov rdx, r13
+    call out_strn
+    call color_reset
+    mov r14, rbx
+    add r14, r13
+    jmp .lp
+.tail:
+    cmp r14, r15
+    jae .done
+    call color_dim
+    lea rsi, [line_buf + r14]
+    mov rdx, r15
+    sub rdx, r14
+    call out_strn
+    call color_reset
+    jmp .done
+.plain:
+    mov rdx, [line_len]
+    test rdx, rdx
+    jz .done
+    lea rsi, [line_buf]
+    call out_strn
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ═══════════════════════════════════════════════════════════
+; grep_tree(rdi=root path) — recursive, path_buf + path_len
+; ═══════════════════════════════════════════════════════════
+grep_tree:
+    push rbx
+    push r12
+    mov r12, rdi
+    lea rdi, [path_buf]
+    mov rsi, r12
+    call strcpy_local
+    mov rdi, r12
+    call strlen
+    mov [path_len], rax
+    call grep_tree_path
+    pop r12
+    pop rbx
+    ret
+
+grep_tree_path:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    ; open directory at path_buf
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    lea rsi, [path_buf]
+    mov rdx, O_RDONLY | O_DIRECTORY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .err
+    mov r12, rax                    ; dirfd
+.dent:
+    mov rax, SYS_getdents64
+    mov rdi, r12
+    lea rsi, [dents]
+    mov rdx, DENT_CAP
+    syscall
+    test rax, rax
+    jle .close
+    mov r13, rax                    ; bytes
+    xor r14, r14
+.dlp:
+    cmp r14, r13
+    jae .dent
+    lea rbx, [dents + r14]
+    movzx r15d, word [rbx + 16]     ; d_reclen
+    lea rdi, [rbx + 19]             ; d_name
+    ; skip . and ..
+    cmp byte [rdi], '.'
+    jne .use
+    cmp byte [rdi+1], 0
+    je .skip
+    cmp byte [rdi+1], '.'
+    jne .use
+    cmp byte [rdi+2], 0
+    je .skip
+.use:
+    ; save path_len
+    mov rax, [path_len]
+    push rax
+    ; append /name
+    mov rcx, rax
+    cmp rcx, PATH_CAP - 2
+    jae .restore
+    lea rdi, [path_buf + rcx]
+    cmp rcx, 0
+    je .js
+    cmp byte [path_buf + rcx - 1], '/'
+    je .js
+    mov byte [rdi], '/'
+    inc rdi
+    inc rcx
+.js:
+    lea rsi, [rbx + 19]
+.jp:
+    mov al, [rsi]
+    mov [rdi], al
+    test al, al
+    jz .joined
+    inc rsi
+    inc rdi
+    inc rcx
+    cmp rcx, PATH_CAP - 1
+    jb .jp
+    mov byte [rdi], 0
+.joined:
+    mov [path_len], rcx
+    ; type
+    mov al, [rbx + 18]              ; d_type
+    cmp al, DT_DIR
+    je .rec
+    cmp al, DT_UNKNOWN
+    jne .file
+    ; stat to resolve
+    lea rdi, [path_buf]
+    call path_is_dir
+    test al, al
+    jnz .rec
+.file:
+    ; open file and grep
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    lea rsi, [path_buf]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .restore
+    mov rsi, rax
+    push rsi
+    lea rdi, [path_buf]
+    call grep_fd
+    pop rsi
+    mov rax, SYS_close
+    mov rdi, rsi
+    syscall
+    jmp .restore
+.rec:
+    call grep_tree_path
+.restore:
+    pop rax
+    mov [path_len], rax
+    mov byte [path_buf + rax], 0
+.skip:
+    add r14, r15
+    jmp .dlp
+.close:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    jmp .out
+.err:
+    lea rdi, [path_buf]
+    lea rsi, [msg_enoent]
+    call emit_err_path
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret

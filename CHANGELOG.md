@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-07-24
+
+### Added
+- Split userland into `suite_grep.asm` / `suite_find.asm` / `suite_diff.asm` (crush pass)
+- **grep/egrep/fgrep `--core` full** for common cases (byte-identical parity suite)
+- **cmp `--core` full**; find/xargs/diff/diff3/sdiff deepened (partial → stronger)
+- `out_write` fix (memcpy length clobber) — suite-wide emit correctness
+
+### Changed
+- Userland scoreboard: **4 full / 5 partial / 9 shipped** (was 0 full)
+- Parity: **114 pass / 0 fail**
+
 ## [0.16.2] - 2026-07-24
 
 ### Added

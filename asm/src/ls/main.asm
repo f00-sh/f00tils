@@ -52,13 +52,13 @@ extern config_main
 extern base64_main, basenc_main, base32_main, dircolors_main
 ; suite_misc
 extern chroot_main, stty_main, stdbuf_main, runcon_main, chcon_main
-; suite_search — grep / findutils / diffutils
+; suite_grep + suite_find + suite_diff — grep / findutils / diffutils
 extern grep_main, egrep_main, fgrep_main
 extern find_main, xargs_main, diff_main, cmp_main, diff3_main, sdiff_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.16.2", 10
+    db "f00-ls (f00) 0.16.3", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg

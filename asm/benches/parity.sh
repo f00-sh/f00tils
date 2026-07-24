@@ -466,6 +466,111 @@ cmp_out "numfmt stdin --to=si" \
 
 # --- GNU userland (grep / findutils / diffutils) progressive ---
 if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
+  printf 'Hello\nhello\nworld\n' > "$WORKDIR/g.txt"
+  cmp_out "grep -F hello" \
+    "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -ci hello" \
+    "$ROOT/f00-grep" --core -ci hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -ci hello "$WORKDIR/g.txt"
+  cmp_out "grep -n -F hello" \
+    "$ROOT/f00-grep" --core -n -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -n -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -v -F hello" \
+    "$ROOT/f00-grep" --core -v -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -v -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -c -F hello" \
+    "$ROOT/f00-grep" --core -c -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -c -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -m1 -F hello" \
+    "$ROOT/f00-grep" --core -m1 -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -m1 -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -x -F hello" \
+    "$ROOT/f00-grep" --core -x -F hello "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -x -F hello "$WORKDIR/g.txt"
+  printf 'hello\nhello world\nsayhello\nhello_world\n' > "$WORKDIR/gw.txt"
+  cmp_out "grep -w -F hello" \
+    "$ROOT/f00-grep" --core -w -F hello "$WORKDIR/gw.txt" ::: \
+    "$CORE/grep" -w -F hello "$WORKDIR/gw.txt"
+  cmp_out "grep -wx -F hello" \
+    "$ROOT/f00-grep" --core -wx -F hello "$WORKDIR/gw.txt" ::: \
+    "$CORE/grep" -wx -F hello "$WORKDIR/gw.txt"
+  printf 'a\nb\n' > "$WORKDIR/ga.txt"
+  printf 'hello\nx\n' > "$WORKDIR/gb.txt"
+  cmp_out "grep multi-file -F" \
+    "$ROOT/f00-grep" --core -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt" ::: \
+    "$CORE/grep" -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt"
+  cmp_out "grep -c multi" \
+    "$ROOT/f00-grep" --core -c -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt" ::: \
+    "$CORE/grep" -c -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt"
+  cmp_out "grep -l multi" \
+    "$ROOT/f00-grep" --core -l -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt" ::: \
+    "$CORE/grep" -l -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt"
+  cmp_out "grep -L multi" \
+    "$ROOT/f00-grep" --core -L -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt" ::: \
+    "$CORE/grep" -L -F hello "$WORKDIR/ga.txt" "$WORKDIR/gb.txt"
+  cmp_out "grep -e multi-pat" \
+    "$ROOT/f00-grep" --core -F -e hello -e world "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -F -e hello -e world "$WORKDIR/g.txt"
+  cmp_out "grep -E a.b" \
+    "$ROOT/f00-grep" --core -E 'a.b' "$WORKDIR/g.txt" ::: \
+    "$CORE/grep" -E 'a.b' "$WORKDIR/g.txt"
+  cmp_out "grep stdin -F" \
+    bash -c "printf 'hello\nx\n' | \"$ROOT/f00-grep\" --core -F hello" ::: \
+    bash -c "printf 'hello\nx\n' | \"$CORE/grep\" -F hello"
+  # exit codes: match / no match / error
+  set +e
+  "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" >/dev/null 2>&1; fr=$?
+  "$CORE/grep" -F hello "$WORKDIR/g.txt" >/dev/null 2>&1; cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" && "$fr" -eq 0 ]] && ok "grep exit match" || bad "grep exit match f00=$fr gnu=$cr"
+  set +e
+  "$ROOT/f00-grep" --core -F nomatch "$WORKDIR/g.txt" >/dev/null 2>&1; fr=$?
+  "$CORE/grep" -F nomatch "$WORKDIR/g.txt" >/dev/null 2>&1; cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" && "$fr" -eq 1 ]] && ok "grep exit nomatch" || bad "grep exit nomatch f00=$fr gnu=$cr"
+  set +e
+  "$ROOT/f00-grep" --core -F hello "$WORKDIR/no-such-$$" >/dev/null 2>&1; fr=$?
+  "$CORE/grep" -F hello "$WORKDIR/no-such-$$" >/dev/null 2>&1; cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" && "$fr" -eq 2 ]] && ok "grep exit error" || bad "grep exit error f00=$fr gnu=$cr"
+  if [[ -x "$ROOT/f00-fgrep" ]]; then
+    cmp_out "fgrep hello" \
+      "$ROOT/f00-fgrep" --core hello "$WORKDIR/g.txt" ::: \
+      "$CORE/grep" -F hello "$WORKDIR/g.txt"
+  fi
+  if [[ -x "$ROOT/f00-egrep" ]]; then
+    printf 'ab\naXb\n' > "$WORKDIR/ge.txt"
+    cmp_out "egrep a.b" \
+      "$ROOT/f00-egrep" --core 'a.b' "$WORKDIR/ge.txt" ::: \
+      "$CORE/grep" -E 'a.b' "$WORKDIR/ge.txt"
+  fi
+  # recursive
+  mkdir -p "$WORKDIR/gr/sub"
+  printf 'hello\n' > "$WORKDIR/gr/a.txt"
+  printf 'no\n' > "$WORKDIR/gr/sub/b.txt"
+  printf 'hello\n' > "$WORKDIR/gr/sub/c.txt"
+  cmp_out "grep -r -F" \
+    bash -c "\"$ROOT/f00-grep\" --core -r -F hello \"$WORKDIR/gr\" | sort" ::: \
+    bash -c "\"$CORE/grep\" -r -F hello \"$WORKDIR/gr\" | sort"
+fi
+if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
+  printf 'abc\n' > "$WORKDIR/c1"
+  cp "$WORKDIR/c1" "$WORKDIR/c2"
+  set +e
+  "$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp equal exit" || bad "cmp equal f00=$fr gnu=$cr"
+fi
+if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
+  cmp_out "find -maxdepth 0"     "$ROOT/f00-find" "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
+fi
+
+# --- GNU userland (grep / findutils / diffutils) progressive ---
+if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
   echo hello > "$WORKDIR/g.txt"
   echo world >> "$WORKDIR/g.txt"
   cmp_out "grep -F hello"     "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -F hello "$WORKDIR/g.txt"
@@ -481,6 +586,117 @@ if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
   cr=$?
   set -e
   [[ "$fr" -eq "$cr" ]] && ok "cmp equal exit" || bad "cmp equal f00=$fr gnu=$cr"
+fi
+if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
+  cmp_out "find -maxdepth 0"     "$ROOT/f00-find" --core "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
+  cmp_out "find -maxdepth 1"     bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 | sort"
+  echo f00-parity-name > "$WORKDIR/f00-parity-name.txt"
+  cmp_out "find -name"          bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -name 'f00-parity*' | sort"
+fi
+if [[ -x "$ROOT/f00-xargs" && -x "$CORE/xargs" ]]; then
+  cmp_out "xargs echo"          bash -c "printf 'a\nb\n' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf 'a\nb\n' | \"$CORE/xargs\""
+  cmp_out "xargs -n1"           bash -c "printf 'a\nb\n' | \"$ROOT/f00-xargs\" --core -n1" :::     bash -c "printf 'a\nb\n' | \"$CORE/xargs\" -n1"
+fi
+# --- GNU userland (grep / findutils / diffutils) progressive ---
+if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
+  echo hello > "$WORKDIR/g.txt"
+  echo world >> "$WORKDIR/g.txt"
+  cmp_out "grep -F hello"     "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -c hello"     "$ROOT/f00-grep" --core -c -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -c -F hello "$WORKDIR/g.txt"
+fi
+if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
+  printf 'abc\n' > "$WORKDIR/c1"
+  cp "$WORKDIR/c1" "$WORKDIR/c2"
+  set +e
+  "$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp equal exit" || bad "cmp equal f00=$fr gnu=$cr"
+  printf 'abd\n' > "$WORKDIR/c3"
+  set +e
+  fo=$("$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c3" 2>/dev/null); fr=$?
+  co=$("$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c3" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq "$cr" && "$fo" == "$co" ]]; then ok "cmp differ msg"; else bad "cmp differ f00=[$fo]($fr) gnu=[$co]($cr)"; fi
+  set +e
+  "$ROOT/f00-cmp" --core -s "$WORKDIR/c1" "$WORKDIR/c3" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" -s "$WORKDIR/c1" "$WORKDIR/c3" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp -s differ exit" || bad "cmp -s f00=$fr gnu=$cr"
+fi
+if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
+  printf 'a\n' > "$WORKDIR/d1"
+  cp "$WORKDIR/d1" "$WORKDIR/d2"
+  set +e
+  fo=$("$ROOT/f00-diff" --core -u "$WORKDIR/d1" "$WORKDIR/d2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -u "$WORKDIR/d1" "$WORKDIR/d2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff identical"; else bad "diff identical f00($fr)=[$fo] gnu($cr)=[$co]"; fi
+fi
+if [[ -x "$ROOT/f00-sdiff" ]]; then
+  printf 'a\n' > "$WORKDIR/s1"
+  printf 'b\n' > "$WORKDIR/s2"
+  set +e
+  sz=$("$ROOT/f00-sdiff" --core -w 40 "$WORKDIR/s1" "$WORKDIR/s2" 2>/dev/null | wc -c)
+  set -e
+  # must not space-spam (was 100k+ on clobber bugs); one line << 4k is fine
+  if [[ "$sz" -gt 0 && "$sz" -lt 4096 ]]; then ok "sdiff size bounded ($sz)"; else bad "sdiff size explode ($sz)"; fi
+fi
+if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
+  cmp_out "find -maxdepth 0"     "$ROOT/f00-find" "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
+fi
+# --- GNU userland (grep / findutils / diffutils) progressive ---
+if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
+  echo hello > "$WORKDIR/g.txt"
+  echo world >> "$WORKDIR/g.txt"
+  cmp_out "grep -F hello"     "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -c hello"     "$ROOT/f00-grep" --core -c -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -c -F hello "$WORKDIR/g.txt"
+fi
+if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
+  printf 'abc\n' > "$WORKDIR/c1"
+  cp "$WORKDIR/c1" "$WORKDIR/c2"
+  set +e
+  "$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp equal exit" || bad "cmp equal f00=$fr gnu=$cr"
+  printf 'abd\n' > "$WORKDIR/c3"
+  set +e
+  fo=$("$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c3" 2>/dev/null); fr=$?
+  co=$("$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c3" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq "$cr" && "$fo" == "$co" ]]; then ok "cmp differ msg"; else bad "cmp differ f00=[$fo]($fr) gnu=[$co]($cr)"; fi
+  set +e
+  "$ROOT/f00-cmp" --core -s "$WORKDIR/c1" "$WORKDIR/c3" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" -s "$WORKDIR/c1" "$WORKDIR/c3" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp -s differ exit" || bad "cmp -s f00=$fr gnu=$cr"
+fi
+if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
+  printf 'a\n' > "$WORKDIR/d1"
+  cp "$WORKDIR/d1" "$WORKDIR/d2"
+  set +e
+  fo=$("$ROOT/f00-diff" --core -u "$WORKDIR/d1" "$WORKDIR/d2" 2>/dev/null); fr=$?
+  co=$("$CORE/diff" -u "$WORKDIR/d1" "$WORKDIR/d2" 2>/dev/null); cr=$?
+  set -e
+  if [[ "$fr" -eq 0 && "$cr" -eq 0 && -z "$fo" && -z "$co" ]]; then ok "diff identical"; else bad "diff identical f00($fr)=[$fo] gnu($cr)=[$co]"; fi
+fi
+if [[ -x "$ROOT/f00-sdiff" ]]; then
+  printf 'a\n' > "$WORKDIR/s1"
+  printf 'b\n' > "$WORKDIR/s2"
+  set +e
+  sz=$("$ROOT/f00-sdiff" --core -w 40 "$WORKDIR/s1" "$WORKDIR/s2" 2>/dev/null | wc -c)
+  set -e
+  # must not space-spam (was 100k+ on clobber bugs); one line << 4k is fine
+  if [[ "$sz" -gt 0 && "$sz" -lt 4096 ]]; then ok "sdiff size bounded ($sz)"; else bad "sdiff size explode ($sz)"; fi
 fi
 if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
   cmp_out "find -maxdepth 0"     "$ROOT/f00-find" "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
