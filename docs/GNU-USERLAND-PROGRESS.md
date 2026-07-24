@@ -37,17 +37,17 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 4 | `find` | `f00-find` | yes | **partial** | deep | win | `-name/-path/-type/-maxdepth/-mindepth`; more predicates TBD |
+| 4 | `find` | `f00-find` | yes | **partial** | deep | win | expr AST: `-name/-iname/-path/-type/-empty/-size/-mtime/-mmin/-executable`, `-not`/`!`/`-o`/`()`, depths; no `-exec`/`-regex`/`-perm` yet |
 | 5 | `xargs` | `f00-xargs` | yes | **partial** | yes | win | `-n/-0/-r`, echo default, execve; quoting/ARG_MAX TBD |
 
 ## diffutils
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 6 | `diff` | `f00-diff` | yes | **partial** | deep | todo | LCS unified hunks; mtime headers TBD |
+| 6 | `diff` | `f00-diff` | yes | **partial** | deep | todo | Unified `-u` common cases byte-identical (mtime headers via TZif, hunk merge, exits 0/1/2); no `-c`/`-r`/dir yet |
 | 7 | `cmp` | `f00-cmp` | yes | **full** | yes | win | mmap + qword; GNU differ message |
-| 8 | `diff3` | `f00-diff3` | yes | **partial** | yes | todo | 3-way + `-m` markers |
-| 9 | `sdiff` | `f00-sdiff` | yes | **partial** | deep | todo | Side-by-side themed |
+| 8 | `diff3` | `f00-diff3` | yes | **partial** | yes | todo | Classic `====` + line nums; `-m` with `|||||||`; type-2 grouping / multi-line ranges TBD |
+| 9 | `sdiff` | `f00-sdiff` | yes | **partial** | deep | todo | `--core` tab pad matches GNU `-w`/`-s`; modern themed columns; no true LCS align yet |
 
 ## Totals
 

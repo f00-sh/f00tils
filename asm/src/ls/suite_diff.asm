@@ -62,21 +62,27 @@ cmp_mb:         resq 1
 cmp_fd_a:       resq 1
 cmp_fd_b:       resq 1
 ; sdiff / diff3 options
-sdiff_width:    resd 1
+sdiff_width:    resd 1              ; total width (GNU -w)
+sdiff_half:     resd 1              ; (width-3)/2
+sdiff_col2:     resd 1              ; tab-aligned right column start (core)
+sdiff_midcol:   resd 1              ; column of mid marker (core)
 sdiff_suppress: resb 1
 d3_merge:       resb 1
 ; LCS / edit script
-; pred[i][j]: 0=diag match, 1=del(up), 2=ins(left)  — (LCS_MAX+1)^2
 lcs_pred:       resb (LCS_MAX+1)*(LCS_MAX+1)
-; edit script: each op is 1 byte KEEP=0 DEL=1 ADD=2, paired indices
-; We stream emit from backtrack without full script storage where possible
-; For hunk emission: mark array per line of a/b: 0=common 1=changed
+; mark array per line of a/b: 0=common 1=changed
 mark_a:         resb MAX_LINES
 mark_b:         resb MAX_LINES
 ; temp stat buffer
 stat_buf:       resb 256
-; scratch for numbers
+; scratch for numbers / mtime
 num_tmp:        resb 32
+mtime_sec:      resq 1
+mtime_nsec:     resq 1
+tz_off:         resq 1
+tz_buf:         resb 16384
+tz_len:         resq 1
+tz_ready:       resb 1
 
 section .rodata
 v_diff:  db "f00-diff (f00) 0.16.3", 10, "License: MIT · https://f00.sh", 10, 0
@@ -136,17 +142,32 @@ diff_hunk_o: db "@@ -", 0
 diff_hunk_m: db " +", 0
 diff_hunk_c: db " @@", 10, 0
 files_differ: db " differ", 10, 0
+files_pre:    db "Files ", 0
+files_and:    db " and ", 0
 cmp_differ:  db " differ: byte ", 0
 cmp_line:    db ", line ", 0
 cmp_eof_pre: db "cmp: EOF on '", 0
 cmp_eof_mid: db "' after byte ", 0
 cmp_eof_ln:  db ", in line ", 0
 
+diff_err_pre: db "diff: ", 0
+diff3_err_pre: db "diff3: ", 0
+sdiff_err_pre: db "sdiff: ", 0
+err_colon:   db ": ", 0
+err_enoent:  db "No such file or directory", 10, 0
+err_eacces:  db "Permission denied", 10, 0
+err_eio:     db "I/O error", 10, 0
+path_localtime: db "/etc/localtime", 0
+
 diff3_aaaa:  db "====", 10, 0
+diff3_eq1:   db "====1", 10, 0
+diff3_eq2:   db "====2", 10, 0
+diff3_eq3:   db "====3", 10, 0
 diff3_1:     db "1:", 0
 diff3_2:     db "2:", 0
 diff3_3:     db "3:", 0
 diff3_c:     db "c", 10, 0
+diff3_ind:   db "  ", 0
 conf_l:      db "<<<<<<< ", 0
 conf_m:      db "=======", 10, 0
 conf_r:      db ">>>>>>> ", 0
@@ -156,6 +177,9 @@ sdiff_bar:   db " | ", 0
 sdiff_lt:    db " < ", 0
 sdiff_gt:    db " > ", 0
 sdiff_sp:    db "   ", 0
+sdiff_pipe_tab: db "|", 9, 0
+sdiff_gt_tab:   db ">", 9, 0
+sdiff_lt_only:  db "<", 0
 
 section .text
 
@@ -230,6 +254,7 @@ lines_equal_ab:
 
 ; load_lines(rdi=path, rsi=pool, rdx=ptr_table, rcx=len_table, r8=*count)
 ; Strips trailing newline from line length (GNU line content without \n).
+; → rax=0 ok, rax=errno (positive) on open failure. count cleared always.
 load_lines:
     push rbx
     push r12
@@ -249,7 +274,7 @@ load_lines:
     xor r10, r10
     syscall
     cmp rax, -4096
-    jae .done
+    jae .fail
     mov rbx, rax                    ; fd
     xor ebp, ebp                    ; pool used
     xor r8d, r8d                    ; line start
@@ -302,11 +327,40 @@ load_lines:
     mov rax, SYS_close
     mov rdi, rbx
     syscall
+    xor eax, eax
+    jmp .done
+.fail:
+    neg rax                         ; positive errno
 .done:
     pop rbp
     pop r15
     pop r14
     pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_tool_path_err(rsi=prefix "diff: ", rdi=path, rax=errno)
+emit_tool_path_err:
+    push rbx
+    push r12
+    mov rbx, rdi
+    mov r12, rax
+    call err_str
+    mov rsi, rbx
+    call err_str
+    lea rsi, [err_colon]
+    call err_str
+    cmp r12, 2
+    je .en
+    cmp r12, 13
+    je .ea
+    lea rsi, [err_eio]
+    jmp .w
+.en: lea rsi, [err_enoent]
+    jmp .w
+.ea: lea rsi, [err_eacces]
+.w:  call err_str
     pop r12
     pop rbx
     ret
@@ -514,21 +568,39 @@ diff_files:
     lea rcx, [lines_a_len]
     lea r8, [diff_na]
     call load_lines
+    test rax, rax
+    jz .lb
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .out
+.lb:
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
     lea rcx, [lines_b_len]
     lea r8, [diff_nb]
     call load_lines
+    test rax, rax
+    jz .okload
+    lea rsi, [diff_err_pre]
+    mov rdi, [diff_b]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .out
+.okload:
     test dword [g_flags], DF_BRIEF
     jz .uni
     call files_equal_ab
     test al, al
     jnz .same
+    lea rsi, [files_pre]
+    call out_str
     mov rsi, [diff_a]
     call out_str
-    mov dil, ' '
-    call out_byte
+    lea rsi, [files_and]
+    call out_str
     mov rsi, [diff_b]
     call out_str
     lea rsi, [files_differ]
@@ -542,24 +614,18 @@ diff_files:
     call files_equal_ab
     test al, al
     jnz .same
-    ; headers --- / +++
+    ; headers --- / +++ with tab + mtime (GNU unified)
     test dword [g_flags], DF_CORE
     jnz .h
     cmp byte [g_color], 0
     je .h
     call color_dim
 .h: lea rsi, [diff_hdr_a]
-    call out_str
-    mov rsi, [diff_a]
-    call out_str
-    mov dil, 10
-    call out_byte
+    mov rdi, [diff_a]
+    call emit_unified_path_hdr
     lea rsi, [diff_hdr_b]
-    call out_str
-    mov rsi, [diff_b]
-    call out_str
-    mov dil, 10
-    call out_byte
+    mov rdi, [diff_b]
+    call emit_unified_path_hdr
     test dword [g_flags], DF_CORE
     jnz .body
     cmp byte [g_color], 0
@@ -941,34 +1007,73 @@ emit_hunks_from_marks:
     jz .fwd_ctx
     jmp .ch_consume
 .fwd_ctx:
-    ; add up to CTX common lines, but if more change soon include it (merge hunks
-    ; if gap < 2*CTX) — simple: take CTX commons; if next change within 2*CTX, continue
+    ; take up to CTX common lines; merge further changes within 2*CTX gap
     mov ecx, CTX_LINES
 .fw:
     test ecx, ecx
-    jz .maybe_merge
+    jz .look_more
     cmp r8, r14
-    jae .fw_done
+    jae .tail_b
     cmp r9, r15
-    jae .fw_done
+    jae .tail_a
     cmp byte [mark_a + r8], 0
-    jne .maybe_merge
+    jne .ch_consume
     cmp byte [mark_b + r9], 0
-    jne .maybe_merge
+    jne .ch_consume
     inc r8
     inc r9
     dec ecx
     jmp .fw
-.maybe_merge:
-    ; if next change within CTX lines, absorb gap
-    cmp r8, r14
-    jae .fw_done
+.tail_b:
     cmp r9, r15
+    jae .fw_done
+    cmp byte [mark_b + r9], 0
+    jne .ch_consume
+    jmp .fw_done
+.tail_a:
+    cmp r8, r14
     jae .fw_done
     cmp byte [mark_a + r8], 0
     jne .ch_consume
+    jmp .fw_done
+.look_more:
+    ; After CTX commons, look up to CTX more lines for a nearby change (merge).
+    push r8
+    push r9
+    mov ecx, CTX_LINES
+.lm:
+    test ecx, ecx
+    jz .lm_no
+    cmp r8, r14
+    jae .lm_tb
+    cmp r9, r15
+    jae .lm_ta
+    cmp byte [mark_a + r8], 0
+    jne .lm_yes
     cmp byte [mark_b + r9], 0
-    jne .ch_consume
+    jne .lm_yes
+    inc r8
+    inc r9
+    dec ecx
+    jmp .lm
+.lm_tb:
+    cmp r9, r15
+    jae .lm_no
+    cmp byte [mark_b + r9], 0
+    jne .lm_yes
+    jmp .lm_no
+.lm_ta:
+    cmp r8, r14
+    jae .lm_no
+    cmp byte [mark_a + r8], 0
+    jne .lm_yes
+    jmp .lm_no
+.lm_yes:
+    add rsp, 16
+    jmp .ch_consume
+.lm_no:
+    pop r9
+    pop r8
 .fw_done:
     ; emit hunk from (a0,b0) saved to (r8,r9)
     pop rbx                         ; b_start
@@ -1187,6 +1292,450 @@ emit_line_add:
     call out_byte
     pop rdx
     pop rsi
+    ret
+
+
+; emit_unified_path_hdr(rsi=prefix "--- "/"+++ ", rdi=path)
+; GNU: PREFIX path TAB YYYY-MM-DD HH:MM:SS.nnnnnnnnn ±HHMM\n
+emit_unified_path_hdr:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    call out_str
+    mov rsi, r12
+    call out_str
+    mov dil, 9
+    call out_byte
+    mov rax, SYS_newfstatat
+    mov rdi, AT_FDCWD
+    mov rsi, r12
+    lea rdx, [stat_buf]
+    xor r10d, r10d
+    syscall
+    cmp rax, -4096
+    jae .nomtime
+    mov rax, [stat_buf + 88]
+    mov [mtime_sec], rax
+    mov rax, [stat_buf + 96]
+    mov [mtime_nsec], rax
+    mov rdi, [mtime_sec]
+    call tz_offset_for
+    mov [tz_off], rax
+    mov rdi, [mtime_sec]
+    add rdi, rax
+    call civil_from_epoch
+    call emit_mtime_fields
+    jmp .nl
+.nomtime:
+    xor edi, edi
+    mov qword [mtime_nsec], 0
+    mov qword [tz_off], 0
+    call civil_from_epoch
+    call emit_mtime_fields
+.nl: mov dil, 10
+    call out_byte
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; civil_from_epoch(rdi=local_sec) → num_tmp year/mon/day/hour/min/sec
+civil_from_epoch:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov rax, r12
+    mov rcx, 86400
+    cqo
+    idiv rcx
+    mov r13, rdx
+    test r13, r13
+    jns .sod_ok
+    add r13, 86400
+    dec rax
+.sod_ok:
+    lea r8, [rax + 719468]
+    mov rax, r8
+    mov rcx, 146097
+    cqo
+    idiv rcx
+    mov r9, rax
+    mov r10, rdx
+    mov rax, r10
+    mov rcx, 1460
+    xor rdx, rdx
+    div rcx
+    mov rbx, rax
+    mov rax, r10
+    mov rcx, 36524
+    xor rdx, rdx
+    div rcx
+    mov r11, rax
+    mov rax, r10
+    mov rcx, 146096
+    xor rdx, rdx
+    div rcx
+    mov rdx, r10
+    sub rdx, rbx
+    add rdx, r11
+    sub rdx, rax
+    mov rax, rdx
+    mov rcx, 365
+    xor rdx, rdx
+    div rcx
+    mov r14, rax
+    mov rax, r14
+    mov rcx, 365
+    mul rcx
+    mov rbx, rax
+    mov rax, r14
+    shr rax, 2
+    add rbx, rax
+    mov rax, r14
+    mov rcx, 100
+    xor rdx, rdx
+    div rcx
+    sub rbx, rax
+    mov rax, r10
+    sub rax, rbx
+    mov r15, rax
+    mov rax, r9
+    mov rcx, 400
+    mul rcx
+    add rax, r14
+    mov r9, rax
+    mov rax, r15
+    mov rcx, 5
+    mul rcx
+    add rax, 2
+    mov rcx, 153
+    xor rdx, rdx
+    div rcx
+    mov r10, rax
+    mov rax, r10
+    mov rcx, 153
+    mul rcx
+    add rax, 2
+    mov rcx, 5
+    xor rdx, rdx
+    div rcx
+    mov rbx, r15
+    sub rbx, rax
+    inc rbx
+    mov r11, rbx
+    mov rax, r10
+    cmp rax, 10
+    jb .m1
+    sub rax, 9
+    jmp .m2
+.m1: add rax, 3
+.m2: mov r15, rax
+    cmp r15, 2
+    jg .yok
+    inc r9
+.yok:
+    mov rax, r13
+    mov rcx, 3600
+    xor rdx, rdx
+    div rcx
+    mov r12, rax
+    mov rax, rdx
+    mov rcx, 60
+    xor rdx, rdx
+    div rcx
+    mov dword [num_tmp], r9d
+    mov byte [num_tmp + 4], r15b
+    mov byte [num_tmp + 5], r11b
+    mov byte [num_tmp + 6], r12b
+    mov byte [num_tmp + 7], al
+    mov byte [num_tmp + 8], dl
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+emit_mtime_fields:
+    push rbx
+    push r12
+    mov edi, [num_tmp]
+    call out_u64
+    mov dil, '-'
+    call out_byte
+    movzx edi, byte [num_tmp + 4]
+    call out_u2
+    mov dil, '-'
+    call out_byte
+    movzx edi, byte [num_tmp + 5]
+    call out_u2
+    mov dil, ' '
+    call out_byte
+    movzx edi, byte [num_tmp + 6]
+    call out_u2
+    mov dil, ':'
+    call out_byte
+    movzx edi, byte [num_tmp + 7]
+    call out_u2
+    mov dil, ':'
+    call out_byte
+    movzx edi, byte [num_tmp + 8]
+    call out_u2
+    mov dil, '.'
+    call out_byte
+    mov rax, [mtime_nsec]
+    call out_nsec9
+    mov dil, ' '
+    call out_byte
+    ; sign + HHMM from tz_off (preserve magnitude across out_*)
+    mov r12, [tz_off]
+    test r12, r12
+    jns .pos
+    mov dil, '-'
+    call out_byte
+    neg r12
+    jmp .mag
+.pos:
+    mov dil, '+'
+    call out_byte
+.mag:
+    mov rax, r12
+    xor rdx, rdx
+    mov rcx, 3600
+    div rcx                         ; rax=hours rdx=rem secs
+    mov r12, rdx
+    mov edi, eax
+    call out_u2
+    mov rax, r12
+    xor rdx, rdx
+    mov rcx, 60
+    div rcx                         ; rax=minutes
+    mov edi, eax
+    call out_u2
+    pop r12
+    pop rbx
+    ret
+
+out_u2:
+    push rbx
+    mov eax, edi
+    xor edx, edx
+    mov ebx, 10
+    div ebx
+    push rdx
+    add al, '0'
+    mov dil, al
+    call out_byte
+    pop rdx
+    mov al, dl
+    add al, '0'
+    mov dil, al
+    call out_byte
+    pop rbx
+    ret
+
+out_nsec9:
+    push rbx
+    push r12
+    mov r12, rax
+    mov ebx, 100000000
+.lp:
+    test ebx, ebx
+    jz .d
+    mov rax, r12
+    xor rdx, rdx
+    mov ecx, ebx
+    div rcx
+    mov r12, rdx
+    add al, '0'
+    mov dil, al
+    call out_byte
+    mov eax, ebx
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    mov ebx, eax
+    jmp .lp
+.d: pop r12
+    pop rbx
+    ret
+
+; tz_offset_for(rdi=utc_sec) → rax seconds east of UTC
+tz_offset_for:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    cmp byte [tz_ready], 1
+    je .have
+    cmp byte [tz_ready], 2
+    je .zero
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    lea rsi, [path_localtime]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .fail_tz
+    mov r13, rax
+    mov rax, SYS_read
+    mov rdi, r13
+    lea rsi, [tz_buf]
+    mov rdx, 16384
+    syscall
+    mov r14, rax
+    push r14
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    pop r14
+    cmp r14, 44
+    jl .fail_tz
+    cmp dword [tz_buf], 0x66695a54
+    jne .fail_tz
+    mov [tz_len], r14
+    mov byte [tz_ready], 1
+.have:
+    lea r13, [tz_buf]
+    mov eax, [r13 + 20]
+    bswap eax
+    mov r8d, eax
+    mov eax, [r13 + 24]
+    bswap eax
+    mov r9d, eax
+    mov eax, [r13 + 28]
+    bswap eax
+    mov r10d, eax
+    mov eax, [r13 + 32]
+    bswap eax
+    mov r11d, eax
+    mov eax, [r13 + 36]
+    bswap eax
+    mov ebx, eax
+    mov eax, [r13 + 40]
+    bswap eax
+    mov r15d, eax
+    lea r14, [r13 + 44]
+    mov eax, r11d
+    shl eax, 2
+    add r14, rax
+    add r14, r11
+    mov eax, ebx
+    imul eax, 6
+    add r14, rax
+    add r14, r15
+    mov eax, r10d
+    shl eax, 3
+    add r14, rax
+    add r14, r9
+    add r14, r8
+    movzx eax, byte [r13 + 4]
+    cmp al, '2'
+    jb .use_v1
+    cmp al, '3'
+    ja .use_v1
+    lea rax, [tz_buf]
+    add rax, [tz_len]
+    lea rdx, [r14 + 44]
+    cmp rdx, rax
+    ja .use_v1
+    cmp dword [r14], 0x66695a54
+    jne .use_v1
+    mov eax, [r14 + 32]
+    bswap eax
+    mov r11d, eax
+    mov eax, [r14 + 36]
+    bswap eax
+    mov ebx, eax
+    add r14, 44
+    xor ecx, ecx
+    test r11d, r11d
+    jz .got_type
+    xor edx, edx
+.find:
+    cmp edx, r11d
+    jae .got_type
+    mov rax, [r14 + rdx*8]
+    bswap rax
+    cmp rax, r12
+    jg .got_type
+    push rdx
+    mov eax, r11d
+    shl eax, 3
+    add rax, r14
+    add rax, rdx
+    movzx ecx, byte [rax]
+    pop rdx
+    inc edx
+    jmp .find
+.got_type:
+    mov eax, r11d
+    shl eax, 3
+    lea r14, [r14 + rax]
+    add r14, r11
+    mov eax, ecx
+    imul eax, 6
+    add r14, rax
+    mov eax, [r14]
+    bswap eax
+    movsxd rax, eax
+    jmp .out
+.use_v1:
+    lea r14, [r13 + 44]
+    xor ecx, ecx
+    test r11d, r11d
+    jz .v1type
+    xor edx, edx
+.v1f:
+    cmp edx, r11d
+    jae .v1type
+    mov eax, [r14 + rdx*4]
+    bswap eax
+    movsxd rax, eax
+    cmp rax, r12
+    jg .v1type
+    push rdx
+    mov eax, r11d
+    shl eax, 2
+    add rax, r14
+    add rax, rdx
+    movzx ecx, byte [rax]
+    pop rdx
+    inc edx
+    jmp .v1f
+.v1type:
+    mov eax, r11d
+    shl eax, 2
+    lea r14, [r14 + rax]
+    add r14, r11
+    mov eax, ecx
+    imul eax, 6
+    add r14, rax
+    mov eax, [r14]
+    bswap eax
+    movsxd rax, eax
+    jmp .out
+.fail_tz:
+    mov byte [tz_ready], 2
+.zero:
+    xor eax, eax
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 ; ═══════════════════════════════════════════════════════════
@@ -1839,18 +2388,42 @@ diff3_files:
     lea rcx, [lines_a_len]
     lea r8, [diff_na]
     call load_lines
+    test rax, rax
+    jz .lb
+    lea rsi, [diff3_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .done
+.lb:
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
     lea rcx, [lines_b_len]
     lea r8, [diff_nb]
     call load_lines
+    test rax, rax
+    jz .lc
+    lea rsi, [diff3_err_pre]
+    mov rdi, [diff_b]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .done
+.lc:
     mov rdi, [diff_c]
     lea rsi, [pool_c]
     lea rdx, [lines_c_ptr]
     lea rcx, [lines_c_len]
     lea r8, [diff_nc]
     call load_lines
+    test rax, rax
+    jz .okl
+    lea rsi, [diff3_err_pre]
+    mov rdi, [diff_c]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .done
+.okl:
     mov r12, [diff_na]
     cmp r12, [diff_nb]
     jae .m1
@@ -1864,7 +2437,6 @@ diff3_files:
 .lp:
     cmp r13, r12
     jae .done
-    ; fetch A → r8 ptr, r9 len (preserved across calls via stack)
     call d3_line_a
     mov r8, rdi
     mov r9, rdx
@@ -1872,37 +2444,49 @@ diff3_files:
     mov r10, rdi
     mov r11, rdx
     call d3_line_c
-    mov rbx, rdi                    ; C ptr
-    mov rbp, rdx                    ; C len (callee-saved)
-    ; eq AB?
+    mov rbx, rdi
+    mov rbp, rdx
+    ; presence flags in [num_tmp]: bit0 A bit1 B bit2 C for lines that exist
+    xor eax, eax
+    cmp r13, [diff_na]
+    jae .p1
+    or al, 1
+.p1: cmp r13, [diff_nb]
+    jae .p2
+    or al, 2
+.p2: cmp r13, [diff_nc]
+    jae .p3
+    or al, 4
+.p3: mov [num_tmp + 16], al
     mov rdi, r8
     mov rdx, r9
     mov rsi, r10
     mov rcx, r11
     call d3_eq
-    mov r14b, al                    ; ab_eq
-    ; eq AC?
+    mov r14b, al
     mov rdi, r8
     mov rdx, r9
     mov rsi, rbx
     mov rcx, rbp
     call d3_eq
-    mov r15b, al                    ; ac_eq
-    ; eq BC?
+    mov r15b, al
     mov rdi, r10
     mov rdx, r11
     mov rsi, rbx
     mov rcx, rbp
     call d3_eq
     ; al = bc_eq
-    ; all equal?
+    ; If all three equal (or all missing empty): merge print / skip
     test r14b, r14b
     jz .differs
     test r15b, r15b
     jz .differs
-    ; all equal → merge print or skip
+    ; all equal
     cmp byte [d3_merge], 0
     je .next
+    ; only print if at least one side has the line (avoid trailing empties from max)
+    test byte [num_tmp + 16], 7
+    jz .next
     test r9, r9
     jz .nl_only
     mov rsi, r8
@@ -1913,33 +2497,80 @@ diff3_files:
     call out_byte
     jmp .next
 .differs:
-    mov dword [g_exit], 1
     cmp byte [d3_merge], 0
     jne .merge_logic
-    ; classic ==== report (preserve lens in stack)
+    ; classic report — GNU exits 0 for successful non-merge report
+    ; type marker: ==== / ====1 / ====2 / ====3
     push r8
     push r9
     push r10
     push r11
     push rbx
     push rbp
+    push rax
+    ; determine type: only A differs => ====1 if B==C; only B => ====2 if A==C; only C => ====3 if A==B
+    pop rax
+    push rax
+    test r14b, r14b                 ; A==B?
+    jz .t_check2
+    ; A==B, not all equal => C differs
+    lea rsi, [diff3_eq3]
+    jmp .t_emit
+.t_check2:
+    test r15b, r15b                 ; A==C?
+    jz .t_check3
+    lea rsi, [diff3_eq2]
+    jmp .t_emit
+.t_check3:
+    test al, al                     ; B==C?
+    jz .t_all
+    lea rsi, [diff3_eq1]
+    jmp .t_emit
+.t_all:
     lea rsi, [diff3_aaaa]
+.t_emit:
     call out_str
-    lea rsi, [diff3_1]
-    call out_str
-    lea rsi, [diff3_c]
-    call out_str
+    pop rax
     pop rbp
     pop rbx
     pop r11
     pop r10
     pop r9
     pop r8
-    test r9, r9
+    ; emit file sections with line number: "1:LINEc\n  text\n"
+    ; For type 1 (only A differs): show 1 and then 2/3 once if B==C
+    ; Simplified: always show each file's line with number (r13+1)
+    push r8
+    push r9
+    push r10
+    push r11
+    push rbx
+    push rbp
+    push rax
+    lea rsi, [diff3_1]
+    call out_str
+    lea rdi, [r13 + 1]
+    call out_u64
+    lea rsi, [diff3_c]
+    call out_str
+    pop rax
+    pop rbp
+    pop rbx
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    ; print A line if present or content
+    test byte [num_tmp + 16], 1
     jz .o2
+    lea rsi, [diff3_ind]
+    call out_str
+    test r9, r9
+    jz .o1nl
     mov rsi, r8
     mov rdx, r9
     call out_strn
+.o1nl:
     mov dil, 10
     call out_byte
 .o2:
@@ -1947,19 +2578,28 @@ diff3_files:
     push r11
     push rbx
     push rbp
+    push rax
     lea rsi, [diff3_2]
     call out_str
+    lea rdi, [r13 + 1]
+    call out_u64
     lea rsi, [diff3_c]
     call out_str
+    pop rax
     pop rbp
     pop rbx
     pop r11
     pop r10
-    test r11, r11
+    test byte [num_tmp + 16], 2
     jz .o3
+    lea rsi, [diff3_ind]
+    call out_str
+    test r11, r11
+    jz .o2nl
     mov rsi, r10
     mov rdx, r11
     call out_strn
+.o2nl:
     mov dil, 10
     call out_byte
 .o3:
@@ -1967,26 +2607,34 @@ diff3_files:
     push rbp
     lea rsi, [diff3_3]
     call out_str
+    lea rdi, [r13 + 1]
+    call out_u64
     lea rsi, [diff3_c]
     call out_str
     pop rbp
     pop rbx
-    test rbp, rbp
+    test byte [num_tmp + 16], 4
     jz .next
+    lea rsi, [diff3_ind]
+    call out_str
+    test rbp, rbp
+    jz .o3nl
     mov rsi, rbx
     mov rdx, rbp
     call out_strn
+.o3nl:
     mov dil, 10
     call out_byte
     jmp .next
 .merge_logic:
     ; r14b=ab_eq, r15b=ac_eq, al=bc_eq
-    ; only yours: ab_eq (mine==old), not ac → take C
     test r14b, r14b
     jz .chk_mine
     test r15b, r15b
-    jnz .next                       ; shouldn't
-    ; take C
+    jnz .next
+    ; only yours changed: take C
+    test byte [num_tmp + 16], 4
+    jz .next
     test rbp, rbp
     jz .m_nl
     mov rsi, rbx
@@ -1997,9 +2645,10 @@ diff3_files:
     call out_byte
     jmp .next
 .chk_mine:
-    ; only mine: bc_eq (yours==old), take A
     test al, al
     jz .conflict
+    test byte [num_tmp + 16], 1
+    jz .next
     test r9, r9
     jz .m_nl2
     mov rsi, r8
@@ -2010,10 +2659,11 @@ diff3_files:
     call out_byte
     jmp .next
 .conflict:
-    ; both changed (or A==C != B handled as take A if ac_eq)
     test r15b, r15b
     jz .conf_out
-    ; A==C != B → both made same change: take A
+    ; A==C != B → same change both sides
+    test byte [num_tmp + 16], 1
+    jz .next
     test r9, r9
     jz .m_nl3
     mov rsi, r8
@@ -2024,8 +2674,12 @@ diff3_files:
     call out_byte
     jmp .next
 .conf_out:
+    ; conflict: exit 1 for merge
+    mov dword [g_exit], 1
     push r8
     push r9
+    push r10
+    push r11
     push rbx
     push rbp
     test dword [g_flags], DF_CORE
@@ -2042,12 +2696,38 @@ diff3_files:
     call out_byte
     pop rbp
     pop rbx
+    pop r11
+    pop r10
     pop r9
     pop r8
+    ; mine lines
     test r9, r9
-    jz .cmid
+    jz .ancestor
     mov rsi, r8
     mov rdx, r9
+    call out_strn
+    mov dil, 10
+    call out_byte
+.ancestor:
+    ; ||||||| oldfile (GNU -m / -A style)
+    push r10
+    push r11
+    push rbx
+    push rbp
+    lea rsi, [conf_o]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    mov dil, 10
+    call out_byte
+    pop rbp
+    pop rbx
+    pop r11
+    pop r10
+    test r11, r11
+    jz .cmid
+    mov rsi, r10
+    mov rdx, r11
     call out_strn
     mov dil, 10
     call out_byte
@@ -2296,23 +2976,57 @@ sdiff_files:
     lea rcx, [lines_a_len]
     lea r8, [diff_na]
     call load_lines
+    test rax, rax
+    jz .lb
+    lea rsi, [sdiff_err_pre]
+    mov rdi, [diff_a]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .done
+.lb:
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
     lea rcx, [lines_b_len]
     lea r8, [diff_nb]
     call load_lines
-    ; half width for each column: (width - 3) / 2
+    test rax, rax
+    jz .okl
+    lea rsi, [sdiff_err_pre]
+    mov rdi, [diff_b]
+    call emit_tool_path_err
+    mov dword [g_exit], 2
+    jmp .done
+.okl:
+    ; half = (width - 3) / 2
     mov eax, [sdiff_width]
     sub eax, 3
     jg .wok
-    mov eax, 2
+    mov eax, 1
 .wok:
     shr eax, 1
     test eax, eax
     jnz .w2
     mov eax, 1
-.w2: mov [sdiff_width], eax         ; now per-column width
+.w2: mov [sdiff_half], eax
+    ; col2 = ceil_tab(half) = ((half+7)/8)*8 ; midcol = min(half+1, col2-2)
+    mov ecx, eax
+    add ecx, 7
+    shr ecx, 3
+    shl ecx, 3
+    cmp ecx, 8
+    jae .c2
+    mov ecx, 8
+.c2: mov [sdiff_col2], ecx
+    mov edx, eax
+    inc edx                         ; half+1
+    mov ebx, ecx
+    sub ebx, 2                      ; col2-2
+    cmp edx, ebx
+    jbe .mid
+    mov edx, ebx
+.mid:
+    mov [sdiff_midcol], edx
     mov r12, [diff_na]
     cmp r12, [diff_nb]
     jae .m
@@ -2326,15 +3040,21 @@ sdiff_files:
     xor r9, r9
     xor r10, r10
     xor r11, r11
+    xor ebx, ebx                    ; bl: bit0=has_left bit1=has_right
     cmp r13, [diff_na]
     jae .b
     mov r8, [lines_a_ptr + r13*8]
     mov r9, [lines_a_len + r13*8]
+    or bl, 1
 .b: cmp r13, [diff_nb]
     jae .cmp
     mov r10, [lines_b_ptr + r13*8]
     mov r11, [lines_b_len + r13*8]
+    or bl, 2
 .cmp:
+    ; both present and equal?
+    cmp bl, 3
+    jne .diff
     mov rdi, r8
     mov rdx, r9
     mov rsi, r10
@@ -2348,6 +3068,7 @@ sdiff_files:
     jmp .next
 .diff:
     mov dword [g_exit], 1
+    ; bl: 1=left only, 2=right only, 3=both differ, 0=impossible
     call sdiff_emit_diff
 .next:
     inc r13
@@ -2360,7 +3081,7 @@ sdiff_files:
     pop rbx
     ret
 
-; r8/r9 left, r10/r11 right — preserve across out_*
+; r8/r9 left, r10/r11 right, bl=presence
 sdiff_emit_common:
     push rbx
     push r12
@@ -2372,27 +3093,43 @@ sdiff_emit_common:
     mov r14, r10
     mov r15, r11
     test dword [g_flags], DF_CORE
-    jnz .l
+    jnz .core
+    ; modern: space-padded themed
     cmp byte [g_color], 0
-    je .l
+    je .ml
     call color_dim
-.l: mov rsi, r12
+.ml: mov rsi, r12
     mov rdx, r13
-    mov ebx, [sdiff_width]
+    mov ebx, [sdiff_half]
     call sdiff_pad_out
-    test dword [g_flags], DF_CORE
-    jnz .m
     cmp byte [g_color], 0
-    je .m
+    je .mm
     call color_reset
-.m: lea rsi, [sdiff_sp]
+.mm: lea rsi, [sdiff_sp]
     call out_str
     mov rsi, r14
     mov rdx, r15
-    mov ebx, [sdiff_width]
+    mov ebx, [sdiff_half]
     call sdiff_pad_out
     mov dil, 10
     call out_byte
+    jmp .out
+.core:
+    ; left truncated to half, tab_from_to(col, col2), right
+    mov rsi, r12
+    mov rdx, r13
+    mov ebx, [sdiff_half]
+    call sdiff_out_trunc
+    mov edi, eax                    ; col after left
+    mov esi, [sdiff_col2]
+    call sdiff_tab_from_to
+    mov rsi, r14
+    mov rdx, r15
+    mov ebx, [sdiff_half]
+    call sdiff_out_trunc
+    mov dil, 10
+    call out_byte
+.out:
     pop r15
     pop r14
     pop r13
@@ -2400,6 +3137,7 @@ sdiff_emit_common:
     pop rbx
     ret
 
+; bl presence: 1 left-only, 2 right-only, 3 both differ
 sdiff_emit_diff:
     push rbx
     push r12
@@ -2410,50 +3148,95 @@ sdiff_emit_diff:
     mov r13, r9
     mov r14, r10
     mov r15, r11
+    mov r8d, ebx                    ; save presence
     test dword [g_flags], DF_CORE
-    jnz .l
+    jnz .core
+    ; modern themed
     cmp byte [g_color], 0
-    je .l
+    je .ml
     call color_err
-.l: mov rsi, r12
+.ml: mov rsi, r12
     mov rdx, r13
-    mov ebx, [sdiff_width]
+    test r8b, 1
+    jnz .ml2
+    xor esi, esi
+    xor edx, edx
+.ml2:
+    mov ebx, [sdiff_half]
     call sdiff_pad_out
-    test dword [g_flags], DF_CORE
-    jnz .mid
     cmp byte [g_color], 0
     je .mid
     call color_reset
 .mid:
-    test r13, r13
-    jnz .has_l
-    ; only right
-    lea rsi, [sdiff_gt]
+    cmp r8b, 1
+    je .mleft
+    cmp r8b, 2
+    je .mright
+    lea rsi, [sdiff_bar]
     jmp .mk
-.has_l:
-    test r15, r15
-    jnz .both
+.mleft:
     lea rsi, [sdiff_lt]
     jmp .mk
-.both:
-    lea rsi, [sdiff_bar]
+.mright:
+    lea rsi, [sdiff_gt]
 .mk: call out_str
-    test dword [g_flags], DF_CORE
-    jnz .r
     cmp byte [g_color], 0
-    je .r
+    je .mr
     call color_ok
-.r: mov rsi, r14
+.mr: mov rsi, r14
     mov rdx, r15
-    mov ebx, [sdiff_width]
+    test r8b, 2
+    jnz .mr2
+    xor esi, esi
+    xor edx, edx
+.mr2:
+    mov ebx, [sdiff_half]
     call sdiff_pad_out
-    test dword [g_flags], DF_CORE
-    jnz .n
     cmp byte [g_color], 0
     je .n
     call color_reset
 .n: mov dil, 10
     call out_byte
+    jmp .out
+.core:
+    cmp r8b, 2
+    je .cright
+    ; left present (only or both)
+    mov rsi, r12
+    mov rdx, r13
+    mov ebx, [sdiff_half]
+    call sdiff_out_trunc
+    mov edi, eax
+    mov esi, [sdiff_midcol]
+    call sdiff_tab_from_to
+    cmp r8b, 1
+    je .cleft
+    ; both differ: | TAB right
+    lea rsi, [sdiff_pipe_tab]
+    call out_str
+    mov rsi, r14
+    mov rdx, r15
+    mov ebx, [sdiff_half]
+    call sdiff_out_trunc
+    jmp .cnl
+.cleft:
+    lea rsi, [sdiff_lt_only]
+    call out_str
+    jmp .cnl
+.cright:
+    xor edi, edi
+    mov esi, [sdiff_midcol]
+    call sdiff_tab_from_to
+    lea rsi, [sdiff_gt_tab]
+    call out_str
+    mov rsi, r14
+    mov rdx, r15
+    mov ebx, [sdiff_half]
+    call sdiff_out_trunc
+.cnl:
+    mov dil, 10
+    call out_byte
+.out:
     pop r15
     pop r14
     pop r13
@@ -2461,8 +3244,68 @@ sdiff_emit_diff:
     pop rbx
     ret
 
-; sdiff_pad_out(rsi=ptr, rdx=len, ebx=width)
-; print min(len,width) then pad with spaces using preserved counter
+; sdiff_out_trunc(rsi=ptr, rdx=len, ebx=half) → eax=display cols written
+sdiff_out_trunc:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+    mov eax, ebx
+    cmp r13, rax
+    jbe .use
+    mov r13, rax
+.use:
+    test r13, r13
+    jz .z
+    test r12, r12
+    jz .z
+    mov rsi, r12
+    mov rdx, r13
+    call out_strn
+    mov eax, r13d
+    jmp .d
+.z: xor eax, eax
+.d: pop r13
+    pop r12
+    pop rbx
+    ret
+
+; sdiff_tab_from_to(edi=from_col, esi=to_col) GNU util.c style
+sdiff_tab_from_to:
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    mov r13d, esi
+.lp:
+    cmp r12d, r13d
+    jae .d
+    ; if to//8 > from//8 → tab
+    mov eax, r13d
+    shr eax, 3
+    mov ebx, r12d
+    shr ebx, 3
+    cmp eax, ebx
+    jbe .sp
+    mov dil, 9
+    call out_byte
+    mov eax, r12d
+    or eax, 7
+    inc eax
+    mov r12d, eax
+    jmp .lp
+.sp:
+    mov dil, ' '
+    call out_byte
+    inc r12d
+    jmp .lp
+.d: pop r13
+    pop r12
+    pop rbx
+    ret
+
+; sdiff_pad_out(rsi=ptr, rdx=len, ebx=width) — space pad (modern)
 sdiff_pad_out:
     push rbx
     push r12

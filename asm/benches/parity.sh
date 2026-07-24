@@ -591,7 +591,15 @@ if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
   cmp_out "find -maxdepth 0"     "$ROOT/f00-find" --core "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
   cmp_out "find -maxdepth 1"     bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 | sort"
   echo f00-parity-name > "$WORKDIR/f00-parity-name.txt"
+  : > "$WORKDIR/f00-parity-empty"
+  echo F00 > "$WORKDIR/f00-parity-NAME.TXT"
   cmp_out "find -name"          bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -name 'f00-parity*' | sort"
+  cmp_out "find -iname"         bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -iname 'f00-parity-name.txt' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -iname 'f00-parity-name.txt' | sort"
+  cmp_out "find -type f"        bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 -type f -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 -type f -name 'f00-parity*' | sort"
+  cmp_out "find -empty"         bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 -type f -empty -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 -type f -empty -name 'f00-parity*' | sort"
+  cmp_out "find -size 0c"       bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 -size 0c -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 -size 0c -name 'f00-parity*' | sort"
+  cmp_out "find -o"             bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 \\( -name 'f00-parity-name.txt' -o -name 'f00-parity-empty' \\) | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 \\( -name 'f00-parity-name.txt' -o -name 'f00-parity-empty' \\) | sort"
+  cmp_out "find -not"           bash -c "\"$ROOT/f00-find\" --core \"$WORKDIR\" -maxdepth 1 -type f -not -name 'f00-parity-empty' -name 'f00-parity*' | sort" :::     bash -c "\"$CORE/find\" \"$WORKDIR\" -maxdepth 1 -type f -not -name 'f00-parity-empty' -name 'f00-parity*' | sort"
 fi
 if [[ -x "$ROOT/f00-xargs" && -x "$CORE/xargs" ]]; then
   cmp_out "xargs echo"          bash -c "printf 'a\nb\n' | \"$ROOT/f00-xargs\" --core" :::     bash -c "printf 'a\nb\n' | \"$CORE/xargs\""
