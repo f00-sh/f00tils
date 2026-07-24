@@ -14,6 +14,7 @@
 █  pretty JSON · CSV tables · cat content paint    █
 █  overall 1.5× · 48% faster than coreutils        █
 █  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
+█  geo · wall/CPU/RSS · CPU 1.4× · RSS 1.0×        █
 █  https://f00.sh · github:theesfeld/f00           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    
