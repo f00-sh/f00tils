@@ -55,7 +55,7 @@ extern chroot_main, stty_main, stdbuf_main, runcon_main, chcon_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.15.19", 10
+    db "f00-ls (f00) 0.15.20", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg

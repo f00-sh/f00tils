@@ -10,6 +10,8 @@ extern out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern g_exit, g_tty, g_color, g_cols, g_envp
 extern g_cfg_core, g_cfg_animations, g_cfg_spinner
 extern g_cfg_color_when, g_cfg_icons_when, g_cfg_git, g_cfg_theme
+extern g_cfg_hyper, g_cfg_dirs_first, g_cfg_ignore_files
+extern g_cfg_headers, g_cfg_line_numbers, g_cfg_syntax
 extern g_icons_when, g_icons_style
 extern is_tty, get_winsize, strlen, strcmp, memcpy
 extern theme_apply_name, theme_current_name, theme_count_builtins, theme_name_by_index
@@ -39,7 +41,13 @@ extern icon_set_style_from_str
 %define S_ANIM    4
 %define S_SPIN    5
 %define S_GIT     6
-%define S_COUNT   7
+%define S_HYPER   7
+%define S_DIRS    8
+%define S_IGN     9
+%define S_HDR     10
+%define S_LNUM    11
+%define S_SYNTAX  12
+%define S_COUNT   13
 
 %define CFG_AUTO   0
 %define CFG_ALWAYS 1
@@ -88,6 +96,12 @@ lbl_s3:     db "File icons", 0
 lbl_s4:     db "Animations", 0
 lbl_s5:     db "Progress spinners", 0
 lbl_s6:     db "Git status in ls", 0
+lbl_s7:     db "Clickable file links (ls)", 0
+lbl_s8:     db "List directories before files", 0
+lbl_s9:     db "Honor .gitignore in ls", 0
+lbl_s10:    db "cat file title banner", 0
+lbl_s11:    db "cat line-number gutter", 0
+lbl_s12:    db "cat syntax highlighting", 0
 hint_set:   db "Changes save immediately to ~/.config/f00/config", 0
 ; plain-English detail for the focused setting
 desc_s0:    db "When yes, bare names (ls, cat, …) on PATH run f00tils via", 10
@@ -109,6 +123,19 @@ desc_s5:    db "Show progress spinners on long work (sort, multi-file copy, hash
 desc_s6:    db "Show git status marks in modern ls (modified/added/… colors).", 10
             db "  auto = on for TTY listings  ·  always/never force on or off.", 10
             db "  Only affects ls-family tools, not cat/hash/etc.", 0
+desc_s7:    db "OSC-8 hyperlinks on file names in ls (clickable in many terminals).", 10
+            db "  auto = on for TTY modern listings  ·  always/never force.", 10
+            db "  Some multiplexers/older terminals ignore or mis-render these.", 0
+desc_s8:    db "When yes, directories are sorted above files in ls (like eza/exa).", 10
+            db "  When no, pure name order (classic ls). CLI can still override.", 0
+desc_s9:    db "When yes, modern ls skips paths matched by .gitignore / .f00ignore", 10
+            db "  in the directory tree. Useful for cleaner project listings.", 0
+desc_s10:   db "cat file title (name · size · language) above content:", 10
+            db "  auto = on TTY only  ·  always/never force. Off for bare piping.", 0
+desc_s11:   db "cat left gutter with line numbers (bat-style):", 10
+            db "  auto = on TTY  ·  always/never force. -n / --no-number still win.", 0
+desc_s12:   db "Color keywords/strings/comments in cat for known file types", 10
+            db "  (asm, c, py, rs, md, sh, json, …). Off = plain text body only.", 0
 desc_hdr:   db "About this setting", 0
 lbl_on:     db "yes", 0
 lbl_off:    db "no", 0
@@ -145,6 +172,12 @@ k_anim:     db "animations", 0
 k_spin:     db "spinner", 0
 k_git:      db "git", 0
 k_theme:    db "theme", 0
+k_hyper:    db "hyperlink", 0
+k_dirs:     db "dirs-first", 0
+k_ign:      db "ignore-files", 0
+k_headers:  db "headers", 0
+k_linenum:  db "line-numbers", 0
+k_syntax:   db "syntax", 0
 env_xdg:    db "XDG_CONFIG_HOME", 0
 env_home:   db "HOME", 0
 suf_th:     db "/.config/f00/themes", 0
@@ -437,6 +470,18 @@ settings_cycle_next:
     je .spin
     cmp eax, S_GIT
     je .git
+    cmp eax, S_HYPER
+    je .hyper
+    cmp eax, S_DIRS
+    je .dirs
+    cmp eax, S_IGN
+    je .ign
+    cmp eax, S_HDR
+    je .hdr
+    cmp eax, S_LNUM
+    je .lnum
+    cmp eax, S_SYNTAX
+    je .syn
     ret
 .rep:
     call replace_is_off
@@ -485,6 +530,40 @@ settings_cycle_next:
 .sf: lea rsi, [s_false]
     call save_kv_status
     ret
+.dirs:
+    xor byte [g_cfg_dirs_first], 1
+    lea rdi, [k_dirs]
+    cmp byte [g_cfg_dirs_first], 0
+    je .df
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.df: lea rsi, [s_false]
+    call save_kv_status
+    ret
+.ign:
+    xor byte [g_cfg_ignore_files], 1
+    lea rdi, [k_ign]
+    cmp byte [g_cfg_ignore_files], 0
+    je .if
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.if: lea rsi, [s_false]
+    call save_kv_status
+    ret
+.syn:
+    xor byte [g_cfg_syntax], 1
+    lea rdi, [k_syntax]
+    cmp byte [g_cfg_syntax], 0
+    je .synf
+    lea rsi, [s_true]
+    call save_kv_status
+    ret
+.synf:
+    lea rsi, [s_false]
+    call save_kv_status
+    ret
 .col:
     movzx eax, byte [g_cfg_color_when]
     inc eax
@@ -505,6 +584,39 @@ settings_cycle_next:
 .gs: mov [g_cfg_git], al
     lea rdi, [k_git]
     call when_to_str_git
+    call save_kv_status
+    ret
+.hyper:
+    movzx eax, byte [g_cfg_hyper]
+    inc eax
+    cmp eax, 3
+    jb .hs
+    xor eax, eax
+.hs: mov [g_cfg_hyper], al
+    lea rdi, [k_hyper]
+    call when_to_str_hyper
+    call save_kv_status
+    ret
+.hdr:
+    movzx eax, byte [g_cfg_headers]
+    inc eax
+    cmp eax, 3
+    jb .hds
+    xor eax, eax
+.hds: mov [g_cfg_headers], al
+    lea rdi, [k_headers]
+    call when_to_str_headers
+    call save_kv_status
+    ret
+.lnum:
+    movzx eax, byte [g_cfg_line_numbers]
+    inc eax
+    cmp eax, 3
+    jb .lns
+    xor eax, eax
+.lns: mov [g_cfg_line_numbers], al
+    lea rdi, [k_linenum]
+    call when_to_str_linenum
     call save_kv_status
     ret
 .ico:
@@ -558,6 +670,12 @@ settings_cycle_prev:
     je .colp
     cmp eax, S_GIT
     je .gitp
+    cmp eax, S_HYPER
+    je .hyp
+    cmp eax, S_HDR
+    je .hdrp
+    cmp eax, S_LNUM
+    je .lnp
     cmp eax, S_ICONS
     je .icop
     jmp settings_cycle_next
@@ -581,6 +699,39 @@ settings_cycle_prev:
     mov [g_cfg_git], al
     lea rdi, [k_git]
     call when_to_str_git
+    call save_kv_status
+    ret
+.hyp:
+    movzx eax, byte [g_cfg_hyper]
+    test eax, eax
+    jnz .hd
+    mov eax, 3
+.hd: dec eax
+    mov [g_cfg_hyper], al
+    lea rdi, [k_hyper]
+    call when_to_str_hyper
+    call save_kv_status
+    ret
+.hdrp:
+    movzx eax, byte [g_cfg_headers]
+    test eax, eax
+    jnz .hdec
+    mov eax, 3
+.hdec: dec eax
+    mov [g_cfg_headers], al
+    lea rdi, [k_headers]
+    call when_to_str_headers
+    call save_kv_status
+    ret
+.lnp:
+    movzx eax, byte [g_cfg_line_numbers]
+    test eax, eax
+    jnz .ldec
+    mov eax, 3
+.ldec: dec eax
+    mov [g_cfg_line_numbers], al
+    lea rdi, [k_linenum]
+    call when_to_str_linenum
     call save_kv_status
     ret
 .icop:
@@ -607,6 +758,18 @@ when_al_to_rsi:
 
 when_to_str_git:
     movzx eax, byte [g_cfg_git]
+    jmp when_al_to_rsi
+
+when_to_str_hyper:
+    movzx eax, byte [g_cfg_hyper]
+    jmp when_al_to_rsi
+
+when_to_str_headers:
+    movzx eax, byte [g_cfg_headers]
+    jmp when_al_to_rsi
+
+when_to_str_linenum:
+    movzx eax, byte [g_cfg_line_numbers]
     jmp when_al_to_rsi
 
 ; icons_cycle_next → val_tmp filled, g_cfg_icons_when/g_icons_style updated
@@ -1061,7 +1224,19 @@ draw_settings:
     je .l4
     cmp ebx, S_SPIN
     je .l5
-    lea rsi, [lbl_s6]
+    cmp ebx, S_GIT
+    je .l6
+    cmp ebx, S_HYPER
+    je .l7
+    cmp ebx, S_DIRS
+    je .l8
+    cmp ebx, S_IGN
+    je .l9
+    cmp ebx, S_HDR
+    je .l10
+    cmp ebx, S_LNUM
+    je .l11
+    lea rsi, [lbl_s12]
     jmp .lo
 .l0: lea rsi, [lbl_s0]
     jmp .lo
@@ -1074,6 +1249,18 @@ draw_settings:
 .l4: lea rsi, [lbl_s4]
     jmp .lo
 .l5: lea rsi, [lbl_s5]
+    jmp .lo
+.l6: lea rsi, [lbl_s6]
+    jmp .lo
+.l7: lea rsi, [lbl_s7]
+    jmp .lo
+.l8: lea rsi, [lbl_s8]
+    jmp .lo
+.l9: lea rsi, [lbl_s9]
+    jmp .lo
+.l10: lea rsi, [lbl_s10]
+    jmp .lo
+.l11: lea rsi, [lbl_s11]
 .lo: call out_str
     call color_reset
     ; pad + value
@@ -1144,7 +1331,19 @@ settings_desc_str:
     je .d4
     cmp eax, S_SPIN
     je .d5
-    lea rsi, [desc_s6]
+    cmp eax, S_GIT
+    je .d6
+    cmp eax, S_HYPER
+    je .d7
+    cmp eax, S_DIRS
+    je .d8
+    cmp eax, S_IGN
+    je .d9
+    cmp eax, S_HDR
+    je .d10
+    cmp eax, S_LNUM
+    je .d11
+    lea rsi, [desc_s12]
     ret
 .d0: lea rsi, [desc_s0]
     ret
@@ -1157,6 +1356,18 @@ settings_desc_str:
 .d4: lea rsi, [desc_s4]
     ret
 .d5: lea rsi, [desc_s5]
+    ret
+.d6: lea rsi, [desc_s6]
+    ret
+.d7: lea rsi, [desc_s7]
+    ret
+.d8: lea rsi, [desc_s8]
+    ret
+.d9: lea rsi, [desc_s9]
+    ret
+.d10: lea rsi, [desc_s10]
+    ret
+.d11: lea rsi, [desc_s11]
     ret
 
 ; eax = row → rsi = value cstr
@@ -1173,9 +1384,23 @@ settings_value_str:
     je .anim
     cmp eax, S_SPIN
     je .spin
-    ; git
-    movzx eax, byte [g_cfg_git]
-    jmp .when
+    cmp eax, S_GIT
+    je .git
+    cmp eax, S_HYPER
+    je .hyper
+    cmp eax, S_DIRS
+    je .dirs
+    cmp eax, S_IGN
+    je .ign
+    cmp eax, S_HDR
+    je .hdr
+    cmp eax, S_LNUM
+    je .lnum
+    ; syntax
+    cmp byte [g_cfg_syntax], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
 .rep:
     call replace_is_off
     test eax, eax
@@ -1199,6 +1424,16 @@ settings_value_str:
     je .off
     lea rsi, [lbl_on]
     ret
+.dirs:
+    cmp byte [g_cfg_dirs_first], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
+.ign:
+    cmp byte [g_cfg_ignore_files], 0
+    je .off
+    lea rsi, [lbl_on]
+    ret
 .col:
     movzx eax, byte [g_cfg_color_when]
 .when:
@@ -1212,6 +1447,18 @@ settings_value_str:
     ret
 .wn: lea rsi, [lbl_never]
     ret
+.git:
+    movzx eax, byte [g_cfg_git]
+    jmp .when
+.hyper:
+    movzx eax, byte [g_cfg_hyper]
+    jmp .when
+.hdr:
+    movzx eax, byte [g_cfg_headers]
+    jmp .when
+.lnum:
+    movzx eax, byte [g_cfg_line_numbers]
+    jmp .when
 .ico:
     cmp byte [g_cfg_icons_when], CFG_NEVER
     je .wn

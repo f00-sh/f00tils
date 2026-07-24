@@ -29,10 +29,10 @@ s_csv: db "csv",0
 s_core: db "core",0
 s_help: db "help",0
 s_ver: db "version",0
-v_chroot: db "f00-chroot (f00) 0.15.19",10,"License: MIT · https://f00.sh",10,0
-v_stty: db "f00-stty (f00) 0.15.19",10,"License: MIT · https://f00.sh",10,0
-v_stdbuf: db "f00-stdbuf (f00) 0.15.19",10,"License: MIT · https://f00.sh",10,0
-v_runcon: db "f00-runcon (f00) 0.15.19",10,"License: MIT · https://f00.sh",10,0
+v_chroot: db "f00-chroot (f00) 0.15.20",10,"License: MIT · https://f00.sh",10,0
+v_stty: db "f00-stty (f00) 0.15.20",10,"License: MIT · https://f00.sh",10,0
+v_stdbuf: db "f00-stdbuf (f00) 0.15.20",10,"License: MIT · https://f00.sh",10,0
+v_runcon: db "f00-runcon (f00) 0.15.20",10,"License: MIT · https://f00.sh",10,0
 nm_chroot: db "chroot",0
 nm_stty: db "stty",0
 nm_stdbuf: db "stdbuf",0
@@ -669,7 +669,7 @@ runcon_main:
 ; ===================== CHCON (SELinux; best-effort freestanding) =====================
 section .rodata
 nm_chcon: db "chcon",0
-v_chcon: db "f00-chcon (f00) 0.15.19",10,"License: MIT · https://f00.sh",10,0
+v_chcon: db "f00-chcon (f00) 0.15.20",10,"License: MIT · https://f00.sh",10,0
 h_chcon:
     db "Usage: f00-chcon [OPTION]... CONTEXT FILE...",10
     db "  or:  f00-chcon [OPTION]... [-u USER] [-r ROLE] [-l RANGE] [-t TYPE] FILE...",10

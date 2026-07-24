@@ -8,6 +8,7 @@ global cat_main
 extern arena_init, out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern is_tty, exit_code, strlen, strcmp, memcpy, memcmp
 extern g_exit, g_tty, g_color, g_opts2, g_json_core, g_cols
+extern g_cfg_headers, g_cfg_line_numbers, g_cfg_syntax
 extern json_meta_open, json_meta_close, json_key_u64, json_key_bool, json_comma_nl
 extern ui_file_header
 extern color_dim, color_hdr, color_num, color_path, color_ok, color_reset
@@ -123,7 +124,7 @@ cat_help:
 cat_help_len equ $-cat_help
 
 cat_version:
-    db "f00-cat (f00) 0.15.19", 10
+    db "f00-cat (f00) 0.15.20", 10
     db "GNU coreutils cat drop-in + modern chrome — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 cat_version_len equ $-cat_version
@@ -169,9 +170,38 @@ ty_make:  db "make", 0
 stdin_nm: db "stdin", 0
 
 csv_hdr:    db "util,version,files,lines_out,bytes_out", 10, 0
-csv_util:   db "cat,0.15.19,", 0
+csv_util:   db "cat,0.15.20,", 0
 
 section .text
+
+; cat_apply_cfg_headers — set/clear C_HEADERS from g_cfg_headers
+; auto → TTY only; always → force; never → off
+cat_apply_cfg_headers:
+    and dword [cat_opts], ~C_HEADERS
+    movzx eax, byte [g_cfg_headers]
+    cmp al, 2                       ; CFG_NEVER
+    je .r
+    cmp al, 1                       ; CFG_ALWAYS
+    je .on
+    cmp byte [g_tty], 0
+    je .r
+.on: or dword [cat_opts], C_HEADERS
+.r:  ret
+
+; cat_want_line_numbers → al=1 if gutter should enable
+cat_want_line_numbers:
+    movzx eax, byte [g_cfg_line_numbers]
+    cmp al, 2                       ; never
+    je .no
+    cmp al, 1                       ; always
+    je .yes
+    cmp byte [g_tty], 0
+    je .no
+.yes:
+    mov al, 1
+    ret
+.no: xor al, al
+    ret
 
 ; cat_main(rdi=argc, rsi=argv) — does not return (exits)
 cat_main:
@@ -197,10 +227,8 @@ cat_main:
     mov rdi, 1
     call is_tty
     mov [g_tty], al
-    ; modern bat chrome defaults on TTY (headers/gutter applied later if not --core)
-    test al, al
-    jz .count_files
-    or dword [cat_opts], C_HEADERS
+    ; headers from config: auto=TTY, always, never
+    call cat_apply_cfg_headers
 
 .count_files:
     ; pre-scan: mark multi-file for modern headers
@@ -234,11 +262,8 @@ cat_main:
     mov byte [cat_multi], 1
 
 .mod_defaults:
-    ; Modern TTY defaults before any file work (not --core — applied after flags too)
-    ; First pass: provisional chrome on TTY; --core later clears color/headers.
-    cmp byte [g_tty], 0
-    je .parse
-    or dword [cat_opts], C_HEADERS
+    ; re-apply headers from config (CLI can still override later)
+    call cat_apply_cfg_headers
 
 .parse:
     mov r14, 1                      ; arg index
@@ -1528,14 +1553,13 @@ cat_one_path:
     mov byte [cat_paint], P_NONE
     mov qword [cat_fsize], 0
     and dword [cat_opts], ~C_STAT_SIZE
-    ; modern TTY: bat-class line gutter by default
+    ; line gutter from config (auto=TTY, always, never) unless CLI already set
     mov eax, [cat_opts]
-    test eax, C_CORE | C_JSON | C_CSV | C_NO_NUMBER
+    test eax, C_CORE | C_JSON | C_CSV | C_NO_NUMBER | C_NUMBER | C_NUMBER_NB
     jnz .det
-    cmp byte [g_tty], 0
-    je .det
-    test eax, C_NUMBER | C_NUMBER_NB
-    jnz .det
+    call cat_want_line_numbers      ; al=1 → enable
+    test al, al
+    jz .det
     or dword [cat_opts], C_NUMBER
 .det:
     mov rdi, r12
@@ -1625,7 +1649,9 @@ cat_one_path:
     je .bulk
     test eax, C_CORE
     jnz .bulk
-    ; modern TTY with color: always token-paint body
+    cmp byte [g_cfg_syntax], 0
+    je .bulk
+    ; modern TTY with color + syntax: token-paint body
     jmp .slow_body
 .bulk:
     mov rsi, r9
@@ -1763,11 +1789,13 @@ emit_line:
     mov dil, 9
     call out_byte
 .body:
-    ; modern syntax paint (unless --core or show-* transforms need emit_char)
+    ; modern syntax paint (unless --core, syntax off, or show-* transforms)
     mov eax, [cat_opts]
     test eax, C_CORE | C_SHOW_ENDS | C_SHOW_TABS | C_SHOW_NONP
     jnz .legacy_body
     cmp byte [g_color], 0
+    je .legacy_body
+    cmp byte [g_cfg_syntax], 0
     je .legacy_body
     call emit_body_syntax
     jmp .ends

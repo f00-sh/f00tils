@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.20] - 2026-07-24
+
+### Added
+- **Dashboard settings expanded (13 rows)** with About help:
+  - `hyperlink` — OSC-8 clickable ls names (auto/always/never)
+  - `dirs-first` — directories before files in ls
+  - `ignore-files` — honor .gitignore / .f00ignore
+  - `headers` / `line-numbers` / `syntax` — cat bat chrome knobs
+- Config load/apply + TUI write for all of the above
+
 ## [0.15.19] - 2026-07-24
 
 ### Fixed

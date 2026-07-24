@@ -32,15 +32,24 @@ Simple line-oriented `key = value` (INI-like). Comments start with `#` or `;`.
 
 # Global defaults (or under [global])
 replace = true          # bare ls/cat on PATH (default); false = GNU bare names
-# replace = false
 core = false
 color = auto
 icons = auto
 animations = true
 spinner = true
 theme = terminal
-# theme = auto          # COLORFGBG → catppuccin mocha/latte
 # theme = dracula
+
+# ls modern extras
+git = auto
+hyperlink = never       # auto|always|never (OSC-8 clickable names)
+dirs-first = false      # directories before files
+ignore-files = false    # honor .gitignore / .f00ignore
+
+# cat modern chrome
+headers = auto          # file title banner (auto = TTY)
+line-numbers = auto     # bat-style gutter
+syntax = true           # token paint for known languages
 
 [ls]
 icons = always
@@ -48,10 +57,9 @@ git = true
 
 [cat]
 # util-specific keys apply only when argv0 is cat / f00-cat
-# (extend as utils honor more keys)
+headers = always
 
 [sha256sum]
-# example: quiet chrome for scripts that still want modern color on TTY
 spinner = false
 ```
 
@@ -68,6 +76,12 @@ spinner = false
 | `animations` | bool | Master switch for motion (spinners, …) |
 | `spinner` | bool | Per-spinner enable (also needs `animations`) |
 | `git` | `auto`/`always`/`never` or bool | ls git decorations |
+| `hyperlink` | `auto`/`always`/`never` | OSC-8 clickable file names in ls (default `never`) |
+| `dirs-first` | bool | Group directories before files in ls |
+| `ignore-files` | bool | Honor `.gitignore` / `.f00ignore` in ls |
+| `headers` | `auto`/`always`/`never` | cat file title banner (default `auto` = TTY) |
+| `line-numbers` | `auto`/`always`/`never` | cat line gutter (default `auto` = TTY) |
+| `syntax` | bool | cat syntax highlighting for known types (default `true`) |
 
 ```bash
 f00-config                 # interactive TUI (TTY)
@@ -97,7 +111,7 @@ Run **`f00`** (or `f00-config`) on a TTY. That is the full configuration UI:
 | Page | What you do |
 |------|-------------|
 | **Themes** | Browse built-in palettes, live preview, **Enter** writes `theme = …` |
-| **Settings** | Plain-English toggles for replace, core, color, icons, animations, spinner, git — each change **writes** `~/.config/f00/config` immediately. Focus a row to see an **About this setting** description |
+| **Settings** | Plain-English toggles (13 rows): replace, core, color, icons, animations, spinner, git, hyperlink, dirs-first, ignore-files, cat headers / line-numbers / syntax — each change **writes** `~/.config/f00/config` immediately. Focus a row for **About this setting** |
 | **Plugins** | Where local plugins live (`~/.config/f00/plugins/`) |
 
 There is **no network theme store**. `i` on Themes seeds builtin `.theme` files under `~/.config/f00/themes/` so you can copy/edit them offline.

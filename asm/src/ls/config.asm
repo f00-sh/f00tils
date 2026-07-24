@@ -13,8 +13,10 @@ global config_load, config_apply
 global g_cfg_core, g_cfg_animations, g_cfg_spinner
 global g_cfg_color_when, g_cfg_icons_when, g_cfg_git
 global g_cfg_theme
+global g_cfg_hyper, g_cfg_dirs_first, g_cfg_ignore_files
+global g_cfg_headers, g_cfg_line_numbers, g_cfg_syntax
 
-extern g_envp, g_util_name, g_opts2, g_icons_when, g_icons_style, g_color, g_tty, g_json_core
+extern g_envp, g_util_name, g_opts, g_opts2, g_icons_when, g_icons_style, g_color, g_tty, g_json_core
 extern strlen, strcmp, memcpy, memset
 extern env_key_match
 extern icon_set_style_from_str
@@ -32,7 +34,12 @@ g_cfg_spinner:      resb 1
 g_cfg_color_when:   resb 1
 g_cfg_icons_when:   resb 1
 g_cfg_git:          resb 1          ; 0=auto(tty) 1=force on 2=force off
-                    resb 1
+g_cfg_hyper:        resb 1          ; OSC-8 hyperlinks: auto/always/never
+g_cfg_dirs_first:   resb 1          ; group directories first (bool)
+g_cfg_ignore_files: resb 1          ; honor .gitignore/.f00ignore (bool)
+g_cfg_headers:      resb 1          ; cat title banner: auto/always/never
+g_cfg_line_numbers: resb 1          ; cat gutter: auto/always/never
+g_cfg_syntax:       resb 1          ; cat syntax paint (bool)
 g_cfg_theme:        resb 64         ; theme name (empty = terminal/default)
 cfg_buf:            resb 8192
 cfg_path:           resb 1024
@@ -60,6 +67,12 @@ k_anim:         db "animations", 0
 k_spin:         db "spinner", 0
 k_git:          db "git", 0
 k_theme:        db "theme", 0
+k_hyper:        db "hyperlink", 0
+k_dirs:         db "dirs-first", 0
+k_ign:          db "ignore-files", 0
+k_headers:      db "headers", 0
+k_linenum:      db "line-numbers", 0
+k_syntax:       db "syntax", 0
 v_true:         db "true", 0
 v_yes:          db "yes", 0
 v_on:           db "on", 0
@@ -80,7 +93,7 @@ config_load:
     push rbx
     push r12
     push r13
-    ; defaults: modern, animations on, auto color/icons, git auto
+    ; defaults: modern suite UX
     mov byte [g_cfg_core], 0
     mov byte [g_cfg_animations], 1
     mov byte [g_cfg_spinner], 1
@@ -88,6 +101,12 @@ config_load:
     mov byte [g_cfg_icons_when], CFG_AUTO
     mov byte [g_icons_style], ICONS_STYLE_NERD
     mov byte [g_cfg_git], CFG_AUTO
+    mov byte [g_cfg_hyper], CFG_NEVER   ; opt-in (OSC-8 can surprise some terminals)
+    mov byte [g_cfg_dirs_first], 0
+    mov byte [g_cfg_ignore_files], 0
+    mov byte [g_cfg_headers], CFG_AUTO  ; cat bat banner on TTY
+    mov byte [g_cfg_line_numbers], CFG_AUTO
+    mov byte [g_cfg_syntax], 1          ; cat syntax paint on
     mov byte [g_cfg_theme], 0
     mov byte [sec_name], 0          ; current section = global
 
@@ -159,14 +178,36 @@ config_apply:
     je .gon
     cmp al, CFG_NEVER
     je .goff
-    jmp .done
+    jmp .hyper
 .gon:
     or dword [g_opts2], OPT2_GIT
     and dword [g_opts2], ~OPT2_NO_GIT
-    jmp .done
+    jmp .hyper
 .goff:
     or dword [g_opts2], OPT2_NO_GIT
     and dword [g_opts2], ~OPT2_GIT
+.hyper:
+    ; skip chrome extras under --core
+    test dword [g_opts2], OPT2_CORE
+    jnz .done
+    mov al, [g_cfg_hyper]
+    cmp al, CFG_NEVER
+    je .dirs
+    cmp al, CFG_ALWAYS
+    je .hyon
+    ; auto: TTY only
+    cmp byte [g_tty], 0
+    je .dirs
+.hyon:
+    or dword [g_opts2], OPT2_HYPER
+.dirs:
+    cmp byte [g_cfg_dirs_first], 0
+    je .ign
+    or dword [g_opts], OPT_DIRS_FIRST
+.ign:
+    cmp byte [g_cfg_ignore_files], 0
+    je .done
+    or dword [g_opts2], OPT2_IGN_FILES
 .done:
     pop rbx
     ret
@@ -529,7 +570,7 @@ apply_key:
     lea rsi, [k_theme]
     call strcmp
     test eax, eax
-    jnz .done
+    jnz .a7
     ; theme = name
     lea rdi, [g_cfg_theme]
     mov rsi, r12
@@ -545,6 +586,66 @@ apply_key:
     jmp .tcopy
 .tzero:
     mov byte [rdi + 63], 0
+    jmp .done
+.a7:
+    mov rdi, rbx
+    lea rsi, [k_hyper]
+    call strcmp
+    test eax, eax
+    jnz .a8
+    mov rdi, r12
+    call parse_when
+    mov [g_cfg_hyper], al
+    jmp .done
+.a8:
+    mov rdi, rbx
+    lea rsi, [k_dirs]
+    call strcmp
+    test eax, eax
+    jnz .a9
+    mov rdi, r12
+    call parse_bool
+    mov [g_cfg_dirs_first], al
+    jmp .done
+.a9:
+    mov rdi, rbx
+    lea rsi, [k_ign]
+    call strcmp
+    test eax, eax
+    jnz .a10
+    mov rdi, r12
+    call parse_bool
+    mov [g_cfg_ignore_files], al
+    jmp .done
+.a10:
+    mov rdi, rbx
+    lea rsi, [k_headers]
+    call strcmp
+    test eax, eax
+    jnz .a11
+    mov rdi, r12
+    call parse_when
+    mov [g_cfg_headers], al
+    jmp .done
+.a11:
+    mov rdi, rbx
+    lea rsi, [k_linenum]
+    call strcmp
+    test eax, eax
+    jnz .a12
+    mov rdi, r12
+    call parse_when
+    mov [g_cfg_line_numbers], al
+    jmp .done
+.a12:
+    mov rdi, rbx
+    lea rsi, [k_syntax]
+    call strcmp
+    test eax, eax
+    jnz .done
+    mov rdi, r12
+    call parse_bool
+    mov [g_cfg_syntax], al
 .done:
     pop r12
     pop rbx
