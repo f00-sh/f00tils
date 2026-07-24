@@ -12,7 +12,7 @@
 █  MIT · 2026-07-24 · 106/106 tools shipped        █
 █  modern default · --core for scripts             █
 █  pretty JSON · CSV tables · cat content paint    █
-█  overall 2.6× · 165% faster than coreutils       █
+█  overall 2.5× · 148% faster than coreutils       █
 █  geo mean · spawn-incl · f00-* --core vs GNU     █
 █  https://f00.sh · github:theesfeld/f00           █
 ████████████████████████████████████████████████████
