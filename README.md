@@ -209,7 +209,7 @@ Detail: [docs/GNU-COMPLIANCE.md](docs/GNU-COMPLIANCE.md) · scoreboard: [docs/CO
 ## Benchmarks
 
 <!-- bench-headline:start -->
-**Overall: 2.4× faster than GNU coreutils** (143% faster overall; geometric mean of 91 timed tools · 90 wins · median 2.38×).
+**Overall: 2.6× faster than GNU coreutils** (164% faster overall; geometric mean of 91 timed tools · 90 wins · median 2.6×).
 <!-- bench-headline:end -->
 
 Warm cache, **spawn-inclusive**, median of N runs. Compare `f00-* --core` to `/usr/bin/*` on Linux x86-64.
@@ -224,20 +224,20 @@ Per-tool tables (command, sample output, GNU time, f00 time):
 Representative results (from latest suite bench — do not hand-edit; CI overwrites):
 
 <!-- bench-table:start -->
-_CI / suite bench · `2026-07-24T15:37:24Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_
+_CI / suite bench · `2026-07-24T15:44:13Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_
 
 | Tool | Command | GNU | f00 `--core` | vs GNU |
 |------|---------|-----|--------------|--------|
-| `true` | `f00-true --core` | 0.53 ms | **0.25 ms** | **~2.1×** |
-| `basename` | `f00-basename --core /usr/bin/ls` | 0.77 ms | **0.27 ms** | **~2.9×** |
-| `nproc` | `f00-nproc --core` | 0.84 ms | **0.31 ms** | **~2.7×** |
-| `whoami` | `f00-whoami --core` | 0.87 ms | **0.28 ms** | **~3.1×** |
-| `cat` | `f00-cat --core fixture.txt` | 0.81 ms | **0.31 ms** | **~2.6×** |
-| `wc` | `f00-wc --core -l fixture.txt` | 0.82 ms | **0.36 ms** | **~2.2×** |
-| `md5sum` | `f00-md5sum --core fixture.txt` | 1.17 ms | **0.40 ms** | **~3.0×** |
-| `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.15 ms | **0.45 ms** | **~2.5×** |
-| `sort` | `f00-sort --core fixture.txt` | 1.29 ms | **0.74 ms** | **~1.7×** |
-| `ls` | `f00-ls --core -1 dir` | 1.00 ms | **0.47 ms** | **~2.1×** |
+| `true` | `f00-true --core` | 0.55 ms | **0.25 ms** | **~2.2×** |
+| `basename` | `f00-basename --core /usr/bin/ls` | 0.85 ms | **0.25 ms** | **~3.3×** |
+| `nproc` | `f00-nproc --core` | 0.84 ms | **0.26 ms** | **~3.2×** |
+| `whoami` | `f00-whoami --core` | 0.89 ms | **0.27 ms** | **~3.3×** |
+| `cat` | `f00-cat --core fixture.txt` | 0.90 ms | **0.30 ms** | **~3.0×** |
+| `wc` | `f00-wc --core -l fixture.txt` | 0.87 ms | **0.36 ms** | **~2.4×** |
+| `md5sum` | `f00-md5sum --core fixture.txt` | 1.27 ms | **0.39 ms** | **~3.2×** |
+| `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.25 ms | **0.46 ms** | **~2.7×** |
+| `sort` | `f00-sort --core fixture.txt` | 1.36 ms | **0.77 ms** | **~1.8×** |
+| `ls` | `f00-ls --core -1 dir` | 1.07 ms | **0.45 ms** | **~2.4×** |
 <!-- bench-table:end -->
 
 Reproduce:
