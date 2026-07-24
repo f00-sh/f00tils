@@ -125,10 +125,11 @@ parity: $(TARGET) links
 	        <(./f00-date --core -u -d @0 '+%Y-%m-%d %H:%M:%S %z %Z %F %T %s'); \
 	echo "parity ok (UTC freestanding date; compare with LC_ALL=C date -u)"
 
-# Median wall-time gate: f00 --core must not be >5% slower than coreutils
+# Speed gates: representative + full suite wall/CPU (all four GNU packages)
 speed: $(TARGET) links
-	@chmod +x benches/speed-gate.sh
+	@chmod +x benches/speed-gate.sh benches/full-speed-gate.sh
 	./benches/speed-gate.sh
+	./benches/full-speed-gate.sh
 
 # Speed gate + full parity battery when present
 ux-check: $(TARGET) links

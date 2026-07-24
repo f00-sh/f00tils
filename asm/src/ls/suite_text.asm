@@ -1374,6 +1374,7 @@ hash_str:
     jmp .h
 .hd: ret
 
+; shell_sort: Sedgewick gaps (much faster than n/2… for large n)
 shell_sort:
     push rbx
     push r12
@@ -1383,8 +1384,16 @@ shell_sort:
     mov r12, [nlines]
     cmp r12, 2
     jb .done
-    mov r13, r12
-    shr r13, 1
+    ; pick first Sedgewick gap < n: 1,4,10,23,57,132,301,701,1577,...
+    mov r13, 1
+.pick:
+    mov rax, r13
+    lea rax, [rax+rax*2]            ; 3*gap
+    add rax, 1                      ; 3*gap+1
+    cmp rax, r12
+    jae .gap
+    mov r13, rax
+    jmp .pick
 .gap:
     test r13, r13
     jz .done
@@ -1427,7 +1436,13 @@ shell_sort:
     inc r14
     jmp .i
 .ng:
-    shr r13, 1
+    ; next smaller Sedgewick gap: (gap-1)/3
+    mov rax, r13
+    dec rax
+    xor edx, edx
+    mov rcx, 3
+    div rcx
+    mov r13, rax
     jmp .gap
 .done:
     pop r15

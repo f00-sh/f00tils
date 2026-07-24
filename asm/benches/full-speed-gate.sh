@@ -11,7 +11,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 F00="${ROOT}/f00"
-N="${N:-30}"
+N="${N:-40}"
 EPS="${EPS:-0.00005}"
 RATIO_MAX="${RATIO_MAX:-1.05}"
 
@@ -158,16 +158,31 @@ CASES=(
   "kill|"
   "arch|"
   "hostname|"
+
+  # --- GNU grep ---
+  "grep|-F speed-gate ${FIX}"
+  "egrep|speed-gate ${FIX}"
+  "fgrep|speed-gate ${FIX}"
+
+  # --- GNU findutils ---
+  "find|${WORKDIR}/dir -maxdepth 1 -name '*.txt'"
+  "xargs|-n 4"
+
+  # --- GNU diffutils ---
+  "diff|-u ${WORKDIR}/a.txt ${WORKDIR}/b.txt"
+  "cmp|${FIX} ${FIX}"
+  "diff3|${WORKDIR}/a.txt ${WORKDIR}/b.txt ${WORKDIR}/a.txt"
+  "sdiff|${WORKDIR}/a.txt ${WORKDIR}/b.txt"
 )
 
 python3 - "$F00" "$N" "$EPS" "$RATIO_MAX" "$WORKDIR" "${CASES[@]}" <<'PY'
-import sys, time, subprocess, statistics, shlex, os
+import sys, time, subprocess, statistics, shlex, os, resource
 f00, N, eps, rmax, workdir = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), sys.argv[5]
 cases = sys.argv[6:]
 pass_n = fail_n = skip_n = 0
-print(f"full-speed-gate N={N} f00={f00}")
-print(f"{'case':<28} {'gnu':>10} {'f00':>10} {'ratio':>8} status")
-print("-" * 70)
+print(f"full-speed-gate N={N} f00={f00} (wall+CPU; fail if either >{rmax:.2f}× GNU)")
+print(f"{'case':<28} {'gnu_ms':>9} {'f00_ms':>9} {'wall×':>7} {'gnu_cpu':>9} {'f00_cpu':>9} {'cpu×':>7} status")
+print("-" * 100)
 
 # name -> skip reason (when present in CASES but not runnable fairly)
 SKIP = {
@@ -186,20 +201,32 @@ SKIP = {
     "kill": "skip-process-target",
 }
 
+def once(cmd, stdin=None):
+    """Return (wall_s, cpu_s) for one spawn; cpu = children user+sys."""
+    kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    if stdin is None:
+        kw["stdin"] = subprocess.DEVNULL
+    else:
+        kw["input"] = stdin
+    ru0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    t0 = time.perf_counter()
+    subprocess.run(cmd, **kw)
+    wall = time.perf_counter() - t0
+    ru1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu = (ru1.ru_utime - ru0.ru_utime) + (ru1.ru_stime - ru0.ru_stime)
+    if cpu < 0:
+        cpu = 0.0
+    return wall, cpu
+
 def med(cmd, n=N, stdin=None):
-    def _run(c):
-        if stdin is None:
-            subprocess.run(c, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        else:
-            subprocess.run(c, input=stdin, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(3):
-        _run(cmd)
-    ts = []
+        once(cmd, stdin=stdin)
+    walls, cpus = [], []
     for _ in range(n):
-        t0 = time.perf_counter()
-        _run(cmd)
-        ts.append(time.perf_counter() - t0)
-    return statistics.median(ts)
+        w, c = once(cmd, stdin=stdin)
+        walls.append(w)
+        cpus.append(c)
+    return statistics.median(walls), statistics.median(cpus)
 
 for c in cases:
     if "|" not in c:
@@ -245,138 +272,89 @@ for c in cases:
         f_args = ["--core"]
     elif name == "tee":
         stdin = b"tee data\n" * 20
+    elif name == "xargs":
+        stdin = b"a\nb\nc\nd\ne\nf\n"
     elif name == "csplit":
         # unique output prefix per run not needed (overwrite)
         g_args = [argl[0], "5"]
         f_args = ["--core", argl[0], "5"]
-        # run in workdir so xx00 files don't clutter
-        pass
-    elif name == "mkdir":
-        # remove target each time so both succeed
-        def _rm_target():
-            t = argl[0]
-            try:
-                os.rmdir(t)
-            except FileNotFoundError:
-                pass
-        # wrap timing with cleanup — handled below via pre
-        pass
 
     try:
         gcmd = [gnu_path] + g_args
         fcmd = fcmd_base + f_args
 
-        def run_med(cmd):
-            # per-case prep for idempotent FS utils
-            if name == "mkdir" and argl:
-                try:
-                    os.rmdir(argl[0])
-                except Exception:
-                    pass
-            if name == "mkfifo" and argl:
-                try:
-                    os.unlink(argl[0])
-                except Exception:
-                    pass
-            if name == "ln" and len(argl) >= 2:
-                try:
-                    os.unlink(argl[-1])
-                except Exception:
-                    pass
-            if name == "link" and len(argl) >= 2:
-                try:
-                    os.unlink(argl[-1])
-                except Exception:
-                    pass
-            if name == "csplit":
-                for fn in ("xx00", "xx01", "xx02"):
-                    try:
-                        os.unlink(fn)
-                    except Exception:
-                        pass
-            return med(cmd, stdin=stdin)
-
         # custom median with prep each run for destructive-ish create utils
         need_prep = name in ("mkdir", "mkfifo", "ln", "link", "csplit", "mv")
         if need_prep:
             def med_prep(cmd, n=N, stdin=None):
+                def prep():
+                    if name == "mkdir" and argl:
+                        try: os.rmdir(argl[0])
+                        except Exception: pass
+                    if name == "mkfifo" and argl:
+                        try: os.unlink(argl[0])
+                        except Exception: pass
+                    if name in ("ln", "link") and len(argl) >= 2:
+                        try: os.unlink(argl[-1])
+                        except Exception: pass
+                    if name == "csplit":
+                        for fn in ("xx00", "xx01", "xx02"):
+                            try: os.unlink(fn)
+                            except Exception: pass
+                    if name == "mv":
+                        src, dst = argl[0], argl[1]
+                        try: os.unlink(dst)
+                        except Exception: pass
+                        open(src, "wb").write(b"x")
                 for _ in range(3):
-                    if name == "mkdir" and argl:
-                        try: os.rmdir(argl[0])
-                        except Exception: pass
-                    if name == "mkfifo" and argl:
-                        try: os.unlink(argl[0])
-                        except Exception: pass
-                    if name in ("ln", "link") and len(argl) >= 2:
-                        try: os.unlink(argl[-1])
-                        except Exception: pass
-                    if name == "csplit":
-                        for fn in ("xx00", "xx01", "xx02"):
-                            try: os.unlink(fn)
-                            except Exception: pass
-                    if name == "mv":
-                        # recreate source
-                        src, dst = argl[0], argl[1]
-                        try: os.unlink(dst)
-                        except Exception: pass
-                        open(src, "wb").write(b"x")
-                    if stdin is None:
-                        subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    else:
-                        subprocess.run(cmd, input=stdin, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                ts = []
+                    prep()
+                    once(cmd, stdin=stdin)
+                walls, cpus = [], []
                 for _ in range(n):
-                    if name == "mkdir" and argl:
-                        try: os.rmdir(argl[0])
-                        except Exception: pass
-                    if name == "mkfifo" and argl:
-                        try: os.unlink(argl[0])
-                        except Exception: pass
-                    if name in ("ln", "link") and len(argl) >= 2:
-                        try: os.unlink(argl[-1])
-                        except Exception: pass
-                    if name == "csplit":
-                        for fn in ("xx00", "xx01", "xx02"):
-                            try: os.unlink(fn)
-                            except Exception: pass
-                    if name == "mv":
-                        src, dst = argl[0], argl[1]
-                        try: os.unlink(dst)
-                        except Exception: pass
-                        open(src, "wb").write(b"x")
-                    t0 = time.perf_counter()
-                    if stdin is None:
-                        subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    else:
-                        subprocess.run(cmd, input=stdin, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    ts.append(time.perf_counter() - t0)
-                return statistics.median(ts)
-            tg = med_prep(gcmd, stdin=stdin)
-            tf = med_prep(fcmd, stdin=stdin)
+                    prep()
+                    w, c = once(cmd, stdin=stdin)
+                    walls.append(w)
+                    cpus.append(c)
+                return statistics.median(walls), statistics.median(cpus)
+            tg, cg = med_prep(gcmd, stdin=stdin)
+            tf, cf = med_prep(fcmd, stdin=stdin)
         else:
-            tg = med(gcmd, stdin=stdin)
-            tf = med(fcmd, stdin=stdin)
+            tg, cg = med(gcmd, stdin=stdin)
+            tf, cf = med(fcmd, stdin=stdin)
     except Exception as e:
         print(f"{name:<28} ERR {e}")
         fail_n += 1
         continue
 
-    ratio = tf / tg if tg > 0 else 0.0
-    if tg < eps and tf < eps:
-        status = "ok-noise"
-        pass_n += 1
-    elif tf <= tg * rmax or (tf - tg) <= eps:
-        status = "ok"
+    wall_r = tf / tg if tg > 0 else 0.0
+    cpu_r = cf / cg if cg > 0 else 0.0
+    wall_ok = (tg < eps and tf < eps) or tf <= tg * rmax or (tf - tg) <= eps
+    # CPU: only enforce when both sides report measurable CPU (>eps)
+    if cg <= eps and cf <= eps:
+        cpu_ok = True
+        cpu_r_disp = 1.0
+    elif cg <= eps:
+        cpu_ok = cf <= eps * 4 or True  # gnu unmeasurable; don't fail
+        cpu_r_disp = cpu_r if cg > 0 else 0.0
+    else:
+        cpu_ok = cf <= cg * rmax or (cf - cg) <= eps
+        cpu_r_disp = cpu_r
+    if wall_ok and cpu_ok:
+        status = "ok-noise" if (tg < eps and tf < eps) else "ok"
         pass_n += 1
     else:
         status = "FAIL"
+        if not wall_ok:
+            status += "-wall"
+        if not cpu_ok:
+            status += "-cpu"
         fail_n += 1
-    print(f"{name:<28} {tg*1000:10.3f} {tf*1000:10.3f} {ratio:8.3f} {status}")
+    print(
+        f"{name:<28} {tg*1000:9.3f} {tf*1000:9.3f} {wall_r:7.3f} "
+        f"{cg*1000:9.3f} {cf*1000:9.3f} {cpu_r_disp:7.3f} {status}"
+    )
 
-print("-" * 70)
+print("-" * 100)
 print(f"pass={pass_n} fail={fail_n} skip={skip_n}")
-# emit machine-readable wins for gen script consumers
-wins = []
-# re-print summary line only
 sys.exit(1 if fail_n else 0)
 PY

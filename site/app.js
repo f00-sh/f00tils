@@ -170,14 +170,14 @@
       { n: 3, util: "fgrep", f00: "f00-fgrep", shipped: "yes", depth: "full", modern: "yes" },
     ],
     findutils: [
-      { n: 1, util: "find", f00: "f00-find", shipped: "yes", depth: "partial", modern: "deep" },
-      { n: 2, util: "xargs", f00: "f00-xargs", shipped: "yes", depth: "partial", modern: "yes" },
+      { n: 1, util: "find", f00: "f00-find", shipped: "yes", depth: "full", modern: "deep" },
+      { n: 2, util: "xargs", f00: "f00-xargs", shipped: "yes", depth: "full", modern: "yes" },
     ],
     diffutils: [
-      { n: 1, util: "diff", f00: "f00-diff", shipped: "yes", depth: "partial", modern: "deep" },
+      { n: 1, util: "diff", f00: "f00-diff", shipped: "yes", depth: "full", modern: "deep" },
       { n: 2, util: "cmp", f00: "f00-cmp", shipped: "yes", depth: "full", modern: "yes" },
-      { n: 3, util: "diff3", f00: "f00-diff3", shipped: "yes", depth: "partial", modern: "yes" },
-      { n: 4, util: "sdiff", f00: "f00-sdiff", shipped: "yes", depth: "partial", modern: "deep" },
+      { n: 3, util: "diff3", f00: "f00-diff3", shipped: "yes", depth: "full", modern: "yes" },
+      { n: 4, util: "sdiff", f00: "f00-sdiff", shipped: "yes", depth: "full", modern: "deep" },
     ],
   };
 

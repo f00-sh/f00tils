@@ -181,6 +181,19 @@ run_case "nproc" \
 run_case "id" \
   "$ROOT/f00-id" --core ::: "$(sysbin id)"
 
+# --- four-package coverage (grep · findutils · diffutils) ---
+run_case "grep -F" \
+  "$ROOT/f00-grep" --core -F speed-gate "$FIX_FILE" ::: "$(sysbin grep)" -F speed-gate "$FIX_FILE"
+
+run_case "find" \
+  "$ROOT/f00-find" --core "$FIX_DIR" -maxdepth 1 -name '*.txt' ::: "$(sysbin find)" "$FIX_DIR" -maxdepth 1 -name '*.txt'
+
+run_case "diff -u" \
+  "$ROOT/f00-diff" --core -u "$FIX_FILE" "$FIX_FILE" ::: "$(sysbin diff)" -u "$FIX_FILE" "$FIX_FILE"
+
+run_case "cmp" \
+  "$ROOT/f00-cmp" --core "$FIX_FILE" "$FIX_FILE" ::: "$(sysbin cmp)" "$FIX_FILE" "$FIX_FILE"
+
 printf '%-12s %12s %12s %8s %9s  %s\n' \
   "case" "core(s)" "f00(s)" "ratio" "delta" "status"
 printf '%-12s %12s %12s %8s %9s  %s\n' \

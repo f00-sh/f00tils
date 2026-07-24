@@ -75,6 +75,7 @@ eol_a:          resb 1
 eol_b:          resb 1
 eol_c:          resb 1
 load_eol:       resb 1              ; set by load_lines
+load_pool_n:    resq 1              ; bytes stored in pool by last load_lines
 ; LCS / edit script
 lcs_pred:       resb (LCS_MAX+1)*(LCS_MAX+1)
 ; mark array per line of a/b: 0=common 1=changed
@@ -473,9 +474,14 @@ load_lines:
     mov rax, SYS_close
     mov rdi, rbx
     syscall
+    ; leave pool used size in [load_pool_n] for bulk memcmp equality
+    ; pool fill counter lives in ebp (32-bit) — zero-extend into qword
+    mov eax, ebp
+    mov [load_pool_n], rax
     xor eax, eax
     jmp .done
 .fail:
+    mov qword [load_pool_n], 0
     neg rax                         ; positive errno
 .done:
     pop rbp
@@ -544,27 +550,254 @@ emit_tool_path_err:
     pop rbx
     ret
 
-; files_equal_ab → al (content + final-newline bits via lines_equal_ab)
+; bulk_equal_ab → eax: 1 equal, 0 differ, 2 open error (g_exit=2 set)
+; Reads full files into pool_a/pool_b without line indexing.
+bulk_equal_ab:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    ; open A
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, [diff_a]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .erra
+    mov r12, rax
+    ; open B
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, [diff_b]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .errb
+    mov r13, rax
+    ; fstat A size
+    sub rsp, 288
+    mov rax, SYS_fstat
+    mov rdi, r12
+    lea rsi, [rsp]
+    syscall
+    test rax, rax
+    jnz .errstat
+    mov r14, [rsp+48]              ; st_size offset 48 on x86-64 Linux
+    mov rax, SYS_fstat
+    mov rdi, r13
+    lea rsi, [rsp+144]
+    syscall
+    test rax, rax
+    jnz .errstat
+    mov r15, [rsp+144+48]
+    add rsp, 288
+    cmp r14, r15
+    jne .diffsz
+    cmp r14, POOL_CAP
+    jae .diffsz                     ; too big — line path after return 0
+    ; size equal: read both fully (r8 = offset)
+    xor r8, r8
+.rda:
+    cmp r8, r14
+    jae .rdb0
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [pool_a+r8]
+    mov rdx, r14
+    sub rdx, r8
+    syscall
+    test rax, rax
+    jle .erra_rd
+    add r8, rax
+    jmp .rda
+.rdb0:
+    xor r8, r8
+.rdb:
+    cmp r8, r15
+    jae .cmp
+    mov rax, SYS_read
+    mov rdi, r13
+    lea rsi, [pool_b+r8]
+    mov rdx, r15
+    sub rdx, r8
+    syscall
+    test rax, rax
+    jle .erra_rd
+    add r8, rax
+    jmp .rdb
+.cmp:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    mov [pool_a_n], r14
+    mov [pool_b_n], r15
+    test r14, r14
+    jz .eq
+    lea rdi, [pool_a]
+    lea rsi, [pool_b]
+    mov rdx, r14
+    call memcmp_n
+    test eax, eax
+    jnz .ne
+.eq:
+    mov eax, 1
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.ne:
+.diffsz:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    xor eax, eax                    ; 0 = differ (or size differ → will line-diff)
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.errstat:
+    add rsp, 288
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov eax, 2
+    mov dword [g_exit], 2
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.erra_rd:
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    xor eax, eax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.errb:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+.erra:
+    mov eax, 2
+    mov dword [g_exit], 2
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; same_file_ab → al=1 if both paths open to same st_dev+st_ino
+same_file_ab:
+    push rbx
+    push r12
+    push r13
+    sub rsp, 288                    ; two struct stat (144 each approx; use 144*2)
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, [diff_a]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .no
+    mov r12, rax
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, [diff_b]
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .cl1
+    mov r13, rax
+    mov rax, SYS_fstat
+    mov rdi, r12
+    lea rsi, [rsp]
+    syscall
+    test rax, rax
+    jnz .cl2
+    mov rax, SYS_fstat
+    mov rdi, r13
+    lea rsi, [rsp+144]
+    syscall
+    test rax, rax
+    jnz .cl2
+    ; st_dev at offset 0, st_ino at offset 8 (x86-64 Linux)
+    mov rax, [rsp]
+    cmp rax, [rsp+144]
+    jne .cl2
+    mov rax, [rsp+8]
+    cmp rax, [rsp+152]
+    jne .cl2
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    mov al, 1
+    add rsp, 288
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.cl2:
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+.cl1:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+.no:
+    xor al, al
+    add rsp, 288
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; files_equal_ab → al (bulk pool memcmp — pools hold full file including \n)
 files_equal_ab:
     push rbx
-    mov rax, [diff_na]
-    cmp rax, [diff_nb]
+    mov rax, [pool_a_n]
+    cmp rax, [pool_b_n]
     jne .no
-    ; whole-file trailing newline must match when both empty or as last lines
-    mov al, [eol_a]
-    cmp al, [eol_b]
-    jne .no
-    xor ebx, ebx
-.lp:
-    cmp rbx, [diff_na]
-    jae .yes
-    mov r8, rbx
-    mov r9, rbx
-    call lines_equal_ab
-    test al, al
-    jz .no
-    inc rbx
-    jmp .lp
+    test rax, rax
+    jz .yes
+    lea rdi, [pool_a]
+    lea rsi, [pool_b]
+    mov rdx, rax
+    call memcmp_n
+    test eax, eax
+    jnz .no
 .yes: mov al, 1
     pop rbx
     ret
@@ -790,6 +1023,39 @@ diff_files:
     mov qword [diff_nb], 0
     mov qword [pool_a_n], 0
     mov qword [pool_b_n], 0
+    ; Fast path: same path string or same device+inode → identical (GNU does this)
+    mov rdi, [diff_a]
+    mov rsi, [diff_b]
+    call strcmp
+    test eax, eax
+    jz .same
+    call same_file_ab
+    test al, al
+    jnz .same
+    ; Fast path: bulk-read both files and memcmp without line split
+    call bulk_equal_ab
+    cmp eax, 1
+    je .same
+    cmp eax, 0
+    je .differ_maybe_brief
+    ; eax=2 → open error already set g_exit
+    jmp .out
+.differ_maybe_brief:
+    test dword [g_flags], DF_BRIEF
+    jz .need_lines
+    lea rsi, [files_pre]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [files_and]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [files_differ]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .out
+.need_lines:
     mov rdi, [diff_a]
     lea rsi, [pool_a]
     lea rdx, [lines_a_ptr]
@@ -806,6 +1072,8 @@ diff_files:
 .lb:
     mov al, [load_eol]
     mov [eol_a], al
+    mov rax, [load_pool_n]
+    mov [pool_a_n], rax
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -822,30 +1090,8 @@ diff_files:
 .okload:
     mov al, [load_eol]
     mov [eol_b], al
-    test dword [g_flags], DF_BRIEF
-    jz .cmp
-    call files_equal_ab
-    test al, al
-    jnz .same
-    lea rsi, [files_pre]
-    call out_str
-    mov rsi, [diff_a]
-    call out_str
-    lea rsi, [files_and]
-    call out_str
-    mov rsi, [diff_b]
-    call out_str
-    lea rsi, [files_differ]
-    call out_str
-    mov dword [g_exit], 1
-    jmp .out
-.same:
-    mov dword [g_exit], 0
-    jmp .out
-.cmp:
-    call files_equal_ab
-    test al, al
-    jnz .same
+    mov rax, [load_pool_n]
+    mov [pool_b_n], rax
     call compute_marks_ab
     test dword [g_flags], DF_CONTEXT
     jnz .ctx
@@ -898,6 +1144,9 @@ diff_files:
 .body:
     call emit_hunks_from_marks
     mov dword [g_exit], 1
+    jmp .out
+.same:
+    mov dword [g_exit], 0
 .out:
     pop r15
     pop r14
