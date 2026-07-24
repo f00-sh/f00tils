@@ -221,7 +221,7 @@ Beyond coreutils, f00tils also targets **grep**, **findutils**, and **diffutils*
 ## Benchmarks
 
 <!-- bench-headline:start -->
-**Overall: 1.5× faster than GNU coreutils** (45% faster overall; geometric mean of 91 timed tools · 90 wins · median 1.42×). **1.4× less CPU than GNU overall** (geo CPU 1.423×). **1× more peak RSS than GNU overall** (geo RSS 1.0×).
+**Overall: 1.4× faster than GNU coreutils** (38% faster overall; geometric mean of 91 timed tools · 90 wins · median 1.33×). **1.4× less CPU than GNU overall** (geo CPU 1.355×). **1× more peak RSS than GNU overall** (geo RSS 1.0×).
 <!-- bench-headline:end -->
 
 Warm cache, **spawn-inclusive**, median of N runs. Compare `f00-* --core` to `/usr/bin/*` on Linux x86-64.
@@ -236,20 +236,20 @@ Per-tool tables (command, sample output, GNU time, f00 time):
 Representative results (from latest suite bench — do not hand-edit; CI overwrites):
 
 <!-- bench-table:start -->
-_CI / suite bench · `2026-07-24T17:30:18Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_
+_CI / suite bench · `2026-07-24T17:36:15Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_
 
 | Tool | Command | GNU wall | f00 wall | Speed | GNU CPU | f00 CPU | CPU × | GNU RSS | f00 RSS | Mem × |
 |------|---------|---------:|---------:|------:|--------:|--------:|------:|--------:|--------:|------:|
-| `true` | `f00-true --core` | 1.16 ms | **0.89 ms** | **~1.3×** | 1.22 ms | **0.97 ms** | **~1.3×** | 13240 KB | **13240 KB** | **~1.0×** |
-| `basename` | `f00-basename --core /usr/bin/ls` | 1.42 ms | **0.90 ms** | **~1.6×** | 1.51 ms | **0.99 ms** | **~1.5×** | 13256 KB | **13256 KB** | **~1.0×** |
-| `nproc` | `f00-nproc --core` | 1.45 ms | **0.92 ms** | **~1.6×** | 1.54 ms | **1.00 ms** | **~1.5×** | 13276 KB | **13276 KB** | **~1.0×** |
-| `whoami` | `f00-whoami --core` | 1.55 ms | **0.94 ms** | **~1.6×** | 1.61 ms | **1.02 ms** | **~1.6×** | 13280 KB | **13280 KB** | **~1.0×** |
-| `cat` | `f00-cat --core fixture.txt` | 1.46 ms | **0.96 ms** | **~1.5×** | 1.54 ms | **1.05 ms** | **~1.5×** | 13316 KB | **13316 KB** | **~1.0×** |
-| `wc` | `f00-wc --core -l fixture.txt` | 1.46 ms | **1.02 ms** | **~1.4×** | 1.55 ms | **1.10 ms** | **~1.4×** | 13448 KB | **13448 KB** | **~1.0×** |
-| `md5sum` | `f00-md5sum --core fixture.txt` | 2.17 ms | **1.36 ms** | **~1.6×** | 2.24 ms | **1.44 ms** | **~1.6×** | 30212 KB | **30212 KB** | **~1.0×** |
-| `sha256sum` | `f00-sha256sum --core fixture.txt` | 2.14 ms | **1.47 ms** | **~1.5×** | 2.22 ms | **1.54 ms** | **~1.4×** | 30220 KB | **30220 KB** | **~1.0×** |
-| `sort` | `f00-sort --core fixture.txt` | 1.98 ms | **1.43 ms** | **~1.4×** | 2.06 ms | **1.51 ms** | **~1.4×** | 13496 KB | **13496 KB** | **~1.0×** |
-| `ls` | `f00-ls --core -1 dir` | 1.98 ms | **1.45 ms** | **~1.4×** | 2.07 ms | **1.53 ms** | **~1.4×** | 30220 KB | **30220 KB** | **~1.0×** |
+| `true` | `f00-true --core` | 0.95 ms | **0.72 ms** | **~1.3×** | 1.02 ms | **0.79 ms** | **~1.3×** | 13148 KB | **13148 KB** | **~1.0×** |
+| `basename` | `f00-basename --core /usr/bin/ls` | 1.12 ms | **0.75 ms** | **~1.5×** | 1.17 ms | **0.80 ms** | **~1.5×** | 13168 KB | **13168 KB** | **~1.0×** |
+| `nproc` | `f00-nproc --core` | 1.16 ms | **0.74 ms** | **~1.6×** | 1.23 ms | **0.83 ms** | **~1.5×** | 13188 KB | **13188 KB** | **~1.0×** |
+| `whoami` | `f00-whoami --core` | 1.18 ms | **0.77 ms** | **~1.5×** | 1.25 ms | **0.84 ms** | **~1.5×** | 13192 KB | **13192 KB** | **~1.0×** |
+| `cat` | `f00-cat --core fixture.txt` | 1.14 ms | **0.78 ms** | **~1.5×** | 1.22 ms | **0.85 ms** | **~1.4×** | 13236 KB | **13236 KB** | **~1.0×** |
+| `wc` | `f00-wc --core -l fixture.txt` | 1.15 ms | **0.91 ms** | **~1.3×** | 1.22 ms | **0.98 ms** | **~1.2×** | 13364 KB | **13364 KB** | **~1.0×** |
+| `md5sum` | `f00-md5sum --core fixture.txt` | 1.65 ms | **1.10 ms** | **~1.5×** | 1.73 ms | **1.18 ms** | **~1.5×** | 30148 KB | **30148 KB** | **~1.0×** |
+| `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.62 ms | **1.18 ms** | **~1.4×** | 1.70 ms | **1.25 ms** | **~1.4×** | 30156 KB | **30156 KB** | **~1.0×** |
+| `sort` | `f00-sort --core fixture.txt` | 1.67 ms | **1.35 ms** | **~1.2×** | 1.74 ms | **1.41 ms** | **~1.2×** | 13416 KB | **13416 KB** | **~1.0×** |
+| `ls` | `f00-ls --core -1 dir` | 1.51 ms | **1.17 ms** | **~1.3×** | 1.58 ms | **1.25 ms** | **~1.3×** | 30156 KB | **30156 KB** | **~1.0×** |
 <!-- bench-table:end -->
 
 Reproduce:
