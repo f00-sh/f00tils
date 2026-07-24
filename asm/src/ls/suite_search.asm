@@ -1,6 +1,8 @@
 ; f00tils — grep / egrep / fgrep / find / xargs / diff / cmp
 ; Freestanding x86-64 Linux ASM. MIT.
-; --core: script-safe plain output; modern TTY: themed match chrome.
+; Product law:
+;   --core  = GNU drop-in path; MUST beat GNU wall + CPU
+;   modern  = default; themed chrome + extra power (amazing, not pale GNU)
 BITS 64
 DEFAULT REL
 %include "syscalls.inc"
@@ -92,11 +94,11 @@ pat_fold:       resb 4096
 line_fold:      resb LINE_CAP
 
 section .rodata
-v_grep:  db "f00-grep (f00) 0.16.0", 10, "License: MIT · https://f00.sh", 10, 0
-v_find:  db "f00-find (f00) 0.16.0", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff:  db "f00-diff (f00) 0.16.0", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.0", 10, "License: MIT · https://f00.sh", 10, 0
-v_xargs: db "f00-xargs (f00) 0.16.0", 10, "License: MIT · https://f00.sh", 10, 0
+v_grep:  db "f00-grep (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
+v_find:  db "f00-find (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
+v_xargs: db "f00-xargs (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_grep:
     db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10
@@ -2750,12 +2752,24 @@ cmp_main:
     mov rax, SYS_exit
     syscall
 
+; cmp BSS for mmap path
+section .bss
+cmp_sa:     resq 1
+cmp_sb:     resq 1
+cmp_ma:     resq 1
+cmp_mb:     resq 1
+
+section .text
+
+; cmp_files — mmap both + single repe cmpsb (must beat GNU wall+CPU)
 cmp_files:
     push rbx
     push r12
     push r13
     push r14
     push r15
+    mov qword [cmp_ma], 0
+    mov qword [cmp_mb], 0
     mov rax, SYS_openat
     mov rdi, AT_FDCWD
     mov rsi, [diff_a]
@@ -2774,43 +2788,136 @@ cmp_files:
     cmp rax, -4096
     jae .err1
     mov r13, rax
-    xor r14, r14                    ; byte index 1-based
-    xor r15, r15                    ; line
-    inc r15
-.lp:
-    ; read one byte each — slow but fine for v1
-    mov rax, SYS_read
+    mov rax, SYS_fstat
     mov rdi, r12
-    lea rsi, [read_buf]
-    mov rdx, 1
+    lea rsi, [dents]
     syscall
-    mov rbx, rax                    ; na
-    mov rax, SYS_read
+    cmp rax, -4096
+    jae .ioerr
+    mov rax, [dents + 48]
+    mov [cmp_sa], rax
+    mov rax, SYS_fstat
     mov rdi, r13
-    lea rsi, [read_buf+1]
-    mov rdx, 1
+    lea rsi, [dents]
     syscall
-    mov rcx, rax                    ; nb
-    test rbx, rbx
-    jnz .c1
-    test rcx, rcx
-    jnz .diff
-    ; both eof equal
+    cmp rax, -4096
+    jae .ioerr
+    mov rax, [dents + 48]
+    mov [cmp_sb], rax
+    mov r14, [cmp_sa]
+    mov r15, [cmp_sb]
+    ; empty/empty
+    mov rax, r14
+    or rax, r15
+    jnz .map
     mov dword [g_exit], 0
     jmp .cl
-.c1: test rcx, rcx
-    jz .diff
-    inc r14
-    mov al, [read_buf]
-    cmp al, 10
-    jne .nl
-    inc r15
-.nl: cmp al, [read_buf+1]
-    je .lp
-.diff:
+.map:
+    test r14, r14
+    jz .diff1
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r14
+    mov rdx, PROT_READ
+    mov r10, MAP_PRIVATE
+    mov r8, r12
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .ioerr
+    mov [cmp_ma], rax
+    test r15, r15
+    jz .diff1_un
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r15
+    mov rdx, PROT_READ
+    mov r10, MAP_PRIVATE
+    mov r8, r13
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .ioerr
+    mov [cmp_mb], rax
+    ; min length — qword compare (repe cmpsb is slow on modern CPUs)
+    mov rdx, r14
+    cmp rdx, r15
+    jbe .mn
+    mov rdx, r15
+.mn:
+    mov rdi, [cmp_ma]
+    mov rsi, [cmp_mb]
+    mov rcx, rdx
+    xor r8, r8                      ; offset
+.qloop:
+    cmp rcx, 8
+    jb .tail
+    mov rax, [rdi]
+    cmp rax, [rsi]
+    jne .misq
+    add rdi, 8
+    add rsi, 8
+    add r8, 8
+    sub rcx, 8
+    jmp .qloop
+.misq:
+    ; find first differing byte in this qword
+    mov rax, [rdi]
+    mov r9, [rsi]
+.bscan:
+    mov r10, rax
+    xor r10, r9
+    test r10b, r10b
+    jnz .bfound
+    shr rax, 8
+    shr r9, 8
+    inc r8
+    jmp .bscan
+.bfound:
+    lea rax, [r8 + 1]
+    mov r14, rax
+    jmp .report
+.tail:
+    test rcx, rcx
+    jz .pref_ok
+.tloop:
+    mov al, [rdi]
+    cmp al, [rsi]
+    jne .tmis
+    inc rdi
+    inc rsi
+    inc r8
+    dec rcx
+    jnz .tloop
+    jmp .pref_ok
+.tmis:
+    lea rax, [r8 + 1]
+    mov r14, rax
+    jmp .report
+.pref_ok:
+    cmp r14, r15                    ; original sizes still in cmp_sa/sb
+    mov rax, [cmp_sa]
+    cmp rax, [cmp_sb]
+    je .equal
+    lea rax, [rdx + 1]
+    mov r14, rax
+    jmp .report
+.equal:
+    mov dword [g_exit], 0
+    jmp .unmaps
+.diff1_un:
+.diff1:
+    mov r14, 1
+.report:
     mov dword [g_exit], 1
     test dword [g_flags], GF_QUIET
-    jnz .cl
+    jnz .unmaps
+    push r14
+    mov rdi, [diff_a]
+    mov rsi, r14
+    call cmp_line_for_byte
+    mov r15, rax
+    pop r14
     mov rsi, [diff_a]
     call out_str
     mov dil, ' '
@@ -2827,6 +2934,25 @@ cmp_files:
     call out_u64
     mov dil, 10
     call out_byte
+.unmaps:
+    mov rax, [cmp_ma]
+    test rax, rax
+    jz .umb
+    mov rdi, rax
+    mov rsi, [cmp_sa]
+    mov rax, SYS_munmap
+    syscall
+.umb:
+    mov rax, [cmp_mb]
+    test rax, rax
+    jz .cl
+    mov rdi, rax
+    mov rsi, [cmp_sb]
+    mov rax, SYS_munmap
+    syscall
+    jmp .cl
+.ioerr:
+    mov dword [g_exit], 2
 .cl:
     mov rax, SYS_close
     mov rdi, r12
@@ -2847,6 +2973,65 @@ cmp_files:
 .err:
     mov dword [g_exit], 2
     pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; cmp_line_for_byte(rdi=path, rsi=1-based byte index) → rax line number
+cmp_line_for_byte:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rsi                    ; target byte (1-based)
+    mov rax, SYS_openat
+    mov rsi, rdi
+    mov rdi, AT_FDCWD
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .one
+    mov r13, rax                    ; fd
+    xor r14, r14                    ; bytes seen
+    mov rbx, 1                      ; line
+.rd:
+    mov rax, SYS_read
+    mov rdi, r13
+    lea rsi, [read_buf]
+    mov rdx, LINE_CAP
+    syscall
+    test rax, rax
+    jle .cl
+    xor ecx, ecx
+.lp:
+    cmp rcx, rax
+    jae .rd
+    inc r14
+    cmp byte [read_buf + rcx], 10
+    jne .n
+    ; newline ends a line; if we haven't reached target yet, next line
+    cmp r14, r12
+    jae .cl                         ; target was this nl or before
+    inc rbx
+.n: cmp r14, r12
+    jae .cl
+    inc rcx
+    jmp .lp
+.cl:
+    mov rax, SYS_close
+    mov rdi, r13
+    syscall
+    mov rax, rbx
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.one:
+    mov eax, 1
     pop r14
     pop r13
     pop r12

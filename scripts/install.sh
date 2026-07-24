@@ -7,11 +7,11 @@
 # in INSTALL_DIR (must win on PATH). Opt out: F00_SUPERSEDE=0 or config replace=false.
 #
 # Beta pin example:
-#   curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.0 bash
+#   curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.1 bash
 #
 # Env:
 #   INSTALL_DIR      default ~/.local/bin
-#   F00_VERSION      release tag (default: latest; default: latest / v0.16.0)
+#   F00_VERSION      release tag (default: latest; default: latest / v0.16.1)
 #   F00_REPO         GitHub owner/repo (default: theesfeld/f00)
 #   F00_LOCAL        path to a local build directory containing ./f00
 #                    (e.g. /path/to/f00/asm) — skips download
@@ -253,7 +253,7 @@ fetch_release() {
 }
 
 main() {
-  printf "\n${BOLD}f00tils${RESET} ${DIM}installer · binary f00 · 0.16.0 multicall${RESET}\n" >&2
+  printf "\n${BOLD}f00tils${RESET} ${DIM}installer · binary f00 · 0.16.1 multicall${RESET}\n" >&2
 
   local dir bin
   local tmp=""
@@ -301,7 +301,7 @@ main() {
   printf "\n${BOLD}done${RESET}. try: ${BOLD}cat --version${RESET} · ${BOLD}ls --help${RESET} · ${BOLD}f00-config replace status${RESET}\n" >&2
   printf "${DIM}default: bare names replace coreutils when INSTALL_DIR wins on PATH${RESET}\n" >&2
   printf "${DIM}opt-out: F00_SUPERSEDE=0  or  f00-config replace off  (replace = false)${RESET}\n" >&2
-  printf "${DIM}knobs: F00_TOOLS=all|ls,cat,…  F00_SUPERSEDE=0  F00_LOCAL=asm  F00_VERSION=v0.16.0${RESET}\n" >&2
+  printf "${DIM}knobs: F00_TOOLS=all|ls,cat,…  F00_SUPERSEDE=0  F00_LOCAL=asm  F00_VERSION=v0.16.1${RESET}\n" >&2
   printf "${DIM}config: ~/.config/f00  ·  themes: f00-config theme list|set|pick${RESET}\n" >&2
 }
 

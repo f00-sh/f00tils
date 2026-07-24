@@ -58,7 +58,7 @@ extern find_main, xargs_main, diff_main, cmp_main
 
 section .rodata
 version_msg:
-    db "f00-ls (f00) 0.16.0", 10
+    db "f00-ls (f00) 0.16.1", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 version_len equ $-version_msg

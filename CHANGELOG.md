@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-07-24
+
+### Fixed
+- **`cmp --core`**: buffered/mmap qword compare — was ~7× slower than GNU (byte reads); now beats GNU wall+CPU on equal-file path
+
+### Changed
+- **Product laws** restated in README + AGENTS.md:
+  - `--core` = GNU drop-in **and** must win **wall + CPU**
+  - modern default = **amazing** extras (theme/chrome/features), not a pale GNU subset
+
 ## [0.16.0] - 2026-07-24
 
 ### Added

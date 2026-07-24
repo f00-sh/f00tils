@@ -15,7 +15,7 @@ One multicall x86-64 Linux binary (no libc). Modern defaults for interactive wor
 | **Scripts** | `--core` — strict coreutils-compatible presentation |
 | **Engine** | Pure ASM multicall · ~650K static · no libc |
 | **License** | MIT |
-| **Status** | Released `v0.16.0` |
+| **Status** | Released `v0.16.1` |
 | **Site** | [https://f00.sh](https://f00.sh) |
 | **Repo** | [github.com/theesfeld/f00](https://github.com/theesfeld/f00) |
 
@@ -43,10 +43,10 @@ Coreutils are correct and portable. They are not the speed or UX ceiling.
 
 ## Product laws
 
-1. **Clone first.** Every GNU coreutils tool has a `f00-*` counterpart. Under `--core`, flags, inputs, outputs, and exit codes target 1:1 coreutils behavior for scripts.
-2. **Modern on top.** Default mode is never a subset of GNU: color on TTY, better layout, `--json` / `--csv` with rich metadata.
-3. **Faster always.** Freestanding ASM must beat coreutils on the core path. Slow and correct is not done.
-4. **One binary.** Multicall dispatch by `argv0` (`f00-ls`, `ls`, `f00-cat`, …).
+1. **Clone first (`--core`).** Covered GNU tools (coreutils, grep, findutils, diffutils) have `f00-*` names. Under **`--core`**, behavior targets script drop-in vs GNU.
+2. **`--core` must win on resources.** The core path must beat GNU on **wall time and CPU** (user+sys). Correct but slower is unfinished.
+3. **Modern is amazing (default).** Non-`--core` is not a pale GNU subset: theme tokens, chrome, icons, rich `--json`/`--csv`, and extra power (fd/rg/delta-class where it fits). Scripts stay on `--core`; humans get the good mode.
+4. **One binary.** Multicall by `argv0` (`f00-ls`, `ls`, `f00-grep`, …).
 
 ---
 
@@ -65,13 +65,12 @@ Coreutils are correct and portable. They are not the speed or UX ceiling.
 
 ### Suite modern surface
 
-| Capability | Default | `--core` |
-|------------|---------|----------|
-| Color (TTY) | **On** (respects `NO_COLOR`) | Off |
-| `--json` | Rich `f00/v1` metadata | Available |
-| `--csv` | Same facts, tabular | Available |
-| Help | Coreutils flags + modern flags | Same structure |
-| Speed | Optimized | **Must beat coreutils** |
+| Capability | Default (modern) | `--core` |
+|------------|------------------|----------|
+| Color / theme chrome | **On** TTY (respects `NO_COLOR`) | Off |
+| Extra UX / features | **Yes** — best interactive experience | Minimal; script-safe only |
+| `--json` / `--csv` | Rich `f00/v1` where applicable | Available, plain |
+| Wall + CPU vs GNU | Should feel instant | **Must beat GNU wall and CPU** |
 
 ---
 
@@ -282,7 +281,7 @@ curl -fsSL https://f00.sh/install.sh | bash
 
 ```bash
 # pin version
-curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.0 bash
+curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.1 bash
 
 # local build
 curl -fsSL https://f00.sh/install.sh | F00_LOCAL=$PWD/asm bash
@@ -314,7 +313,7 @@ Requires: `nasm`, `ld` (binutils). Target: **Linux x86-64**.
 
 ## Package managers
 
-Release assets for `v0.16.0` include tarball, **deb**, **rpm**, and **Arch** packages.
+Release assets for `v0.16.1` include tarball, **deb**, **rpm**, and **Arch** packages.
 
 | Channel | Status | Notes |
 |---------|--------|-------|
@@ -329,16 +328,16 @@ Release assets for `v0.16.0` include tarball, **deb**, **rpm**, and **Arch** pac
 
 ```bash
 # Debian / Ubuntu example
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.0/f00_0.16.0_amd64.deb
-sudo dpkg -i f00_0.16.0_amd64.deb
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.1/f00_0.16.1_amd64.deb
+sudo dpkg -i f00_0.16.1_amd64.deb
 
 # Fedora / RHEL example
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.0/f00-0.16.0-1.x86_64.rpm
-sudo rpm -Uvh f00-0.16.0-1.x86_64.rpm
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.1/f00-0.16.1-1.x86_64.rpm
+sudo rpm -Uvh f00-0.16.1-1.x86_64.rpm
 
 # Arch example (release package)
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.0/f00-0.16.0-1-x86_64.pkg.tar.zst
-sudo pacman -U f00-0.16.0-1-x86_64.pkg.tar.zst
+curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.1/f00-0.16.1-1-x86_64.pkg.tar.zst
+sudo pacman -U f00-0.16.1-1-x86_64.pkg.tar.zst
 ```
 
 ---
@@ -413,7 +412,7 @@ same file as an asset. Keep monospaced when you view it.
 
 ```text
 ░▒▓████████████████████████████████████████████▓▒░░░
-█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.16.0 ░▒▓█ 
+█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.16.1 ░▒▓█ 
 ████████████████████████████████████████████████████
 █  ▄████████▄   ▄███████▄   ▄███████▄              █
 █  ███▀▀▀▀███   ███▀▀▀▀███  ███▀▀▀▀███  freest.    █
