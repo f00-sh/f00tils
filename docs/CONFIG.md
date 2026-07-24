@@ -68,6 +68,11 @@ spinner = false
 | `git` | `auto`/`always`/`never` or bool | ls git decorations |
 
 ```bash
+f00-config                 # interactive TUI (TTY)
+f00-config tui             # force TUI
+f00-config theme list      # gallery
+f00-config theme set dracula
+f00-config init            # seed ~/.config/f00/themes/*.theme
 f00-config replace status   # true|false
 f00-config replace on       # write replace = true
 f00-config replace off      # write replace = false (then open a new shell)

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.15] - 2026-07-24
+
+### Added
+- **`f00-config` interactive TUI** (pure ASM): theme gallery, live preview, apply+save, replace toggle, seed theme files
+  - Launch: `f00-config` on a TTY, or `f00-config tui` / `ui` / `menu`
+  - Keys: `j/k` select · `Enter` apply · `r` replace · `i` seed · `q` quit
+
+### Notes
+- Themes: **no network download**. Builtins are in the binary; `init` / TUI `i` seeds `~/.config/f00/themes/*.theme`. Drop custom `.theme` files there.
+
 ## [0.15.14] - 2026-07-24
 
 ### Changed

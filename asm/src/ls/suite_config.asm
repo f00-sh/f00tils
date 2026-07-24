@@ -7,6 +7,7 @@ DEFAULT REL
 %include "syscalls.inc"
 
 global config_main
+global config_upsert_theme, config_upsert_replace, replace_is_off
 extern out_init, out_flush, out_str, out_byte, out_strn
 extern g_exit, g_tty, g_color, g_envp
 extern is_tty
@@ -18,6 +19,7 @@ extern strcmp, strlen, memcpy, memset
 extern color_path, color_num, color_ok, color_err, color_hdr, color_dim, color_reset
 extern c_path, c_num, c_ok, c_err, c_hdr, c_dim
 extern env_key_match
+extern config_tui_run
 
 section .bss
 alignb 8
@@ -40,10 +42,12 @@ usage:
     db "to lock a look into ~/.config/f00/config — or F00_THEME=… for one shot.", 10
     db 10
     db "Commands:", 10
-    db "  (none) | show       Current theme + token preview + chrome sample", 10
-    db "  init                Create XDG config tree + starter config (idempotent)", 10
+    db "  (none)              Interactive config TUI on a TTY; else show", 10
+    db "  tui | ui | menu     Force configuration TUI", 10
+    db "  show                Theme + token preview + chrome sample", 10
+    db "  init                Create XDG config tree + seed theme files", 10
     db "  theme list|themes   Gallery of builtin (+ user) themes", 10
-    db "  theme pick          Interactive numbered picker (TTY)", 10
+    db "  theme pick          Numbered picker (TTY)", 10
     db "  theme get           Print theme name only (script-safe)", 10
     db "  theme set NAME      Apply + write theme=NAME to XDG config", 10
     db "  theme set auto      Dark/light from COLORFGBG (catppuccin)", 10
@@ -51,16 +55,12 @@ usage:
     db "  shell-init          Print PATH export for bare names (eval)", 10
     db "  paths               Print config / themes paths", 10
     db 10
-    db "Default: replace coreutils (bare ls/cat/…) via PATH.", 10
-    db "  f00-config replace off   # keep GNU; use f00-* only", 10
-    db "  f00-config replace on    # default", 10
+    db "Themes: builtins ship in the binary. init seeds ~/.config/f00/themes/*.theme", 10
+    db "(no network). Drop custom .theme files there or use the TUI.", 10
     db "Default theme 'terminal' = ANSI 16 colors (your palette).", 10
-    db "theme=auto picks catppuccin mocha/latte from COLORFGBG.", 10
-    db "Named themes use truecolor. User: ~/.config/f00/themes/*.theme", 10
-    db "ls file colors still use LS_COLORS (orthogonal to suite theme).", 10
     db 10
     db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
-v_cfg: db "f00-config (f00) 0.15.14", 10, "License: MIT · https://f00.sh", 10, 0
+v_cfg: db "f00-config (f00) 0.15.15", 10, "License: MIT · https://f00.sh", 10, 0
 s_theme: db "theme", 0
 s_themes: db "themes", 0
 s_show: db "show", 0
@@ -79,6 +79,9 @@ s_status: db "status", 0
 s_shell_init: db "shell-init", 0
 s_true: db "true", 0
 s_false: db "false", 0
+s_tui: db "tui", 0
+s_ui: db "ui", 0
+s_menu: db "menu", 0
 key_replace_eq: db "replace = ", 0
 line_replace_pfx: db "replace", 0
 lbl_replace: db "replace: ", 0
@@ -160,7 +163,7 @@ config_main:
     mov r12, rdi                    ; argc
     mov r13, rsi                    ; argv
     cmp r12, 1
-    jle .show
+    jle .default
     mov rdi, [r13+8]
     cmp byte [rdi], '-'
     jne .cmd
@@ -176,6 +179,21 @@ config_main:
     test eax, eax
     jz .ver
 .cmd:
+    mov rdi, [r13+8]
+    lea rsi, [s_tui]
+    call strcmp
+    test eax, eax
+    jz .tui
+    mov rdi, [r13+8]
+    lea rsi, [s_ui]
+    call strcmp
+    test eax, eax
+    jz .tui
+    mov rdi, [r13+8]
+    lea rsi, [s_menu]
+    call strcmp
+    test eax, eax
+    jz .tui
     mov rdi, [r13+8]
     lea rsi, [s_show]
     call strcmp
@@ -366,6 +384,17 @@ config_main:
     call out_str
     mov dil, 10
     call out_byte
+    jmp .exit
+
+.default:
+    ; TTY → interactive TUI; pipe/script → show
+    mov rdi, 1
+    call is_tty
+    test al, al
+    jz .show
+    ; fall through
+.tui:
+    call config_tui_run
     jmp .exit
 
 .show:
