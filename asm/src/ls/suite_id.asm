@@ -484,22 +484,22 @@ h_printf:
     db "  f00-printf '%04d' 42",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
 
-v_id: db "f00-id (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_groups: db "f00-groups (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_uname: db "f00-uname (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_arch: db "f00-arch (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_date: db "f00-date (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_users: db "f00-users (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_who: db "f00-who (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_pinky: db "f00-pinky (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_uptime: db "f00-uptime (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_hostname: db "f00-hostname (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_nice: db "f00-nice (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_nohup: db "f00-nohup (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_timeout: db "f00-timeout (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_kill: db "f00-kill (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_test: db "f00-test (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
-v_printf: db "f00-printf (f00) 0.16.1",10,"License: MIT · https://f00.sh",10,0
+v_id: db "f00-id (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_groups: db "f00-groups (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_uname: db "f00-uname (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_arch: db "f00-arch (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_date: db "f00-date (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_users: db "f00-users (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_who: db "f00-who (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_pinky: db "f00-pinky (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_uptime: db "f00-uptime (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_hostname: db "f00-hostname (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_nice: db "f00-nice (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_nohup: db "f00-nohup (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_timeout: db "f00-timeout (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_kill: db "f00-kill (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_test: db "f00-test (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
+v_printf: db "f00-printf (f00) 0.16.2",10,"License: MIT · https://f00.sh",10,0
 
 ; util names for err_missing_operand / json_meta_open
 nm_id: db "id",0

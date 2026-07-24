@@ -463,6 +463,29 @@ cmp_out "numfmt stdin --to=si" \
   bash -c "echo 1000000 | \"$ROOT/f00-numfmt\" --core --to=si" ::: \
   bash -c "echo 1000000 | \"$CORE/numfmt\" --to=si"
 
+
+# --- GNU userland (grep / findutils / diffutils) progressive ---
+if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
+  echo hello > "$WORKDIR/g.txt"
+  echo world >> "$WORKDIR/g.txt"
+  cmp_out "grep -F hello"     "$ROOT/f00-grep" --core -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -F hello "$WORKDIR/g.txt"
+  cmp_out "grep -c hello"     "$ROOT/f00-grep" --core -c -F hello "$WORKDIR/g.txt" :::     "$CORE/grep" -c -F hello "$WORKDIR/g.txt"
+fi
+if [[ -x "$ROOT/f00-cmp" && -x "$CORE/cmp" ]]; then
+  printf 'abc\n' > "$WORKDIR/c1"
+  cp "$WORKDIR/c1" "$WORKDIR/c2"
+  set +e
+  "$ROOT/f00-cmp" --core "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  fr=$?
+  "$CORE/cmp" "$WORKDIR/c1" "$WORKDIR/c2" >/dev/null 2>&1
+  cr=$?
+  set -e
+  [[ "$fr" -eq "$cr" ]] && ok "cmp equal exit" || bad "cmp equal f00=$fr gnu=$cr"
+fi
+if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
+  cmp_out "find -maxdepth 0"     "$ROOT/f00-find" "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
+fi
+
 # --- summary ---
 log
 echo "parity: $PASS pass / $FAIL fail / $SKIP skip"

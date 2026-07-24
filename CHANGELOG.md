@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-07-24
+
+### Added
+- **GNU userland scoreboard:** [docs/GNU-USERLAND-PROGRESS.md](docs/GNU-USERLAND-PROGRESS.md) — full **grep / findutils / diffutils** rewrite table (9 tools)
+- **`diff3` / `sdiff`** multicall tools (partial `--core` depth; modern markers/chrome)
+- All **9/9** userland names shipped (depth still progressive toward byte-identical full)
+
 ## [0.16.1] - 2026-07-24
 
 ### Fixed

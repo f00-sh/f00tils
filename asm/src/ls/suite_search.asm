@@ -9,6 +9,7 @@ DEFAULT REL
 
 global grep_main, egrep_main, fgrep_main
 global find_main, xargs_main, diff_main, cmp_main
+global diff3_main, sdiff_main
 
 extern out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern is_tty, strlen, strcmp, memcpy, memset
@@ -94,11 +95,11 @@ pat_fold:       resb 4096
 line_fold:      resb LINE_CAP
 
 section .rodata
-v_grep:  db "f00-grep (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
-v_find:  db "f00-find (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff:  db "f00-diff (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
-v_xargs: db "f00-xargs (f00) 0.16.1", 10, "License: MIT · https://f00.sh", 10, 0
+v_grep:  db "f00-grep (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+v_find:  db "f00-find (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+v_xargs: db "f00-xargs (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_grep:
     db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10
@@ -3285,5 +3286,671 @@ xargs_exec:
     xor r10, r10
     syscall
 .d: pop r12
+    pop rbx
+    ret
+
+; ═══════════════════════════════════════════════════════════
+; diff3_main — three-way line compare (progressive depth)
+; ═══════════════════════════════════════════════════════════
+global diff3_main, sdiff_main
+
+section .rodata
+v_diff3: db "f00-diff3 (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+v_sdiff: db "f00-sdiff (f00) 0.16.2", 10, "License: MIT · https://f00.sh", 10, 0
+h_diff3:
+    db "Usage: f00-diff3 [OPTION]... MYFILE OLDFILE YOURFILE", 10
+    db "Compare three files line by line.", 10, 10
+    db "  -m, --merge     output merged file with conflict markers", 10
+    db "      --core      plain GNU-oriented output", 10
+    db "  --help  --version", 10, 0
+h_sdiff:
+    db "Usage: f00-sdiff [OPTION]... FILE1 FILE2", 10
+    db "Side-by-side merge of FILE1 and FILE2.", 10, 10
+    db "  -s, --suppress-common-lines   omit identical lines", 10
+    db "  -w, --width=NUM               column width (default 60 each)", 10
+    db "      --core                    plain output", 10
+    db "  --help  --version", 10, 0
+s_merge: db "merge", 0
+s_width: db "width", 0
+s_width_eq: db "width=", 0
+s_suppress: db "suppress-common-lines", 0
+diff3_aaaa: db "====", 10, 0
+diff3_1: db "1:", 0
+diff3_2: db "2:", 0
+diff3_3: db "3:", 0
+diff3_c: db "c", 10, 0
+conf_l: db "<<<<<<< ", 0
+conf_m: db "=======", 10, 0
+conf_r: db ">>>>>>> ", 0
+sdiff_bar: db " | ", 0
+sdiff_lt: db " <", 0
+sdiff_gt: db " >", 0
+sdiff_sp: db "   ", 0
+
+section .bss
+diff_c:     resq 1
+diff_nc:    resq 1
+lines_c_ptr: resq 8192
+lines_c_len: resq 8192
+pool_c:     resb 2*1024*1024
+pool_c_n:   resq 1
+sdiff_width: resd 1
+sdiff_suppress: resb 1
+d3_merge:   resb 1
+
+section .text
+
+diff3_main:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov dword [g_flags], 0
+    mov byte [d3_merge], 0
+    mov qword [diff_a], 0
+    mov qword [diff_b], 0
+    mov qword [diff_c], 0
+    mov r14, 1
+    xor r15, r15
+.d3p:
+    cmp r14, r12
+    jge .d3run
+    mov rdi, [r13 + r14*8]
+    cmp byte [rdi], '-'
+    jne .d3f
+    cmp word [rdi], '--'
+    je .d3l
+    cmp byte [rdi+1], 'm'
+    jne .d3h
+    mov byte [d3_merge], 1
+    jmp .d3n
+.d3h:
+    lea rsi, [opt_help]
+    call strcmp
+    test eax, eax
+    jnz .d3v
+    lea rsi, [h_diff3]
+    call out_str
+    jmp .d3e0
+.d3v:
+    lea rsi, [opt_version]
+    call strcmp
+    test eax, eax
+    jnz .d3core
+    lea rsi, [v_diff3]
+    call out_str
+    jmp .d3e0
+.d3core:
+    lea rsi, [opt_core]
+    call strcmp
+    test eax, eax
+    jnz .d3n
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+    jmp .d3n
+.d3l:
+    add rdi, 2
+    lea rsi, [s_help]
+    call strcmp
+    test eax, eax
+    jz .d3hh
+    lea rsi, [s_version]
+    call strcmp
+    test eax, eax
+    jz .d3vv
+    lea rsi, [s_merge]
+    call strcmp
+    test eax, eax
+    jnz .d3n
+    mov byte [d3_merge], 1
+    jmp .d3n
+.d3hh:
+    lea rsi, [h_diff3]
+    call out_str
+    jmp .d3e0
+.d3vv:
+    lea rsi, [v_diff3]
+    call out_str
+    jmp .d3e0
+.d3f:
+    cmp r15, 0
+    jne .f2
+    mov [diff_a], rdi
+    inc r15
+    jmp .d3n
+.f2: cmp r15, 1
+    jne .f3
+    mov [diff_b], rdi
+    inc r15
+    jmp .d3n
+.f3: mov [diff_c], rdi
+    inc r15
+.d3n:
+    inc r14
+    jmp .d3p
+.d3run:
+    cmp r15, 3
+    jae .ok
+    lea rsi, [h_diff3]
+    call out_str
+    mov dword [g_exit], 2
+    jmp .d3ex
+.ok: call diff3_files
+.d3ex:
+    call out_flush
+    mov edi, [g_exit]
+    mov rax, SYS_exit
+    syscall
+.d3e0:
+    call out_flush
+    xor edi, edi
+    mov rax, SYS_exit
+    syscall
+
+diff3_files:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov qword [diff_na], 0
+    mov qword [diff_nb], 0
+    mov qword [diff_nc], 0
+    mov qword [pool_a_n], 0
+    mov qword [pool_b_n], 0
+    mov qword [pool_c_n], 0
+    mov rdi, [diff_a]
+    lea rsi, [pool_a]
+    lea rdx, [lines_a_ptr]
+    lea rcx, [lines_a_len]
+    lea r8, [diff_na]
+    call load_lines
+    mov rdi, [diff_b]
+    lea rsi, [pool_b]
+    lea rdx, [lines_b_ptr]
+    lea rcx, [lines_b_len]
+    lea r8, [diff_nb]
+    call load_lines
+    mov rdi, [diff_c]
+    lea rsi, [pool_c]
+    lea rdx, [lines_c_ptr]
+    lea rcx, [lines_c_len]
+    lea r8, [diff_nc]
+    call load_lines
+    ; max lines
+    mov r12, [diff_na]
+    cmp r12, [diff_nb]
+    jae .m1
+    mov r12, [diff_nb]
+.m1: cmp r12, [diff_nc]
+    jae .m2
+    mov r12, [diff_nc]
+.m2:
+    xor r13, r13                    ; line index
+    mov dword [g_exit], 0
+.lp:
+    cmp r13, r12
+    jae .done
+    call d3_line_a
+    mov r8, rdi
+    mov r9, rdx
+    call d3_line_b
+    mov r10, rdi
+    mov r11, rdx
+    call d3_line_c
+    mov rbx, rdi                    ; c ptr
+    mov rcx, rdx                    ; c len
+    ; a==b?
+    mov rdi, r8
+    mov rdx, r9
+    mov rsi, r10
+    push rcx
+    mov rcx, r11
+    call d3_eq
+    pop rcx
+    test al, al
+    jz .differs
+    ; a==c?
+    mov rdi, r8
+    mov rdx, r9
+    mov rsi, rbx
+    call d3_eq
+    test al, al
+    jz .differs
+    ; all equal
+    cmp byte [d3_merge], 0
+    je .next
+    test r9, r9
+    jz .nl_only
+    mov rsi, r8
+    mov rdx, r9
+    call out_strn
+.nl_only:
+    mov dil, 10
+    call out_byte
+    jmp .next
+.differs:
+    mov dword [g_exit], 1
+    cmp byte [d3_merge], 0
+    jne .merge_out
+    lea rsi, [diff3_aaaa]
+    call out_str
+    lea rsi, [diff3_1]
+    call out_str
+    lea rsi, [diff3_c]
+    call out_str
+    test r9, r9
+    jz .o2
+    mov rsi, r8
+    mov rdx, r9
+    call out_strn
+    mov dil, 10
+    call out_byte
+.o2: lea rsi, [diff3_2]
+    call out_str
+    lea rsi, [diff3_c]
+    call out_str
+    test r11, r11
+    jz .o3
+    mov rsi, r10
+    mov rdx, r11
+    call out_strn
+    mov dil, 10
+    call out_byte
+.o3: lea rsi, [diff3_3]
+    call out_str
+    lea rsi, [diff3_c]
+    call out_str
+    test rcx, rcx
+    jz .next
+    mov rsi, rbx
+    mov rdx, rcx
+    call out_strn
+    mov dil, 10
+    call out_byte
+    jmp .next
+.merge_out:
+    lea rsi, [conf_l]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    mov dil, 10
+    call out_byte
+    test r9, r9
+    jz .m2b
+    mov rsi, r8
+    mov rdx, r9
+    call out_strn
+    mov dil, 10
+    call out_byte
+.m2b:
+    lea rsi, [conf_m]
+    call out_str
+    test rcx, rcx
+    jz .m3b
+    mov rsi, rbx
+    mov rdx, rcx
+    call out_strn
+    mov dil, 10
+    call out_byte
+.m3b:
+    lea rsi, [conf_r]
+    call out_str
+    mov rsi, [diff_c]
+    call out_str
+    mov dil, 10
+    call out_byte
+.next:
+    inc r13
+    jmp .lp
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; d3_line_a/b/c: use r13 index → rdi=ptr rdx=len (0 if past end)
+d3_line_a:
+    cmp r13, [diff_na]
+    jae .e
+    mov rdi, [lines_a_ptr + r13*8]
+    mov rdx, [lines_a_len + r13*8]
+    ret
+.e: xor edi, edi
+    xor edx, edx
+    ret
+d3_line_b:
+    cmp r13, [diff_nb]
+    jae .e
+    mov rdi, [lines_b_ptr + r13*8]
+    mov rdx, [lines_b_len + r13*8]
+    ret
+.e: xor edi, edi
+    xor edx, edx
+    ret
+d3_line_c:
+    cmp r13, [diff_nc]
+    jae .e
+    mov rdi, [lines_c_ptr + r13*8]
+    mov rdx, [lines_c_len + r13*8]
+    ret
+.e: xor edi, edi
+    xor edx, edx
+    ret
+
+; d3_eq(rdi=a, rdx=lena, rsi=b, rcx=lenb) → al
+d3_eq:
+    cmp rdx, rcx
+    jne .no
+    test rdx, rdx
+    jz .yes
+    call memcmp_n
+    test eax, eax
+    jnz .no
+.yes: mov al, 1
+    ret
+.no: xor al, al
+    ret
+
+; ═══════════════════════════════════════════════════════════
+; sdiff_main — side-by-side
+; ═══════════════════════════════════════════════════════════
+sdiff_main:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov dword [g_flags], 0
+    mov dword [sdiff_width], 60
+    mov byte [sdiff_suppress], 0
+    mov qword [diff_a], 0
+    mov qword [diff_b], 0
+    mov r14, 1
+    xor r15, r15
+.sp:
+    cmp r14, r12
+    jge .srun
+    mov rdi, [r13 + r14*8]
+    cmp byte [rdi], '-'
+    jne .sf
+    cmp word [rdi], '--'
+    je .sl
+    cmp byte [rdi+1], 's'
+    jne .sw
+    mov byte [sdiff_suppress], 1
+    jmp .sn
+.sw: cmp byte [rdi+1], 'w'
+    jne .sh
+    inc r14
+    cmp r14, r12
+    jge .srun
+    mov rdi, [r13 + r14*8]
+    call parse_u64
+    shr eax, 1                      ; each column ~ half
+    test eax, eax
+    jnz .sws
+    mov eax, 30
+.sws: mov [sdiff_width], eax
+    jmp .sn
+.sh: lea rsi, [opt_help]
+    call strcmp
+    test eax, eax
+    jnz .sv
+    lea rsi, [h_sdiff]
+    call out_str
+    jmp .se0
+.sv: lea rsi, [opt_version]
+    call strcmp
+    test eax, eax
+    jnz .sc
+    lea rsi, [v_sdiff]
+    call out_str
+    jmp .se0
+.sc: lea rsi, [opt_core]
+    call strcmp
+    test eax, eax
+    jnz .sn
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+    jmp .sn
+.sl:
+    add rdi, 2
+    lea rsi, [s_help]
+    call strcmp
+    test eax, eax
+    jnz .sl2
+    lea rsi, [h_sdiff]
+    call out_str
+    jmp .se0
+.sl2: lea rsi, [s_version]
+    call strcmp
+    test eax, eax
+    jnz .sl3
+    lea rsi, [v_sdiff]
+    call out_str
+    jmp .se0
+.sl3: lea rsi, [s_suppress]
+    call strcmp
+    test eax, eax
+    jnz .sn
+    mov byte [sdiff_suppress], 1
+    jmp .sn
+.sf:
+    cmp r15, 0
+    jne .sf2
+    mov [diff_a], rdi
+    inc r15
+    jmp .sn
+.sf2: mov [diff_b], rdi
+    inc r15
+.sn: inc r14
+    jmp .sp
+.srun:
+    cmp r15, 2
+    jae .sok
+    lea rsi, [h_sdiff]
+    call out_str
+    mov dword [g_exit], 2
+    jmp .sex
+.sok: call sdiff_files
+.sex: call out_flush
+    mov edi, [g_exit]
+    mov rax, SYS_exit
+    syscall
+.se0: call out_flush
+    xor edi, edi
+    mov rax, SYS_exit
+    syscall
+
+sdiff_files:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov qword [diff_na], 0
+    mov qword [diff_nb], 0
+    mov qword [pool_a_n], 0
+    mov qword [pool_b_n], 0
+    mov rdi, [diff_a]
+    lea rsi, [pool_a]
+    lea rdx, [lines_a_ptr]
+    lea rcx, [lines_a_len]
+    lea r8, [diff_na]
+    call load_lines
+    mov rdi, [diff_b]
+    lea rsi, [pool_b]
+    lea rdx, [lines_b_ptr]
+    lea rcx, [lines_b_len]
+    lea r8, [diff_nb]
+    call load_lines
+    mov r12, [diff_na]
+    cmp r12, [diff_nb]
+    jae .m
+    mov r12, [diff_nb]
+.m: xor r13, r13
+    mov dword [g_exit], 0
+.lp:
+    cmp r13, r12
+    jae .done
+    xor r8, r8
+    xor r9, r9
+    xor r10, r10
+    xor r11, r11
+    cmp r13, [diff_na]
+    jae .b
+    mov r8, [lines_a_ptr + r13*8]
+    mov r9, [lines_a_len + r13*8]
+.b: cmp r13, [diff_nb]
+    jae .cmp
+    mov r10, [lines_b_ptr + r13*8]
+    mov r11, [lines_b_len + r13*8]
+.cmp:
+    ; equal?
+    mov rdi, r8
+    mov rdx, r9
+    mov rsi, r10
+    mov rcx, r11
+    call d3_eq
+    test al, al
+    jz .diff
+    cmp byte [sdiff_suppress], 0
+    jne .next
+    ; common: left + spaces + right or just left padded
+    call sdiff_emit_common
+    jmp .next
+.diff:
+    mov dword [g_exit], 1
+    call sdiff_emit_diff
+.next:
+    inc r13
+    jmp .lp
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; r8/r9 left, r10/r11 right
+sdiff_emit_common:
+    push rbx
+    mov ebx, [sdiff_width]
+    ; left
+    test dword [g_flags], DF_CORE
+    jnz .l
+    cmp byte [g_color], 0
+    je .l
+    call color_dim
+.l: mov rsi, r8
+    mov rdx, r9
+    call sdiff_pad_out
+    test dword [g_flags], DF_CORE
+    jnz .m
+    cmp byte [g_color], 0
+    je .m
+    call color_reset
+.m: lea rsi, [sdiff_sp]
+    call out_str
+    mov rsi, r10
+    mov rdx, r11
+    call sdiff_pad_out
+    mov dil, 10
+    call out_byte
+    pop rbx
+    ret
+
+sdiff_emit_diff:
+    push rbx
+    mov ebx, [sdiff_width]
+    test dword [g_flags], DF_CORE
+    jnz .l
+    cmp byte [g_color], 0
+    je .l
+    call color_err
+.l: mov rsi, r8
+    mov rdx, r9
+    call sdiff_pad_out
+    test dword [g_flags], DF_CORE
+    jnz .mid
+    cmp byte [g_color], 0
+    je .mid
+    call color_reset
+.mid:
+    ; marker
+    test r9, r9
+    jz .only_r
+    test r11, r11
+    jz .only_l
+    lea rsi, [sdiff_bar]
+    jmp .mk
+.only_l:
+    lea rsi, [sdiff_lt]
+    jmp .mk
+.only_r:
+    lea rsi, [sdiff_gt]
+.mk: call out_str
+    test dword [g_flags], DF_CORE
+    jnz .r
+    cmp byte [g_color], 0
+    je .r
+    call color_ok
+.r: mov rsi, r10
+    mov rdx, r11
+    call sdiff_pad_out
+    test dword [g_flags], DF_CORE
+    jnz .n
+    cmp byte [g_color], 0
+    je .n
+    call color_reset
+.n: mov dil, 10
+    call out_byte
+    pop rbx
+    ret
+
+; sdiff_pad_out(rsi=ptr, rdx=len) width in ebx — print min(len,width) then pad spaces
+sdiff_pad_out:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rsi
+    mov r13, rdx
+    mov r14d, ebx                   ; width (stable)
+    cmp r13, r14
+    jbe .use
+    mov r13, r14
+.use:
+    test r13, r13
+    jz .pad
+    mov rsi, r12
+    mov rdx, r13
+    call out_strn
+.pad:
+    mov eax, r14d
+    sub eax, r13d
+    jle .d
+    mov r14d, eax                   ; pad count
+.sp:
+    mov dil, ' '
+    call out_byte
+    dec r14d
+    jnz .sp
+.d: pop r14
+    pop r13
+    pop r12
     pop rbx
     ret
