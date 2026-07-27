@@ -27,8 +27,10 @@ extern ui_spinner_start, ui_spinner_tick, ui_spinner_stop
 %define F_HELP 8
 %define F_VER  16
 
-%define BIG_CAP   1048576
-%define MAX_LINES 65536
+; In-memory load ceiling for sort/uniq/shuf/etc. Demand-paged BSS.
+; Real-work hot path: 200k × ~33B ≈ 6.6MiB — keep headroom for multi-file concat.
+%define BIG_CAP   (16*1024*1024)
+%define MAX_LINES 262144
 %define LINE_CAP  8192
 %define MAP_N     256
 %define RL_SLOTS  8
@@ -143,6 +145,7 @@ rl_fds:      resq RL_SLOTS
 rl_pos:      resq RL_SLOTS
 rl_end:      resq RL_SLOTS
 rl_data:     resb RL_SLOTS * RL_BUFSZ
+qstack:      resq 256            ; iterative quicksort (lo,hi) pairs
 
 section .rodata
 nl:     db 10,0
@@ -181,6 +184,7 @@ nm_factor: db "factor",0
 nm_numfmt: db "numfmt",0
 nm_expr: db "expr",0
 err_cut_need: db ": you must specify a list of bytes, characters, or fields",10,0
+err_efbig:    db "File too large",10,0
 ; JSON result keys
 jk_lines: db "line_count",0
 jk_mode: db "mode",0
@@ -469,6 +473,13 @@ close_fd:
     pop rbx
     ret
 
+; die_efbig — hard fail, never silent-truncate large inputs (shared load path)
+die_efbig:
+    lea rsi, [err_efbig]
+    call err_str
+    mov dword [g_exit], 2
+    jmp xexit
+
 load_fd:
     push rbx
     push r12
@@ -477,7 +488,7 @@ load_fd:
     xor r13, r13
 .lr:
     cmp r13, BIG_CAP-1
-    jae .ld
+    jae .probe
     mov rax, SYS_read
     mov rdi, r12
     lea rsi, [big_buf+r13]
@@ -488,6 +499,15 @@ load_fd:
     jle .ld
     add r13, rax
     jmp .lr
+.probe:
+    ; buffer full — one-byte probe; more data ⇒ hard fail (no silent truncate)
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [scratch]
+    mov rdx, 1
+    syscall
+    test rax, rax
+    jg .ov
 .ld:
     mov byte [big_buf+r13], 0
     mov rax, r13
@@ -495,6 +515,8 @@ load_fd:
     pop r12
     pop rbx
     ret
+.ov:
+    jmp die_efbig
 
 load_path:
     test rdi, rdi
@@ -543,7 +565,7 @@ append_path:
     mov rbx, rax
 .rd:
     cmp r15, BIG_CAP-1
-    jae .cl
+    jae .probe
     mov rax, SYS_read
     mov rdi, rbx
     lea rsi, [big_buf+r15]
@@ -554,6 +576,15 @@ append_path:
     jle .cl
     add r15, rax
     jmp .rd
+.probe:
+    ; more bytes beyond BIG_CAP ⇒ hard fail (never silent truncate)
+    mov rax, SYS_read
+    mov rdi, rbx
+    lea rsi, [scratch]
+    mov rdx, 1
+    syscall
+    test rax, rax
+    jg .ov
 .cl:
     mov rdi, rbx
     call close_fd
@@ -570,6 +601,10 @@ append_path:
     pop r12
     pop rbx
     ret
+.ov:
+    mov rdi, rbx
+    call close_fd
+    jmp die_efbig
 
 split_lines:
     push rbx
@@ -596,13 +631,15 @@ split_lines:
     cmp rax, r12
     jae .done
     cmp r13, MAX_LINES
-    jae .done
+    jae .ovlines
     lea rdx, [big_buf+rax]
     mov [line_ptrs+r13*8], rdx
     mov [counts+r13*8], r13
     inc r13
 .nx: inc rcx
     jmp .lp
+.ovlines:
+    jmp die_efbig
 .done:
     ; if buffer non-empty and does not end with delim, last line already recorded
     ; fix original indices 0..n-1
@@ -1190,8 +1227,11 @@ parse_month:
     sub al, 32
 .ur: ret
 
+; Key-affecting option bits (force slow path). REV/STABLE/UNIQ/CHECK/ZERO handled elsewhere.
+%define OF_KEYPATH (OF_BLANK|OF_FOLD|OF_DICT|OF_NONPRT|OF_MONTH|OF_HUMAN|OF_VERSORT|OF_NUM|OF_GENNUM|OF_RANDOM)
+
 ; rdi=a rsi=b → eax like strcmp; respects ordering options + last-resort
-; r8/r9 optional original indices (for stable); if -1, skip index
+; num_a/num_b original indices for stable (-s)
 line_cmp:
     push rbx
     push r12
@@ -1200,6 +1240,16 @@ line_cmp:
     push r15
     mov r14, rdi                    ; full line a
     mov r15, rsi                    ; full line b
+    ; ── fast path: plain lexicographic full-line (hot-path default) ──
+    test dword [opt_flags], OF_KEYPATH
+    jnz .slow
+    cmp qword [key_field], 0
+    jne .slow
+    mov rdi, r14
+    mov rsi, r15
+    call strcmp
+    jmp .tie
+.slow:
     mov rdi, r14
     call line_key_ptr
     ; copy key a out of work (line_key_ptr may use work)
@@ -1374,79 +1424,393 @@ hash_str:
     jmp .h
 .hd: ret
 
-; shell_sort: Sedgewick gaps (much faster than n/2… for large n)
+; shell_sort: introsort — iterative quicksort (true median-of-3) + insertion
+; for small runs + heapsort when depth exhausted, partition degenerate
+; (sorted / all-equal), or qstack full. Never emits partial order.
+; Name kept for call sites. line_cmp (incl. -r/-s).
+; Callee-saved used: rbx/r12-r15/rbp. qstack frames: (lo,hi,depth)*3 qwords.
+%define QS_THRESH 24
+%define QS_FRAME  3
+%define QS_MAXQ   252               ; multiple of 3; headroom under 256
 shell_sort:
     push rbx
     push r12
     push r13
     push r14
     push r15
-    mov r12, [nlines]
-    cmp r12, 2
+    push rbp
+    mov rax, [nlines]
+    cmp rax, 2
     jb .done
-    ; pick first Sedgewick gap < n: 1,4,10,23,57,132,301,701,1577,...
-    mov r13, 1
-.pick:
-    mov rax, r13
-    lea rax, [rax+rax*2]            ; 3*gap
-    add rax, 1                      ; 3*gap+1
-    cmp rax, r12
-    jae .gap
-    mov r13, rax
-    jmp .pick
-.gap:
-    test r13, r13
+    ; depth limit ≈ 2*floor(log2(n))
+    mov rcx, rax
+    xor edx, edx
+.lg: shr rcx, 1
+    jz .lg0
+    inc edx
+    jmp .lg
+.lg0:
+    lea edx, [rdx*2]
+    test edx, edx
+    jnz .lg1
+    mov edx, 1
+.lg1:
+    mov qword [qstack], 0           ; lo
+    dec rax
+    mov [qstack+8], rax             ; hi
+    mov [qstack+16], rdx            ; depth
+    mov ebp, QS_FRAME
+.main:
+    test ebp, ebp
     jz .done
-    mov r14, r13
-.i:
-    cmp r14, r12
-    jae .ng
-    mov r15, [line_ptrs+r14*8]
-    mov rcx, [counts+r14*8]
-    push rcx                        ; save index of r15
-    mov rbx, r14
-.j:
-    cmp rbx, r13
-    jb .place
-    mov rax, rbx
-    sub rax, r13
-    mov rdi, [line_ptrs+rax*8]
-    mov rsi, r15
-    ; set num_a/num_b for stable
-    mov rdx, [counts+rax*8]
+    sub ebp, QS_FRAME
+    mov r14, [qstack+rbp*8]         ; lo
+    mov r15, [qstack+rbp*8+8]       ; hi
+    mov r13, [qstack+rbp*8+16]      ; depth
+    mov rax, r15
+    sub rax, r14
+    cmp rax, QS_THRESH
+    jbe .insert
+    test r13, r13
+    jz .heap                        ; depth exhausted → heapsort
+    ; mid = (lo+hi)/2
+    mov r12, r14
+    add r12, r15
+    shr r12, 1
+    ; sort3(lo, mid, hi): lo <= mid <= hi
+    mov rdi, [line_ptrs+r14*8]
+    mov rsi, [line_ptrs+r12*8]
+    mov rdx, [counts+r14*8]
     mov [num_a], rdx
-    mov rdx, [rsp]
+    mov rdx, [counts+r12*8]
     mov [num_b], rdx
     call line_cmp
-    ; line_cmp already applies reverse
     test eax, eax
-    jle .place
+    jle .m1
+    mov rax, [line_ptrs+r14*8]
+    mov rcx, [line_ptrs+r12*8]
+    mov [line_ptrs+r14*8], rcx
+    mov [line_ptrs+r12*8], rax
+    mov rax, [counts+r14*8]
+    mov rcx, [counts+r12*8]
+    mov [counts+r14*8], rcx
+    mov [counts+r12*8], rax
+.m1:
+    mov rdi, [line_ptrs+r14*8]
+    mov rsi, [line_ptrs+r15*8]
+    mov rdx, [counts+r14*8]
+    mov [num_a], rdx
+    mov rdx, [counts+r15*8]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jle .m2
+    mov rax, [line_ptrs+r14*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+r14*8], rcx
+    mov [line_ptrs+r15*8], rax
+    mov rax, [counts+r14*8]
+    mov rcx, [counts+r15*8]
+    mov [counts+r14*8], rcx
+    mov [counts+r15*8], rax
+.m2:
+    mov rdi, [line_ptrs+r12*8]
+    mov rsi, [line_ptrs+r15*8]
+    mov rdx, [counts+r12*8]
+    mov [num_a], rdx
+    mov rdx, [counts+r15*8]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jle .m3
+    mov rax, [line_ptrs+r12*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+r12*8], rcx
+    mov [line_ptrs+r15*8], rax
+    mov rax, [counts+r12*8]
+    mov rcx, [counts+r15*8]
+    mov [counts+r12*8], rcx
+    mov [counts+r15*8], rax
+.m3:
+    ; true median-of-3: after lo<=mid<=hi, median is at mid — swap mid↔hi for Lomuto
+    mov rax, [line_ptrs+r12*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+r12*8], rcx
+    mov [line_ptrs+r15*8], rax
+    mov rax, [counts+r12*8]
+    mov rcx, [counts+r15*8]
+    mov [counts+r12*8], rcx
+    mov [counts+r15*8], rax
+    ; Lomuto: pivot at hi; j = lo..hi-1; i = rbx
+    mov rbx, r14
+    mov r12, r14
+.part:
+    cmp r12, r15
+    jae .pend
+    mov rdi, [line_ptrs+r12*8]
+    mov rsi, [line_ptrs+r15*8]
+    mov rdx, [counts+r12*8]
+    mov [num_a], rdx
+    mov rdx, [counts+r15*8]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jg .pnx
+    mov rax, [line_ptrs+rbx*8]
+    mov rcx, [line_ptrs+r12*8]
+    mov [line_ptrs+rbx*8], rcx
+    mov [line_ptrs+r12*8], rax
+    mov rax, [counts+rbx*8]
+    mov rcx, [counts+r12*8]
+    mov [counts+rbx*8], rcx
+    mov [counts+r12*8], rax
+    inc rbx
+.pnx:
+    inc r12
+    jmp .part
+.pend:
+    mov rax, [line_ptrs+rbx*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+rbx*8], rcx
+    mov [line_ptrs+r15*8], rax
+    mov rax, [counts+rbx*8]
+    mov rcx, [counts+r15*8]
+    mov [counts+rbx*8], rcx
+    mov [counts+r15*8], rax
+    ; sizes; if one side empty (all-equal / degenerate) → heapsort that side
     mov rax, rbx
-    sub rax, r13
+    sub rax, r14                    ; left count (pivot-lo)
+    mov rcx, r15
+    sub rcx, rbx                    ; right count (hi-pivot)
+    ; range length nspan = hi-lo+1
+    mov rdx, r15
+    sub rdx, r14
+    inc rdx
+    ; if left==0 or right==0 and span > QS_THRESH: heapsort whole [lo,hi]
+    test rax, rax
+    jz .deg
+    test rcx, rcx
+    jz .deg
+    jmp .push
+.deg:
+    cmp rdx, QS_THRESH
+    ja .heap
+.push:
+    dec r13                         ; depth-1 for children
+    ; push larger side first so smaller is processed sooner (stack shallow)
+    cmp rax, rcx
+    jae .left_big
+    ; right bigger or equal: push right then left
+    cmp rcx, 1
+    jbe .pl
+    cmp ebp, QS_MAXQ
+    jae .heap_both
+    lea rdx, [rbx+1]
+    mov [qstack+rbp*8], rdx
+    mov [qstack+rbp*8+8], r15
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+.pl:
+    cmp rax, 1
+    jbe .main
+    cmp ebp, QS_MAXQ
+    jae .heap_left
+    mov [qstack+rbp*8], r14
+    lea rdx, [rbx-1]
+    mov [qstack+rbp*8+8], rdx
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+    jmp .main
+.left_big:
+    cmp rax, 1
+    jbe .pr
+    cmp ebp, QS_MAXQ
+    jae .heap_both
+    mov [qstack+rbp*8], r14
+    lea rdx, [rbx-1]
+    mov [qstack+rbp*8+8], rdx
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+.pr:
+    cmp rcx, 1
+    jbe .main
+    cmp ebp, QS_MAXQ
+    jae .heap_right
+    lea rdx, [rbx+1]
+    mov [qstack+rbp*8], rdx
+    mov [qstack+rbp*8+8], r15
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+    jmp .main
+.heap_both:
+    ; cannot push — finish this range with heapsort (never partial)
+    jmp .heap
+.heap_left:
+    mov r15, rbx
+    dec r15
+    jmp .heap
+.heap_right:
+    mov r14, rbx
+    inc r14
+    jmp .heap
+.heap:
+    call heap_sort_range            ; r14=lo r15=hi
+    jmp .main
+.insert:
+    mov r12, r14
+    inc r12
+.il:
+    cmp r12, r15
+    ja .main
+    mov rax, [line_ptrs+r12*8]
+    mov [num_c], rax
+    mov rax, [counts+r12*8]
+    mov [n_bytes], rax
+    mov rbx, r12
+.ij:
+    cmp rbx, r14
+    jbe .iput
+    lea rax, [rbx-1]
+    mov rdi, [line_ptrs+rax*8]
+    mov rsi, [num_c]
+    mov rdx, [counts+rax*8]
+    mov [num_a], rdx
+    mov rdx, [n_bytes]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jle .iput
+    lea rax, [rbx-1]
     mov rcx, [line_ptrs+rax*8]
     mov [line_ptrs+rbx*8], rcx
     mov rcx, [counts+rax*8]
     mov [counts+rbx*8], rcx
-    sub rbx, r13
-    jmp .j
-.place:
-    mov [line_ptrs+rbx*8], r15
-    pop rcx
-    mov [counts+rbx*8], rcx
-    inc r14
-    jmp .i
-.ng:
-    ; next smaller Sedgewick gap: (gap-1)/3
-    mov rax, r13
-    dec rax
-    xor edx, edx
-    mov rcx, 3
-    div rcx
-    mov r13, rax
-    jmp .gap
+    dec rbx
+    jmp .ij
+.iput:
+    mov rax, [num_c]
+    mov [line_ptrs+rbx*8], rax
+    mov rax, [n_bytes]
+    mov [counts+rbx*8], rax
+    inc r12
+    jmp .il
 .done:
+    pop rbp
     pop r15
     pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; heap_sort_range: sort line_ptrs[r14..r15] inclusive (O(n log n), worst-case).
+; Clobbers rax-rdx,rbx,r12,r13; preserves r14,r15. Uses line_cmp + num_a/num_b.
+heap_sort_range:
+    push rbx
+    push r12
+    push r13
+    mov r12, r15
+    sub r12, r14
+    inc r12                         ; n
+    cmp r12, 2
+    jb .hret
+    ; build max-heap: i = n/2-1 .. 0
+    mov rbx, r12
+    shr rbx, 1
+.hb:
+    test rbx, rbx
+    jz .hex
+    dec rbx
+    mov rdi, rbx                    ; i
+    mov rsi, r12                    ; heap size
+    call heap_sift
+    jmp .hb
+.hex:
+    mov r13, r12
+.he:
+    dec r13
+    jz .hret
+    ; swap root (lo+0) with lo+r13
+    lea rax, [r14]
+    lea rcx, [r14+r13]
+    mov rdx, [line_ptrs+rax*8]
+    mov rbx, [line_ptrs+rcx*8]
+    mov [line_ptrs+rax*8], rbx
+    mov [line_ptrs+rcx*8], rdx
+    mov rdx, [counts+rax*8]
+    mov rbx, [counts+rcx*8]
+    mov [counts+rax*8], rbx
+    mov [counts+rcx*8], rdx
+    xor edi, edi
+    mov rsi, r13
+    call heap_sift
+    jmp .he
+.hret:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; heap_sift(rdi=i, rsi=size) relative to r14 base. Max-heap by line_cmp.
+; line_cmp clobbers caller-saved regs — keep indices in callee-saved only.
+heap_sift:
+    push rbx
+    push r12
+    push r13
+    push r15                        ; largest (r14 is range base — preserve)
+    mov r12, rdi                    ; i
+    mov r13, rsi                    ; size
+.hs:
+    mov rbx, r12
+    add rbx, r12
+    inc rbx                         ; left = 2*i+1
+    cmp rbx, r13
+    jae .hsd
+    mov r15, rbx                    ; largest = left
+    lea rax, [rbx+1]                ; right
+    cmp rax, r13
+    jae .hsc
+    ; if a[right] > a[left] → largest = right (save right in n_bytes across cmp)
+    mov [n_bytes], rax
+    lea rcx, [r14+rax]              ; abs right
+    lea rax, [r14+rbx]              ; abs left
+    mov rdi, [line_ptrs+rcx*8]
+    mov rsi, [line_ptrs+rax*8]
+    mov rdx, [counts+rcx*8]
+    mov [num_a], rdx
+    mov rdx, [counts+rax*8]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jle .hsc
+    mov r15, [n_bytes]
+.hsc:
+    ; if a[largest] > a[i] swap and continue
+    lea rax, [r14+r15]
+    lea rcx, [r14+r12]
+    mov rdi, [line_ptrs+rax*8]
+    mov rsi, [line_ptrs+rcx*8]
+    mov rdx, [counts+rax*8]
+    mov [num_a], rdx
+    mov rdx, [counts+rcx*8]
+    mov [num_b], rdx
+    call line_cmp
+    test eax, eax
+    jle .hsd
+    lea rax, [r14+r15]
+    lea rcx, [r14+r12]
+    mov rdx, [line_ptrs+rax*8]
+    mov rbx, [line_ptrs+rcx*8]
+    mov [line_ptrs+rax*8], rbx
+    mov [line_ptrs+rcx*8], rdx
+    mov rdx, [counts+rax*8]
+    mov rbx, [counts+rcx*8]
+    mov [counts+rax*8], rbx
+    mov [counts+rcx*8], rdx
+    mov r12, r15
+    jmp .hs
+.hsd:
+    pop r15
     pop r13
     pop r12
     pop rbx

@@ -43,10 +43,13 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 cd asm
 make
 make check          # boring-solid: smoke + parity
-make speed          # wall+CPU law (optional on every commit)
+make hot            # real-work wall+CPU (sort 200k + ls 500; full stdout assert)
+make speed          # wall+CPU law (optional on every commit; includes hot)
 # aarch64 freestanding port (needs aarch64-linux-gnu-{as,ld} + qemu-aarch64-static)
 make aarch64 && make aarch64-smoke
 ```
+
+Release story: **tarball + `install.sh`** (`make sync-install` keeps site copy identical). deb/rpm/AUR/brew secondary.
 
 Ship narrative: **README + https://f00.sh only.** Docs under `docs/` are optional depth.
 

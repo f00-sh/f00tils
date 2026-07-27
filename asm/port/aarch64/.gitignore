@@ -6,5 +6,6 @@ true
 false
 echo
 pwd
+cat
 grep
 version
