@@ -1,6 +1,6 @@
 # Contributing to f00tils
 
-**f00tils** is a pure x86-64 Linux freestanding assembly multicall suite.
+**f00tils** is a freestanding assembly multicall suite (Linux x86-64 primary; aarch64 port under `asm/port/aarch64`).
 It replaces GNU coreutils (coreutils → f00tils).
 
 Binary name: `f00`. Tools: `f00-*`.
@@ -18,10 +18,11 @@ Binary name: `f00`. Tools: `f00-*`.
 ```bash
 cd asm
 make
-make smoke
-make speed
-bash benches/parity.sh
+make check          # boring-solid: smoke + parity
+make speed          # wall+CPU law (optional on every commit)
 ```
+
+Ship narrative: **README + https://f00.sh**.
 
 Install a local build:
 

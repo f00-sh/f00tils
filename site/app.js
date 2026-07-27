@@ -210,58 +210,52 @@
     return out;
   }
 
-  function renderPackageCards(packages, meta) {
-    const host = document.getElementById("pkg-cards");
-    if (!host) return;
-    const cards = PKG_ORDER.map((p) => {
-      const s = (packages && packages[p]) || {};
-      const hx = s.headline_x || "—";
-      const cx =
-        s.headline_cpu_x ||
-        (s.cpu_ratio_geo != null
-          ? `${Math.round(Number(s.cpu_ratio_geo) * 10) / 10}×`
-          : "—");
-      const n = s.tools_ok != null ? s.tools_ok : 0;
-      const wins = s.tools_win != null ? `${s.tools_win}/${n}` : "—";
-      const cpuWins =
-        s.cpu_wins != null && s.cpu_tools_ok != null
-          ? `${s.cpu_wins}/${s.cpu_tools_ok}`
-          : "—";
+  function pkgTileHtml(p, s, compact) {
+    const hx = s.headline_x || "—";
+    const cx =
+      s.headline_cpu_x ||
+      (s.cpu_ratio_geo != null
+        ? `${Math.round(Number(s.cpu_ratio_geo) * 10) / 10}×`
+        : "—");
+    const n = s.tools_ok != null ? s.tools_ok : 0;
+    if (compact) {
       return (
-        `<article class="pkg-card" data-pkg="${esc(p)}">` +
-        `<header><span class="pkg-name">${esc(PKG_LABEL[p])}</span>` +
-        `<span class="pkg-x">${esc(hx)} <span class="pkg-x-sub">wall</span></span></header>` +
-        `<p class="pkg-cpu"><strong>${esc(cx)}</strong> <span class="muted">CPU</span></p>` +
-        `<p class="pkg-meta muted small">${n} timed · wall wins ${esc(wins)} · CPU wins ${esc(cpuWins)}</p>` +
+        `<article class="hero-pkg-tile" data-pkg="${esc(p)}">` +
+        `<span class="hero-pkg-name">${esc(PKG_LABEL[p])}</span>` +
+        `<span class="hero-pkg-wall">${esc(hx)}</span>` +
+        `<span class="hero-pkg-meta">wall · CPU ${esc(cx)}</span>` +
         `</article>`
       );
-    }).join("");
-    host.innerHTML = cards;
+    }
+    const wins = s.tools_win != null ? `${s.tools_win}/${n}` : "—";
+    const cpuWins =
+      s.cpu_wins != null && s.cpu_tools_ok != null
+        ? `${s.cpu_wins}/${s.cpu_tools_ok}`
+        : "—";
+    return (
+      `<article class="pkg-card" data-pkg="${esc(p)}">` +
+      `<header><span class="pkg-name">${esc(PKG_LABEL[p])}</span>` +
+      `<span class="pkg-x">${esc(hx)} <span class="pkg-x-sub">wall</span></span></header>` +
+      `<p class="pkg-cpu"><strong>${esc(cx)}</strong> <span class="muted">CPU</span></p>` +
+      `<p class="pkg-meta muted small">${n} timed · wall ${esc(wins)} · CPU ${esc(cpuWins)}</p>` +
+      `</article>`
+    );
+  }
 
-    // Hero shows coreutils wall + CPU (separate), not a blend across packages
-    const core = (packages && packages.coreutils) || {};
-    const hero = document.getElementById("hero-speed");
-    if (hero && core.headline_x) {
-      hero.hidden = false;
-      const xEl = document.getElementById("hero-speed-x");
-      const sub = document.getElementById("hero-speed-sub");
-      const lab = document.getElementById("hero-speed-label");
-      if (xEl) xEl.textContent = core.headline_x;
-      if (lab) lab.textContent = "wall vs GNU coreutils";
-      if (sub) {
-        const cpuX =
-          core.headline_cpu_x ||
-          (core.cpu_ratio_geo != null
-            ? `${Number(core.cpu_ratio_geo).toFixed(1)}×`
-            : null);
-        sub.textContent = [
-          cpuX ? `CPU ${cpuX}` : null,
-          core.tools_ok != null ? `${core.tools_ok} tools` : null,
-          "wall · CPU separate · per package",
-        ]
-          .filter(Boolean)
-          .join(" · ");
-      }
+  function renderPackageCards(packages, meta) {
+    const host = document.getElementById("pkg-cards");
+    if (host) {
+      host.innerHTML = PKG_ORDER.map((p) =>
+        pkgTileHtml(p, (packages && packages[p]) || {}, false)
+      ).join("");
+    }
+
+    // Hero: one tile per GNU package (wall + CPU), never blended
+    const heroGrid = document.getElementById("hero-pkg-grid");
+    if (heroGrid) {
+      heroGrid.innerHTML = PKG_ORDER.map((p) =>
+        pkgTileHtml(p, (packages && packages[p]) || {}, true)
+      ).join("");
     }
 
     const claim = document.getElementById("scoreboard-speed-claim");
@@ -274,7 +268,7 @@
           (s.cpu_ratio_geo != null
             ? `${Number(s.cpu_ratio_geo).toFixed(1)}×`
             : "—");
-        return `${PKG_LABEL[p]} wall ${s.headline_x} / CPU ${cpu}`;
+        return `${PKG_LABEL[p]} ${s.headline_x}/${cpu}`;
       })
         .filter(Boolean)
         .join(" · ");

@@ -42,12 +42,13 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 ```bash
 cd asm
 make
-make smoke
-make speed
-bash benches/parity.sh
+make check          # boring-solid: smoke + parity
+make speed          # wall+CPU law (optional on every commit)
 # aarch64 freestanding port (needs aarch64-linux-gnu-{as,ld} + qemu-aarch64-static)
 make aarch64 && make aarch64-smoke
 ```
+
+Ship narrative: **README + https://f00.sh only.** Docs under `docs/` are optional depth.
 
 ## Language purity
 

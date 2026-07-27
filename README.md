@@ -75,7 +75,14 @@ f00-config replace off
 | findutils | 2 | full common track |
 | diffutils | 4 | full common track |
 
-Scoreboards: [coreutils](docs/COREUTILS-PROGRESS.md) · [userland](docs/GNU-USERLAND-PROGRESS.md) · [flags](docs/GNU-COMPLIANCE.md)
+Live scoreboard + benches: [f00.sh](https://f00.sh/#scoreboard) · data [`site/bench/suite.json`](site/bench/suite.json).
+
+### Boring-solid (x86-64)
+
+```bash
+cd asm && make check    # smoke + parity — default quality bar
+cd asm && make speed    # wall+CPU law (optional on every commit)
+```
 
 ---
 

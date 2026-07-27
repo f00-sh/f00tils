@@ -24,14 +24,26 @@ extern err_str
 %define DF_MERGE     16
 %define DF_SUPPRESS  32
 %define DF_CONTEXT   64
+%define DF_RECURSIVE 128
 
 %define LINE_CAP     65536
-%define MAX_LINES    4096
+; Full-file line index hard ceiling — never silent-truncate (exit 2 / EFBIG on overflow).
+; 32K covers multi-k sources (e.g. suite_text ~9k) + multi-line batteries past the
+; old 4096 silent-truncate trap, without a multi-tens-of-MB BSS hit on every util.
+%define MAX_LINES    32768
 ; 8MiB/pool: multi-MiB single-line files must fully load for --core -u drop-in
 %define POOL_CAP     (8*1024*1024)
 %define LCS_MAX      512
 %define CTX_DEFAULT  3
 %define STAT_SIZE_OFF 48
+%define STAT_MODE_OFF 24
+; recursive directory compare (iterative work queue — no recursive table clobber)
+%define DIFF_MAX_ENTS  2048
+%define DIFF_NPOOL     (128*1024)
+%define DIFF_PATH_CAP  4096
+%define DIFF_DENT_CAP  65536
+%define DIFF_QMAX      256
+%define DIFF_PSTORE    (512*1024)
 
 section .bss
 alignb 8
@@ -43,7 +55,7 @@ diff_c:         resq 1
 diff_na:        resq 1
 diff_nb:        resq 1
 diff_nc:        resq 1
-; line tables
+; line tables (full-file; sized to MAX_LINES — demand-paged BSS)
 lines_a_ptr:    resq MAX_LINES
 lines_b_ptr:    resq MAX_LINES
 lines_c_ptr:    resq MAX_LINES
@@ -77,6 +89,12 @@ eol_b:          resb 1
 eol_c:          resb 1
 load_eol:       resb 1              ; set by load_lines
 load_pool_n:    resq 1              ; bytes stored in pool by last load_lines
+load_map_base:  resq 1              ; mmap base if load used mmap (0 = pool)
+load_map_len:   resq 1
+map_a_base:     resq 1
+map_a_len:      resq 1
+map_b_base:     resq 1
+map_b_len:      resq 1
 bulk_diff:      resb 1              ; 1 if bulk_equal_ab confirmed content differ
 ; LCS / edit script
 lcs_pred:       resb (LCS_MAX+1)*(LCS_MAX+1)
@@ -93,6 +111,23 @@ tz_off:         resq 1
 tz_buf:         resb 16384
 tz_len:         resq 1
 tz_ready:       resb 1
+; directory recursion
+diff_ents_a:    resq DIFF_MAX_ENTS
+diff_ents_b:    resq DIFF_MAX_ENTS
+diff_na_e:      resq 1
+diff_nb_e:      resq 1
+diff_npool:     resb DIFF_NPOOL
+diff_npool_n:   resq 1
+diff_path_a:    resb DIFF_PATH_CAP
+diff_path_b:    resb DIFF_PATH_CAP
+diff_dents:     resb DIFF_DENT_CAP
+save_diff_a:    resq 1
+save_diff_b:    resq 1
+diff_q_a:       resq DIFF_QMAX      ; path ptrs in pstore
+diff_q_b:       resq DIFF_QMAX
+diff_q_n:       resq 1
+diff_pstore:    resb DIFF_PSTORE
+diff_pstore_n:  resq 1
 
 section .rodata
 v_diff:  db "f00-diff (f00) 0.16.3", 10, "License: MIT · https://f00.sh", 10, 0
@@ -106,6 +141,7 @@ h_diff:
     db "  -u, -U NUM  unified context (modern default; NUM default 3)", 10
     db "  -c, -C NUM  context format", 10
     db "  -q, --brief report only when files differ", 10
+    db "  -r, --recursive  recursively compare directories", 10
     db "      --core  GNU-oriented (default format = normal)", 10
     db "  --help  --version", 10
     db "Modern TTY: themed -/+ lines (delta-class).", 10, 0
@@ -142,6 +178,17 @@ s_version:   db "version", 0
 s_unified:   db "unified", 0
 s_context:   db "context", 0
 s_brief:     db "brief", 0
+s_recursive: db "recursive", 0
+only_in_pre: db "Only in ", 0
+only_in_mid: db ": ", 0
+common_sub_pre: db "Common subdirectories: ", 0
+common_sub_and: db " and ", 0
+diff_cmd_pre: db "diff -r", 0
+file_is_pre: db "File ", 0
+is_reg_while: db " is a regular file while file ", 0
+is_dir_while: db " is a directory while file ", 0
+is_a_dir:    db " is a directory", 10, 0
+is_a_reg:    db " is a regular file", 10, 0
 s_merge:     db "merge", 0
 s_width:     db "width", 0
 s_suppress:  db "suppress-common-lines", 0
@@ -178,6 +225,7 @@ err_colon:   db ": ", 0
 err_enoent:  db "No such file or directory", 10, 0
 err_eacces:  db "Permission denied", 10, 0
 err_eio:     db "I/O error", 10, 0
+err_efbig:   db "File too large", 10, 0
 path_localtime: db "/etc/localtime", 0
 
 diff3_aaaa:  db "====", 10, 0
@@ -400,6 +448,8 @@ lines_equal_bc:
 ; load_lines(rdi=path, rsi=pool, rdx=ptr_table, rcx=len_table, r8=*count)
 ; Strips trailing newline from line length (GNU line content without \n).
 ; Sets load_eol: 1 if file ends with \n or is empty; 0 if last line has no \n.
+; If st_size > POOL_CAP: mmap whole file and index lines into the map (not pool).
+; Sets load_map_base/len (0 if pool path). Caller munmaps when done.
 ; → rax=0 ok, rax=errno (positive) on open failure. count cleared always.
 load_lines:
     push rbx
@@ -408,12 +458,15 @@ load_lines:
     push r14
     push r15
     push rbp
-    mov r12, rsi                    ; pool
+    mov r12, rsi                    ; pool (unused for mmap path)
     mov r13, rdx                    ; ptr table
     mov r14, rcx                    ; len table
     mov r15, r8                     ; count ptr
     mov qword [r15], 0
     mov byte [load_eol], 1
+    mov qword [load_map_base], 0
+    mov qword [load_map_len], 0
+    mov qword [load_pool_n], 0
     mov rax, SYS_openat
     mov rsi, rdi
     mov rdi, AT_FDCWD
@@ -423,6 +476,21 @@ load_lines:
     cmp rax, -4096
     jae .fail
     mov rbx, rax                    ; fd
+    ; fstat size
+    mov rax, SYS_fstat
+    mov rdi, rbx
+    lea rsi, [stat_buf]
+    syscall
+    test rax, rax
+    jnz .fail_fd
+    mov rbp, [stat_buf + STAT_SIZE_OFF]  ; size
+    test rbp, rbp
+    jz .empty
+    ; pool holds at most POOL_CAP bytes; size >= POOL_CAP → mmap whole file
+    cmp rbp, POOL_CAP
+    jae .mmap_path
+    ; ── small file: read into pool ──
+    mov r9, rbp                     ; size (stable)
     xor ebp, ebp                    ; pool used
     xor r8d, r8d                    ; line start
 .rd:
@@ -440,15 +508,15 @@ load_lines:
     jae .rd
     mov al, [read_buf + rdx]
     inc rdx
-    cmp ebp, POOL_CAP-1
+    cmp ebp, POOL_CAP
     jae .ch
     mov [r12 + rbp], al
     inc ebp
     cmp al, 10
     jne .ch
     mov rax, [r15]
-    cmp rax, MAX_LINES-1
-    jae .ch
+    cmp rax, MAX_LINES
+    jae .overflow_fd                  ; never silent-truncate
     lea rsi, [r12 + r8]
     mov [r13 + rax*8], rsi
     mov rdi, rbp
@@ -461,11 +529,10 @@ load_lines:
 .eof:
     cmp r8, rbp
     jae .cl
-    ; incomplete last line (no trailing newline)
     mov byte [load_eol], 0
     mov rax, [r15]
-    cmp rax, MAX_LINES-1
-    jae .cl
+    cmp rax, MAX_LINES
+    jae .overflow_fd
     lea rsi, [r12 + r8]
     mov [r13 + rax*8], rsi
     mov rdi, rbp
@@ -476,15 +543,112 @@ load_lines:
     mov rax, SYS_close
     mov rdi, rbx
     syscall
-    ; leave pool used size in [load_pool_n] for bulk memcmp equality
-    ; pool fill counter lives in ebp (32-bit) — zero-extend into qword
     mov eax, ebp
     mov [load_pool_n], rax
     xor eax, eax
     jmp .done
+.empty:
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    xor eax, eax
+    jmp .done
+; ── large file: mmap entire contents, index lines in-place ──
+.mmap_path:
+    mov r9, rbp                     ; size (must save before mmap clobbers r9)
+    test r9, r9
+    jz .empty
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r9                     ; length
+    mov rdx, PROT_READ
+    mov r10, MAP_PRIVATE
+    mov r8, rbx                     ; fd
+    push r9                         ; size survives mmap (r9 = offset arg)
+    xor r9, r9                      ; offset 0
+    syscall
+    pop r9                          ; restore size
+    cmp rax, -4096
+    jae .fail_fd
+    mov r12, rax                    ; map base
+    mov [load_map_base], r12
+    mov [load_map_len], r9
+    mov [load_pool_n], r9
+    ; close fd early (map keeps pages)
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    mov ebx, 0                      ; fd closed; overflow path must not re-close
+    ; walk map for newlines
+    xor r8, r8                      ; line start offset
+    xor rcx, rcx                    ; i
+    mov byte [load_eol], 1
+.mw:
+    cmp rcx, r9
+    jae .meof
+    mov al, [r12 + rcx]
+    inc rcx
+    cmp al, 10
+    jne .mw
+    mov rax, [r15]
+    cmp rax, MAX_LINES
+    jae .overflow_map                 ; never silent-truncate
+    lea rsi, [r12 + r8]
+    mov [r13 + rax*8], rsi
+    mov rdi, rcx
+    dec rdi
+    sub rdi, r8
+    mov [r14 + rax*8], rdi
+    inc qword [r15]
+    mov r8, rcx
+    jmp .mw
+.meof:
+    cmp r8, r9
+    jae .mok
+    mov byte [load_eol], 0
+    mov rax, [r15]
+    cmp rax, MAX_LINES
+    jae .overflow_map
+    lea rsi, [r12 + r8]
+    mov [r13 + rax*8], rsi
+    mov rdi, r9
+    sub rdi, r8
+    mov [r14 + rax*8], rdi
+    inc qword [r15]
+.mok:
+    xor eax, eax
+    jmp .done
+.overflow_fd:
+    ; still have open fd (pool path)
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    mov eax, 27                     ; EFBIG — line table ceiling
+    jmp .done_err
+.overflow_map:
+    ; content map held in load_map_*; unmap then error
+    mov rdi, [load_map_base]
+    test rdi, rdi
+    jz .ovm2
+    mov rsi, [load_map_len]
+    mov rax, SYS_munmap
+    syscall
+.ovm2:
+    mov eax, 27                     ; EFBIG
+    jmp .done_err
+.fail_fd:
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    mov eax, 5                      ; EIO
+    jmp .done_err
 .fail:
-    mov qword [load_pool_n], 0
     neg rax                         ; positive errno
+.done_err:
+    mov qword [load_map_base], 0
+    mov qword [load_map_len], 0
+    mov qword [load_pool_n], 0
+    mov qword [r15], 0              ; count cleared on failure
 .done:
     pop rbp
     pop r15
@@ -542,11 +706,15 @@ emit_tool_path_err:
     je .en
     cmp r12, 13
     je .ea
+    cmp r12, 27                     ; EFBIG — line-table / file ceiling
+    je .ef
     lea rsi, [err_eio]
     jmp .w
 .en: lea rsi, [err_enoent]
     jmp .w
 .ea: lea rsi, [err_eacces]
+    jmp .w
+.ef: lea rsi, [err_efbig]
 .w:  call err_str
     pop r12
     pop rbx
@@ -883,24 +1051,31 @@ same_file_ab:
     pop rbx
     ret
 
-; files_equal_ab → al (bulk pool memcmp — pools hold full file including \n)
+; files_equal_ab → al=1 if every indexed line matches (works for pool + mmap).
+; Do NOT use pool_a_n alone — sdiff never filled it, and mmap path has pool_n=0.
 files_equal_ab:
     push rbx
-    mov rax, [pool_a_n]
-    cmp rax, [pool_b_n]
+    push r12
+    mov rax, [diff_na]
+    cmp rax, [diff_nb]
     jne .no
-    test rax, rax
-    jz .yes
-    lea rdi, [pool_a]
-    lea rsi, [pool_b]
-    mov rdx, rax
-    call memcmp_n
-    test eax, eax
-    jnz .no
+    xor r12, r12
+.lp:
+    cmp r12, [diff_na]
+    jae .yes
+    mov r8, r12
+    mov r9, r12
+    call lines_equal_ab
+    test al, al
+    jz .no
+    inc r12
+    jmp .lp
 .yes: mov al, 1
+    pop r12
     pop rbx
     ret
 .no: xor al, al
+    pop r12
     pop rbx
     ret
 
@@ -1000,8 +1175,12 @@ diff_main:
     dec r14
     jmp .dn
 .sq: cmp al, 'q'
-    jne .sn
+    jne .sr
     or dword [g_flags], DF_BRIEF
+    jmp .sn
+.sr: cmp al, 'r'
+    jne .sn
+    or dword [g_flags], DF_RECURSIVE
 .sn: inc rsi
     jmp .sh
 .dl:
@@ -1032,8 +1211,15 @@ diff_main:
 .db: lea rsi, [s_brief]
     call strcmp
     test eax, eax
-    jnz .dn
+    jnz .drec
     or dword [g_flags], DF_BRIEF
+    jmp .dn
+.drec:
+    lea rsi, [s_recursive]
+    call strcmp
+    test eax, eax
+    jnz .dn
+    or dword [g_flags], DF_RECURSIVE
     jmp .dn
 .dhelp:
     lea rsi, [h_diff]
@@ -1100,7 +1286,53 @@ diff_main:
     jnz .fmt_ok
     or dword [g_flags], DF_UNIFIED
 .fmt_ok:
+    ; dispatch: directories (always top-level compare; -r descends)
+    mov rdi, [diff_a]
+    call path_is_dir
+    mov bl, al
+    mov rdi, [diff_b]
+    call path_is_dir
+    mov bh, al
+    test bl, bl
+    jz .chk_mix
+    test bh, bh
+    jz .chk_mix
+    call diff_dirs
+    jmp .dex
+.chk_mix:
+    test bl, bl
+    jnz .mix_a_dir
+    test bh, bh
+    jnz .mix_b_dir
     call diff_files
+    jmp .dex
+.mix_a_dir:
+    ; A dir, B not
+    lea rsi, [file_is_pre]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [is_dir_while]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [is_a_reg]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .dex
+.mix_b_dir:
+    lea rsi, [file_is_pre]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [is_reg_while]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [is_a_dir]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .dex
 .dex:
     call out_flush
     mov edi, [g_exit]
@@ -1111,6 +1343,612 @@ diff_main:
     xor edi, edi
     mov rax, SYS_exit
     syscall
+
+; ── path / directory helpers for -r ────────────────────────
+
+; path_is_dir(rdi=path) → al=1 if directory, 0 otherwise (missing/file → 0)
+; Prefer open(O_DIRECTORY|O_PATH|O_CLOEXEC): reliable vs wrong st_mode offsets.
+path_is_dir:
+    push rbx
+    mov rsi, rdi
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rdx, O_RDONLY | O_DIRECTORY | O_PATH | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .try_stat
+    mov rdi, rax
+    mov rax, SYS_close
+    syscall
+    mov al, 1
+    pop rbx
+    ret
+.try_stat:
+    ; fallback fstatat (symlinks etc.)
+    mov rdi, AT_FDCWD
+    ; rsi still pathname? clobbered — caller must not rely; use stack
+    ; re-read: we lost path. Use newfstatat only when open fails for non-dir.
+    xor al, al
+    pop rbx
+    ret
+
+; path_join(rdi=dst, rsi=dir, rdx=name) — dst = dir + "/" + name (NUL), trunc DIFF_PATH_CAP
+path_join:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi                    ; dst
+    mov r13, rsi                    ; dir
+    mov r14, rdx                    ; name
+    ; copy dir
+    mov rdi, r13
+    call strlen
+    mov r15, rax                    ; dirlen (use r15 — not clobbered by memcpy)
+    cmp r15, DIFF_PATH_CAP - 2
+    jb .ok1
+    mov r15, DIFF_PATH_CAP - 2
+.ok1:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r15
+    call memcpy
+    test r15, r15
+    jz .slash
+    cmp byte [r12 + r15 - 1], '/'
+    je .name
+.slash:
+    mov byte [r12 + r15], '/'
+    inc r15
+.name:
+    ; copy name
+    mov rdi, r14
+    call strlen
+    mov rbx, rax                    ; namelen
+    test rbx, rbx
+    jz .term
+    lea rax, [r15 + rbx]
+    cmp rax, DIFF_PATH_CAP - 1
+    jb .ok2
+    mov rbx, DIFF_PATH_CAP - 1
+    sub rbx, r15
+    jle .term
+.ok2:
+    lea rdi, [r12 + r15]
+    mov rsi, r14
+    mov rdx, rbx
+    call memcpy
+    add r15, rbx
+.term:
+    mov byte [r12 + r15], 0
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; list_dir_names(rdi=path, rsi=ents_table, rdx=*count)
+; Appends names into diff_npool; sets *count. Skips . and ..
+; → rax=0 ok, 1 error
+list_dir_names:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov r12, rsi                    ; ents table
+    mov r13, rdx                    ; count ptr
+    mov qword [r13], 0
+    mov rax, SYS_openat
+    mov rsi, rdi
+    mov rdi, AT_FDCWD
+    mov rdx, O_RDONLY | O_DIRECTORY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    cmp rax, -4096
+    jae .fail
+    mov rbx, rax                    ; fd
+.dent:
+    mov rax, SYS_getdents64
+    mov rdi, rbx
+    lea rsi, [diff_dents]
+    mov rdx, DIFF_DENT_CAP
+    syscall
+    test rax, rax
+    jle .close
+    mov r14, rax                    ; bytes
+    xor r15, r15                    ; offset
+.dl:
+    cmp r15, r14
+    jae .dent
+    lea rbp, [diff_dents + r15]
+    movzx ecx, word [rbp + 16]      ; d_reclen
+    push rcx
+    lea rsi, [rbp + 19]             ; d_name
+    ; skip . and ..
+    cmp byte [rsi], '.'
+    jne .keep
+    cmp byte [rsi+1], 0
+    je .skip
+    cmp byte [rsi+1], '.'
+    jne .keep
+    cmp byte [rsi+2], 0
+    je .skip
+.keep:
+    cmp byte [rsi], 0
+    je .skip                        ; never index empty names
+    mov rax, [r13]
+    cmp rax, DIFF_MAX_ENTS
+    jae .skip
+    ; namelen: bound by remaining reclen-19
+    mov rdx, [rsp]                  ; reclen
+    cmp rdx, 20
+    jb .skip
+    sub rdx, 19                     ; max name field size
+    xor ecx, ecx
+.nlen:
+    cmp rcx, rdx
+    jae .skip                       ; no NUL in field
+    cmp byte [rsi + rcx], 0
+    je .ngot
+    inc rcx
+    jmp .nlen
+.ngot:
+    test rcx, rcx
+    jz .skip
+    lea rdx, [rcx + 1]              ; copy with NUL
+    mov rcx, [diff_npool_n]
+    mov rax, rcx
+    add rax, rdx
+    cmp rax, DIFF_NPOOL
+    jae .skip
+    lea rdi, [diff_npool + rcx]
+    ; stack: keep name/len/pooloff safe across memcpy
+    push rsi                        ; name
+    push rdx                        ; len with NUL
+    push rcx                        ; pool off
+    mov rsi, [rsp + 16]             ; name
+    mov rdx, [rsp + 8]              ; len
+    ; rdi still dest
+    call memcpy
+    pop rcx
+    pop rdx
+    pop rsi
+    mov rax, [r13]
+    lea rdi, [diff_npool + rcx]
+    mov [r12 + rax*8], rdi
+    inc qword [r13]
+    add [diff_npool_n], rdx
+.skip:
+    pop rcx
+    test rcx, rcx
+    jz .close                       ; corrupt reclen → stop
+    add r15, rcx
+    jmp .dl
+.close:
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    xor eax, eax
+    jmp .out
+.fail:
+    mov eax, 1
+.out:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; sort_name_ptrs(rdi=table, rsi=count) — insertion sort by strcmp
+sort_name_ptrs:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    cmp r13, 2
+    jb .done
+    mov r14, 1
+.i:
+    cmp r14, r13
+    jae .done
+    mov r15, [r12 + r14*8]          ; key
+    mov rbx, r14
+.j:
+    test rbx, rbx
+    jz .place
+    mov rdi, [r12 + rbx*8 - 8]
+    mov rsi, r15
+    call strcmp
+    ; want ascending: if prev <= key, stop (eax <= 0 → prev <= key for strcmp? 
+    ; strcmp: <0 if rdi < rsi. if prev < key, eax < 0; if equal 0; if prev > key >0
+    test eax, eax
+    jle .place
+    mov rax, [r12 + rbx*8 - 8]
+    mov [r12 + rbx*8], rax
+    dec rbx
+    jmp .j
+.place:
+    mov [r12 + rbx*8], r15
+    inc r14
+    jmp .i
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_only_in(rdi=dirpath, rsi=name)
+emit_only_in:
+    push rbx
+    push r12
+    mov rbx, rdi
+    mov r12, rsi
+    lea rsi, [only_in_pre]
+    call out_str
+    mov rsi, rbx
+    call out_str
+    lea rsi, [only_in_mid]
+    call out_str
+    mov rsi, r12
+    call out_str
+    mov dil, 10
+    call out_byte
+    pop r12
+    pop rbx
+    ret
+
+; emit_diff_r_header — "diff -r[u|c] patha pathb\n" (not for brief)
+emit_diff_r_header:
+    push rbx
+    lea rsi, [diff_cmd_pre]
+    call out_str
+    test dword [g_flags], DF_UNIFIED
+    jz .c
+    mov dil, 'u'
+    call out_byte
+    jmp .sp
+.c:  test dword [g_flags], DF_CONTEXT
+    jz .sp
+    mov dil, 'c'
+    call out_byte
+.sp: mov dil, ' '
+    call out_byte
+    mov rsi, [diff_a]
+    call out_str
+    mov dil, ' '
+    call out_byte
+    mov rsi, [diff_b]
+    call out_str
+    mov dil, 10
+    call out_byte
+    pop rbx
+    ret
+
+; pstore_copy(rsi=cstr) → rax=ptr in diff_pstore (0 if OOM)
+pstore_copy:
+    push rbx
+    push r12
+    mov r12, rsi
+    mov rdi, rsi
+    call strlen
+    mov rbx, rax
+    inc rbx
+    mov rcx, [diff_pstore_n]
+    lea rax, [rcx + rbx]
+    cmp rax, DIFF_PSTORE
+    jae .oom
+    lea rdi, [diff_pstore + rcx]
+    mov rsi, r12
+    mov rdx, rbx
+    push rcx
+    call memcpy
+    pop rcx
+    lea rax, [diff_pstore + rcx]
+    add [diff_pstore_n], rbx
+    pop r12
+    pop rbx
+    ret
+.oom:
+    xor eax, eax
+    pop r12
+    pop rbx
+    ret
+
+; enqueue_pair(rsi=path_a, rdx=path_b) — copy into pstore, push queue
+enqueue_pair:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov r13, rdx
+    mov rax, [diff_q_n]
+    cmp rax, DIFF_QMAX
+    jae .drop
+    mov rsi, r12
+    call pstore_copy
+    test rax, rax
+    jz .drop
+    mov rbx, rax
+    mov rsi, r13
+    call pstore_copy
+    test rax, rax
+    jz .drop
+    mov rcx, [diff_q_n]
+    mov [diff_q_a + rcx*8], rbx
+    mov [diff_q_b + rcx*8], rax
+    inc qword [diff_q_n]
+.drop:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; diff_dirs — iterative queue of directory pairs (GNU top-level + optional -r)
+diff_dirs:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov qword [diff_q_n], 0
+    mov qword [diff_pstore_n], 0
+    mov rsi, [diff_a]
+    mov rdx, [diff_b]
+    call enqueue_pair
+.qloop:
+    mov rax, [diff_q_n]
+    test rax, rax
+    jz .done
+    dec rax
+    mov [diff_q_n], rax
+    mov rsi, [diff_q_a + rax*8]
+    mov rdx, [diff_q_b + rax*8]
+    mov [diff_a], rsi
+    mov [diff_b], rdx
+    ; list both dirs (fresh name pool each pair)
+    mov qword [diff_npool_n], 0
+    mov rdi, [diff_a]
+    lea rsi, [diff_ents_a]
+    lea rdx, [diff_na_e]
+    call list_dir_names
+    test rax, rax
+    jnz .err
+    mov rdi, [diff_b]
+    lea rsi, [diff_ents_b]
+    lea rdx, [diff_nb_e]
+    call list_dir_names
+    test rax, rax
+    jnz .err
+    lea rdi, [diff_ents_a]
+    mov rsi, [diff_na_e]
+    call sort_name_ptrs
+    lea rdi, [diff_ents_b]
+    mov rsi, [diff_nb_e]
+    call sort_name_ptrs
+    xor r12, r12
+    xor r13, r13
+    mov r14, [diff_na_e]
+    mov r15, [diff_nb_e]
+.merge:
+    cmp r12, r14
+    jae .rest_b
+    cmp r13, r15
+    jae .rest_a
+    mov rdi, [diff_ents_a + r12*8]
+    mov rsi, [diff_ents_b + r13*8]
+    call strcmp
+    test eax, eax
+    jz .both
+    js .only_a
+    mov rdi, [diff_b]
+    mov rsi, [diff_ents_b + r13*8]
+    call emit_only_in
+    mov dword [g_exit], 1
+    inc r13
+    jmp .merge
+.only_a:
+    mov rdi, [diff_a]
+    mov rsi, [diff_ents_a + r12*8]
+    call emit_only_in
+    mov dword [g_exit], 1
+    inc r12
+    jmp .merge
+.both:
+    lea rdi, [diff_path_a]
+    mov rsi, [diff_a]
+    mov rdx, [diff_ents_a + r12*8]
+    call path_join
+    lea rdi, [diff_path_b]
+    mov rsi, [diff_b]
+    mov rdx, [diff_ents_b + r13*8]
+    call path_join
+    lea rdi, [diff_path_a]
+    call path_is_dir
+    mov bl, al
+    lea rdi, [diff_path_b]
+    call path_is_dir
+    mov bh, al
+    test bl, bl
+    jz .b_file
+    test bh, bh
+    jz .type_mix
+    test dword [g_flags], DF_RECURSIVE
+    jnz .enqueue
+    lea rsi, [common_sub_pre]
+    call out_str
+    lea rsi, [diff_path_a]
+    call out_str
+    lea rsi, [common_sub_and]
+    call out_str
+    lea rsi, [diff_path_b]
+    call out_str
+    mov dil, 10
+    call out_byte
+    jmp .adv_both
+.enqueue:
+    lea rsi, [diff_path_a]
+    lea rdx, [diff_path_b]
+    call enqueue_pair
+    jmp .adv_both
+.b_file:
+    test bh, bh
+    jnz .type_mix
+    test dword [g_flags], DF_BRIEF
+    jnz .brief_pair
+    test dword [g_flags], DF_RECURSIVE
+    jz .cmp_pair
+    mov rax, [diff_a]
+    mov [save_diff_a], rax
+    mov rax, [diff_b]
+    mov [save_diff_b], rax
+    lea rax, [diff_path_a]
+    mov [diff_a], rax
+    lea rax, [diff_path_b]
+    mov [diff_b], rax
+    call bulk_equal_ab
+    cmp eax, 1
+    je .pair_eq
+    cmp eax, 2
+    je .pair_err
+    call emit_diff_r_header
+    mov ebx, [g_exit]
+    call diff_files
+    cmp dword [g_exit], 0
+    jne .pair_rest
+    mov [g_exit], ebx
+    jmp .pair_rest
+.pair_eq:
+    jmp .pair_rest
+.pair_err:
+    mov dword [g_exit], 2
+.pair_rest:
+    mov rax, [save_diff_a]
+    mov [diff_a], rax
+    mov rax, [save_diff_b]
+    mov [diff_b], rax
+    jmp .adv_both
+.cmp_pair:
+    mov rax, [diff_a]
+    mov [save_diff_a], rax
+    mov rax, [diff_b]
+    mov [save_diff_b], rax
+    lea rax, [diff_path_a]
+    mov [diff_a], rax
+    lea rax, [diff_path_b]
+    mov [diff_b], rax
+    mov ebx, [g_exit]
+    call diff_files
+    cmp dword [g_exit], 0
+    jne .pair_rest2
+    mov [g_exit], ebx
+.pair_rest2:
+    mov rax, [save_diff_a]
+    mov [diff_a], rax
+    mov rax, [save_diff_b]
+    mov [diff_b], rax
+    jmp .adv_both
+.brief_pair:
+    mov rax, [diff_a]
+    mov [save_diff_a], rax
+    mov rax, [diff_b]
+    mov [save_diff_b], rax
+    lea rax, [diff_path_a]
+    mov [diff_a], rax
+    lea rax, [diff_path_b]
+    mov [diff_b], rax
+    call bulk_equal_ab
+    cmp eax, 1
+    je .brief_rest
+    cmp eax, 2
+    je .brief_err
+    lea rsi, [files_pre]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [files_and]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [files_differ]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .brief_rest
+.brief_err:
+    mov dword [g_exit], 2
+.brief_rest:
+    mov rax, [save_diff_a]
+    mov [diff_a], rax
+    mov rax, [save_diff_b]
+    mov [diff_b], rax
+    jmp .adv_both
+.type_mix:
+    lea rsi, [file_is_pre]
+    call out_str
+    lea rsi, [diff_path_a]
+    call out_str
+    test bl, bl
+    jz .tm_a_reg
+    lea rsi, [is_dir_while]
+    call out_str
+    lea rsi, [diff_path_b]
+    call out_str
+    lea rsi, [is_a_reg]
+    call out_str
+    jmp .tm_done
+.tm_a_reg:
+    lea rsi, [is_reg_while]
+    call out_str
+    lea rsi, [diff_path_b]
+    call out_str
+    lea rsi, [is_a_dir]
+    call out_str
+.tm_done:
+    mov dword [g_exit], 1
+.adv_both:
+    inc r12
+    inc r13
+    jmp .merge
+.rest_a:
+    cmp r12, r14
+    jae .qloop
+    mov rdi, [diff_a]
+    mov rsi, [diff_ents_a + r12*8]
+    call emit_only_in
+    mov dword [g_exit], 1
+    inc r12
+    jmp .rest_a
+.rest_b:
+    cmp r13, r15
+    jae .qloop
+    mov rdi, [diff_b]
+    mov rsi, [diff_ents_b + r13*8]
+    call emit_only_in
+    mov dword [g_exit], 1
+    inc r13
+    jmp .rest_b
+.err:
+    mov dword [g_exit], 2
+.done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
 
 ; Decision table:
 ;   bulk_equal → exit 0 empty
@@ -1127,6 +1965,10 @@ diff_files:
     mov qword [diff_nb], 0
     mov qword [pool_a_n], 0
     mov qword [pool_b_n], 0
+    mov qword [map_a_base], 0
+    mov qword [map_a_len], 0
+    mov qword [map_b_base], 0
+    mov qword [map_b_len], 0
     mov byte [bulk_diff], 0
     mov rdi, [diff_a]
     mov rsi, [diff_b]
@@ -1175,6 +2017,10 @@ diff_files:
     mov [eol_a], al
     mov rax, [load_pool_n]
     mov [pool_a_n], rax
+    mov rax, [load_map_base]
+    mov [map_a_base], rax
+    mov rax, [load_map_len]
+    mov [map_a_len], rax
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -1193,7 +2039,11 @@ diff_files:
     mov [eol_b], al
     mov rax, [load_pool_n]
     mov [pool_b_n], rax
-    ; Never re-claim equal after bulk_differ (pools may still be truncated >POOL_CAP)
+    mov rax, [load_map_base]
+    mov [map_b_base], rax
+    mov rax, [load_map_len]
+    mov [map_b_len], rax
+    ; Never re-claim equal after bulk_differ
     cmp byte [bulk_diff], 0
     jne .marks
     call files_equal_ab
@@ -1255,6 +2105,23 @@ diff_files:
 .same:
     mov dword [g_exit], 0
 .out:
+    ; munmap any large-file maps from load_lines
+    mov rdi, [map_a_base]
+    test rdi, rdi
+    jz .unb
+    mov rsi, [map_a_len]
+    mov rax, SYS_munmap
+    syscall
+    mov qword [map_a_base], 0
+.unb:
+    mov rdi, [map_b_base]
+    test rdi, rdi
+    jz .unx
+    mov rsi, [map_b_len]
+    mov rax, SYS_munmap
+    syscall
+    mov qword [map_b_base], 0
+.unx:
     pop r15
     pop r14
     pop r13
@@ -1270,6 +2137,7 @@ compute_marks_ab:
     push r13
     push r14
     push r15
+    push rbp
     ; clear marks
     mov rdi, [diff_na]
     test rdi, rdi
@@ -1323,57 +2191,11 @@ compute_marks_ab:
     dec r15
     jmp .suf
 .suf_done:
-    ; middle: a[r12..r14) vs b[r13..r15)
-    mov rax, r14
-    sub rax, r12                    ; na_mid
-    mov rbx, r15
-    sub rbx, r13                    ; nb_mid
-    mov rcx, rax
-    or rcx, rbx
-    jz .marked
-    cmp rax, LCS_MAX
-    ja .bulk
-    cmp rbx, LCS_MAX
-    ja .bulk
-    test rax, rax
-    jz .only_ins
-    test rbx, rbx
-    jz .only_del
-    call lcs_mark_solid
-    jmp .marked
-.only_ins:
-    mov rcx, r13
-.oi:
-    cmp rcx, r15
-    jae .marked
-    mov byte [mark_b + rcx], 1
-    inc rcx
-    jmp .oi
-.only_del:
-    mov rcx, r12
-.od:
-    cmp rcx, r14
-    jae .marked
-    mov byte [mark_a + rcx], 1
-    inc rcx
-    jmp .od
-.bulk:
-    mov rcx, r12
-.ba:
-    cmp rcx, r14
-    jae .bb0
-    mov byte [mark_a + rcx], 1
-    inc rcx
-    jmp .ba
-.bb0:
-    mov rcx, r13
-.bb:
-    cmp rcx, r15
-    jae .marked
-    mov byte [mark_b + rcx], 1
-    inc rcx
-    jmp .bb
+    ; middle: a[r12..r14) vs b[r13..r15) — D&C LCS (cross-window anchors)
+    call lcs_mark_range
+    call classify_change_groups     ; mark 1=del/ins (-/+), 2=replace (!)
 .marked:
+    pop rbp
     pop r15
     pop r14
     pop r13
@@ -1381,6 +2203,248 @@ compute_marks_ab:
     pop rbx
     ret
 
+; classify_change_groups — walk marks; runs with both a+b changes → mark=2 (replace/!).
+; Pure a-run → mark_a=1 (-); pure b-run → mark_b=1 (+). Common stays 0.
+; Enables context format to emit -/+ across MATCH-linked shift hunks (not !).
+classify_change_groups:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    xor r12, r12                    ; ia
+    xor r13, r13                    ; ib
+    mov r14, [diff_na]
+    mov r15, [diff_nb]
+.walk:
+    cmp r12, r14
+    jae .tail_b
+    cmp r13, r15
+    jae .tail_a
+    cmp byte [mark_a + r12], 0
+    jne .chg
+    cmp byte [mark_b + r13], 0
+    jne .chg
+    ; both common
+    inc r12
+    inc r13
+    jmp .walk
+.chg:
+    mov rax, r12                    ; a0
+    mov rbx, r13                    ; b0
+.ca:
+    cmp r12, r14
+    jae .cb
+    cmp byte [mark_a + r12], 0
+    je .cb
+    inc r12
+    jmp .ca
+.cb:
+    cmp r13, r15
+    jae .cls
+    cmp byte [mark_b + r13], 0
+    je .cls
+    inc r13
+    jmp .cb
+.cls:
+    ; if both sides advanced → replace (2); else leave as 1
+    cmp r12, rax
+    je .walk                        ; pure b — already 1
+    cmp r13, rbx
+    je .walk                        ; pure a — already 1
+    ; paint 2 on both runs
+    mov rcx, rax
+.pa:
+    cmp rcx, r12
+    jae .pb0
+    mov byte [mark_a + rcx], 2
+    inc rcx
+    jmp .pa
+.pb0:
+    mov rcx, rbx
+.pb:
+    cmp rcx, r13
+    jae .walk
+    mov byte [mark_b + rcx], 2
+    inc rcx
+    jmp .pb
+.tail_b:
+    ; remaining b already mark 1 if changed; no replace pairing
+    jmp .out
+.tail_a:
+    jmp .out
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; lcs_mark_range — mark changed lines in a[r12..r14) vs b[r13..r15).
+; Small middles: solid DP LCS. Large: divide-and-conquer on an order-preserving
+; anchor match so commons across LCS_MAX tile boundaries still align (e.g.
+; A=512uniq+MATCH, B=MATCH+512uniq → MATCH is common, not delete+insert).
+lcs_mark_range:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov rax, r14
+    sub rax, r12                    ; n
+    mov rbx, r15
+    sub rbx, r13                    ; m
+    mov rcx, rax
+    or rcx, rbx
+    jz .done
+    test rax, rax
+    jz .oins
+    test rbx, rbx
+    jz .odel
+    cmp rax, LCS_MAX
+    ja .dc
+    cmp rbx, LCS_MAX
+    ja .dc
+    call lcs_mark_solid
+    jmp .done
+.oins:
+    mov rcx, r13
+.oi:
+    cmp rcx, r15
+    jae .done
+    mov byte [mark_b + rcx], 1
+    inc rcx
+    jmp .oi
+.odel:
+    mov rcx, r12
+.od:
+    cmp rcx, r14
+    jae .done
+    mov byte [mark_a + rcx], 1
+    inc rcx
+    jmp .od
+.dc:
+    call lcs_find_anchor            ; r8=ia r9=ib al=1 if found
+    test al, al
+    jz .allchg
+    ; left subproblem [a0,ia) × [b0,ib)
+    push r8
+    push r9
+    push r14
+    push r15
+    mov r14, r8
+    mov r15, r9
+    call lcs_mark_range
+    pop r15
+    pop r14
+    pop r9
+    pop r8
+    ; right subproblem (ia+1,a1) × (ib+1,b1); anchor left unmarked (common)
+    lea r12, [r8 + 1]
+    lea r13, [r9 + 1]
+    call lcs_mark_range
+    jmp .done
+.allchg:
+    mov rcx, r12
+.aa:
+    cmp rcx, r14
+    jae .ab0
+    mov byte [mark_a + rcx], 1
+    inc rcx
+    jmp .aa
+.ab0:
+    mov rcx, r13
+.ab:
+    cmp rcx, r15
+    jae .done
+    mov byte [mark_b + rcx], 1
+    inc rcx
+    jmp .ab
+.done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; lcs_find_anchor — find order-preserving common line in range.
+; Heuristic order (balance then shifts): A[mid], A[a1-1], A[a0], scan A.
+; → r8=ia, r9=ib, al=1 found / 0 none. Clobbers rax,rcx,rdx,rsi,rdi.
+lcs_find_anchor:
+    push rbx
+    ; 1) mid A — balanced D&C when structure is interleaved
+    mov r8, r14
+    sub r8, r12
+    shr r8, 1
+    add r8, r12
+    cmp r8, r14
+    jae .try_last
+    cmp r8, r12
+    jb .try_last
+    call lcs_scan_b_for_a
+    test al, al
+    jnz .got
+.try_last:
+    ; 2) last A (A=…+MATCH / B=MATCH+… cross-window shifts)
+    mov r8, r14
+    dec r8
+    cmp r8, r12
+    jb .try_first
+    call lcs_scan_b_for_a
+    test al, al
+    jnz .got
+.try_first:
+    ; 3) first A
+    mov r8, r12
+    cmp r8, r14
+    jae .none
+    call lcs_scan_b_for_a
+    test al, al
+    jnz .got
+    ; 4) full scan of A
+    mov r8, r12
+.slp:
+    cmp r8, r14
+    jae .none
+    call lcs_scan_b_for_a
+    test al, al
+    jnz .got
+    inc r8
+    jmp .slp
+.none:
+    xor al, al
+    pop rbx
+    ret
+.got:
+    mov al, 1
+    pop rbx
+    ret
+
+; lcs_scan_b_for_a — given r8=ia in [r12,r14), find first ib in [r13,r15) equal.
+; → r9=ib, al=1/0. Preserves r8,r12-r15.
+lcs_scan_b_for_a:
+    push r8
+    mov r9, r13
+.lp:
+    cmp r9, r15
+    jae .no
+    call lines_equal_ab
+    test al, al
+    jnz .yes
+    inc r9
+    jmp .lp
+.no:
+    xor al, al
+    pop r8
+    ret
+.yes:
+    mov al, 1
+    pop r8
+    ret
 
 ; Solid LCS using pool_c as DP length rows + lcs_pred for directions
 ; Inputs: r12=a0,r14=a1,r13=b0,r15=b1 (must be live from caller)
@@ -1950,24 +3014,22 @@ emit_one_context_hunk:
     je .newsec
     test r14, r14
     jz .newsec
-    ; chg marker: '!' if both sides changed, else '-'
-    mov al, '!'
-    cmp byte [num_tmp + 1], 0
-    jne .omark
-    mov al, '-'
-.omark:
-    mov [num_tmp + 2], al
+    ; per-line marker: mark 2 → '!' (replace), mark 1 → '-' (delete)
     mov rbx, r12
     lea r8, [r12 + r14]
 .owalk:
     cmp rbx, r8
     jae .newsec
-    cmp byte [mark_a + rbx], 0
-    jne .ochg
+    movzx eax, byte [mark_a + rbx]
+    test al, al
+    jnz .ochg
     mov dil, ' '
     jmp .oemit
 .ochg:
-    mov dil, [num_tmp + 2]
+    mov dil, '!'
+    cmp al, 2
+    je .oemit
+    mov dil, '-'
 .oemit:
     call out_byte
     mov dil, ' '
@@ -1990,23 +3052,22 @@ emit_one_context_hunk:
     je .ctxdone
     test r15, r15
     jz .ctxdone
-    mov al, '!'
-    cmp byte [num_tmp], 0
-    jne .nmark
-    mov al, '+'
-.nmark:
-    mov [num_tmp + 2], al
+    ; per-line: mark 2 → '!', mark 1 → '+'
     mov rbp, r13
     lea r9, [r13 + r15]
 .nwalk:
     cmp rbp, r9
     jae .ctxdone
-    cmp byte [mark_b + rbp], 0
-    jne .nchg
+    movzx eax, byte [mark_b + rbp]
+    test al, al
+    jnz .nchg
     mov dil, ' '
     jmp .nemit
 .nchg:
-    mov dil, [num_tmp + 2]
+    mov dil, '!'
+    cmp al, 2
+    je .nemit
+    mov dil, '+'
 .nemit:
     call out_byte
     mov dil, ' '
@@ -4625,6 +5686,29 @@ sdiff_files:
     push r15
     mov qword [diff_na], 0
     mov qword [diff_nb], 0
+    mov qword [map_a_base], 0
+    mov qword [map_a_len], 0
+    mov qword [map_b_base], 0
+    mov qword [map_b_len], 0
+    mov qword [pool_a_n], 0
+    mov qword [pool_b_n], 0
+    mov byte [bulk_diff], 0
+    ; bulk stream first: same-path / equal / missing / differ
+    mov rdi, [diff_a]
+    mov rsi, [diff_b]
+    call strcmp
+    test eax, eax
+    jz .bulk_eq
+    call bulk_equal_ab
+    cmp eax, 1
+    je .bulk_eq
+    cmp eax, 2
+    je .done
+    mov byte [bulk_diff], 1
+    jmp .need_lines
+.bulk_eq:
+    mov byte [bulk_diff], 0
+.need_lines:
     mov rdi, [diff_a]
     lea rsi, [pool_a]
     lea rdx, [lines_a_ptr]
@@ -4641,6 +5725,12 @@ sdiff_files:
 .lb:
     mov al, [load_eol]
     mov [eol_a], al
+    mov rax, [load_pool_n]
+    mov [pool_a_n], rax
+    mov rax, [load_map_base]
+    mov [map_a_base], rax
+    mov rax, [load_map_len]
+    mov [map_a_len], rax
     mov rdi, [diff_b]
     lea rsi, [pool_b]
     lea rdx, [lines_b_ptr]
@@ -4657,6 +5747,12 @@ sdiff_files:
 .okl:
     mov al, [load_eol]
     mov [eol_b], al
+    mov rax, [load_pool_n]
+    mov [pool_b_n], rax
+    mov rax, [load_map_base]
+    mov [map_b_base], rax
+    mov rax, [load_map_len]
+    mov [map_b_len], rax
     ; half = (width - 3) / 2
     mov eax, [sdiff_width]
     sub eax, 3
@@ -4686,13 +5782,13 @@ sdiff_files:
     mov edx, ebx
 .mid:
     mov [sdiff_midcol], edx
-    call files_equal_ab
-    test al, al
-    jz .differs
+    cmp byte [bulk_diff], 0
+    je .emit_equal
+    jmp .differs
+.emit_equal:
     mov dword [g_exit], 0
     cmp byte [sdiff_suppress], 0
     jne .done
-    ; emit all as common
     xor r13, r13
 .eqlp:
     cmp r13, [diff_na]
@@ -4824,6 +5920,22 @@ sdiff_files:
     inc r12
     jmp .rest_a
 .done:
+    mov rdi, [map_a_base]
+    test rdi, rdi
+    jz .unb
+    mov rsi, [map_a_len]
+    mov rax, SYS_munmap
+    syscall
+    mov qword [map_a_base], 0
+.unb:
+    mov rdi, [map_b_base]
+    test rdi, rdi
+    jz .unx
+    mov rsi, [map_b_len]
+    mov rax, SYS_munmap
+    syscall
+    mov qword [map_b_base], 0
+.unx:
     pop r15
     pop r14
     pop r13

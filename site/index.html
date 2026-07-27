@@ -4,21 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>f00tils — freestanding assembly GNU userland</title>
-  <meta name="description" content="f00tils replaces GNU coreutils, grep, findutils, and diffutils (115 tools) with one freestanding x86-64 assembly multicall. Modern by default. --core for scripts. MIT." />
+  <meta name="description" content="115 GNU tools in one freestanding x86-64 ASM multicall. --core: byte-identical and faster. Modern: themed terminal UX." />
   <meta name="theme-color" content="#0a0c0f" />
   <link rel="canonical" href="https://f00.sh/" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
-  <link rel="icon" href="assets/favicon-16.png" type="image/png" sizes="16x16" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta property="og:title" content="f00tils — freestanding assembly GNU userland" />
-  <meta property="og:description" content="115 tools · 4 GNU packages (coreutils · grep · findutils · diffutils). --core byte-identical + faster. Modern themed UX. v0.16.3." />
+  <meta property="og:title" content="f00tils" />
+  <meta property="og:description" content="--core beats GNU wall+CPU. Modern default is the terminal you want." />
   <meta property="og:url" content="https://f00.sh/" />
   <meta property="og:image" content="https://f00.sh/assets/og.png" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://f00.sh/assets/og.png" />
   <link rel="stylesheet" href="styles.css" />
@@ -32,12 +28,10 @@
         <span class="logo-text">f00<span class="dot">.sh</span></span>
       </a>
       <nav class="site-nav nav" id="site-nav" aria-label="Primary">
-        <a href="#laws">Laws</a>
-        <a href="#benchmarks">Benchmarks</a>
+        <a href="#why">Why</a>
+        <a href="#benchmarks">Bench</a>
         <a href="#scoreboard">Scoreboard</a>
-        <a href="#config">Config</a>
         <a href="#install">Install</a>
-        <a href="#packages">Packages</a>
         <a class="btn btn-ghost btn-sm" href="https://github.com/theesfeld/f00">GitHub</a>
       </nav>
     </div>
@@ -47,22 +41,38 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">f00tils · pure assembly · multicall · MIT · <span data-version>v0.16.3</span></p>
-          <h1>GNU userland → f00tils</h1>
+          <p class="eyebrow">f00tils · pure ASM · multicall · MIT · <span data-version>v0.16.3</span></p>
+          <h1>GNU userland, rebuilt</h1>
           <p class="lead">
-            <strong>f00tils</strong> replaces <strong>four</strong> GNU packages in one freestanding multicall:
-            <strong>coreutils</strong>, <strong>grep</strong>, <strong>findutils</strong>, and
-            <strong>diffutils</strong> (115 tools). Pure x86-64 assembly, no libc.
-            Default is modern (theme, chrome, extras).
-            <code class="mono">--core</code> is <strong>byte-identical</strong> to GNU and must win wall + CPU.
+            One freestanding multicall for <strong>coreutils</strong>, <strong>grep</strong>,
+            <strong>findutils</strong>, and <strong>diffutils</strong> (115 tools).
+            <code class="mono">--core</code> is GNU-identical and faster.
+            Default modern is the terminal you actually want.
           </p>
-          <div class="speed-badge" id="hero-speed" hidden>
-            <span class="speed-x" id="hero-speed-x">—</span>
-            <span class="speed-copy">
-              <strong id="hero-speed-label">vs GNU coreutils</strong>
-              <span class="muted small" id="hero-speed-sub">per package · not blended</span>
-            </span>
+
+          <div class="hero-pkg-grid" id="hero-pkg-grid" aria-label="Speed vs GNU by package">
+            <article class="hero-pkg-tile" data-pkg="coreutils">
+              <span class="hero-pkg-name">coreutils</span>
+              <span class="hero-pkg-wall">2.6×</span>
+              <span class="hero-pkg-meta">wall · CPU 2.8×</span>
+            </article>
+            <article class="hero-pkg-tile" data-pkg="grep">
+              <span class="hero-pkg-name">grep</span>
+              <span class="hero-pkg-wall">9×</span>
+              <span class="hero-pkg-meta">wall · CPU 10.1×</span>
+            </article>
+            <article class="hero-pkg-tile" data-pkg="findutils">
+              <span class="hero-pkg-name">findutils</span>
+              <span class="hero-pkg-wall">3.6×</span>
+              <span class="hero-pkg-meta">wall · CPU 3.7×</span>
+            </article>
+            <article class="hero-pkg-tile" data-pkg="diffutils">
+              <span class="hero-pkg-name">diffutils</span>
+              <span class="hero-pkg-wall">2×</span>
+              <span class="hero-pkg-meta">wall · CPU 2.1×</span>
+            </article>
           </div>
+
           <div class="install-block">
             <div class="install-row">
               <div class="install-cmd">
@@ -71,14 +81,11 @@
               </div>
               <button type="button" class="copy-btn" data-copy="#install-line">copy</button>
             </div>
-            <p class="muted small" style="margin-top:0.75rem">
-              Pin: <code class="mono">F00_VERSION=v0.16.3</code> · <strong>115</strong> tools · 4 packages
-            </p>
           </div>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#install">Install</a>
             <a class="btn btn-ghost" href="#benchmarks">Benchmarks</a>
-            <a class="btn btn-ghost" href="#scoreboard">Scoreboard</a>
+            <a class="btn btn-ghost" href="https://github.com/theesfeld/f00">GitHub</a>
           </div>
         </div>
         <div class="hero-visual">
@@ -88,7 +95,7 @@
               src="assets/screenshots/hero.png"
               width="1040"
               height="420"
-              alt="Color terminal: f00 suite version and directory listing"
+              alt="f00-ls modern listing in a color terminal"
               loading="eager"
             />
           </figure>
@@ -96,15 +103,37 @@
       </div>
     </section>
 
-    <section class="section" id="laws">
+    <section class="section" id="why">
       <div class="wrap">
-        <h2>Product laws</h2>
-        <ol class="laws">
-          <li><strong>Clone first.</strong> Under <code class="mono">--core</code>, output is <strong>byte-identical</strong> to the GNU tool.</li>
-          <li><strong>Win on resources.</strong> <code class="mono">--core</code> must beat GNU wall time <em>and</em> CPU.</li>
-          <li><strong>Modern is amazing.</strong> Default mode is themed chrome + extras — not a pale GNU subset.</li>
-          <li><strong>One binary.</strong> Multicall by <code class="mono">argv0</code> across four GNU package sets.</li>
-        </ol>
+        <h2>Why it wins</h2>
+        <div class="why-grid">
+          <article class="why-card">
+            <h3><code class="mono">--core</code> — scripts</h3>
+            <ul class="why-list">
+              <li><strong>Byte-identical</strong> to GNU (stdout, stderr, exit).</li>
+              <li>Beats GNU on <strong>wall</strong> and <strong>CPU</strong> — separate metrics, per package.</li>
+              <li>Drop-in on PATH. CI and shell scripts don’t care which binary ran.</li>
+            </ul>
+          </article>
+          <article class="why-card why-card-accent">
+            <h3>Modern — default TTY</h3>
+            <ul class="why-list">
+              <li>Theme, truecolor, icons, chrome — not a pale GNU subset.</li>
+              <li>Rich <code class="mono">--json</code> / <code class="mono">--csv</code>, fd/rg/delta-class power where it fits.</li>
+              <li>Humans get the good path. Scripts stay on <code class="mono">--core</code>.</li>
+            </ul>
+          </article>
+        </div>
+        <figure class="shot-frame why-shot">
+          <img
+            src="assets/screenshots/f00-core-vs-modern.png"
+            alt="Modern default vs --core side by side"
+            width="920"
+            height="592"
+            loading="lazy"
+          />
+          <figcaption class="muted small">Modern default vs <code class="mono">--core</code></figcaption>
+        </figure>
       </div>
     </section>
 
@@ -112,53 +141,20 @@
       <div class="wrap">
         <h2>Benchmarks</h2>
         <p class="muted">
-          Spawn-inclusive <code class="mono">f00-* --core</code> vs GNU.
-          <strong>Totals are per package set</strong> (coreutils / grep / findutils / diffutils) — never one blended 115-tool average.
-          <strong>Wall</strong> and <strong>CPU</strong> are separate geos (not mixed; no RSS).
+          <code class="mono">f00-* --core</code> vs GNU. Spawn-inclusive.
+          Totals per package. Wall and CPU separate.
         </p>
-
-        <div class="pkg-cards" id="pkg-cards" aria-live="polite">
-          <!-- filled by app.js from suite.json packages — per-set wall + CPU geos -->
-        </div>
-
-        <h3 class="subhead">Per-tool races by GNU package</h3>
-        <p class="muted small">
-          Race bars are <strong>split by package</strong> (not one 115-tool soup).
-          Userland sets show every timed tool; coreutils “all” view shows the top wall wins
-          (open the <strong>coreutils</strong> filter for the full timed set).
-          Full wall/CPU numbers also live in the scoreboard tabs below.
-        </p>
-        <div class="pkg-tabs" id="race-pkg-tabs" role="tablist" aria-label="Benchmark package filter">
-          <button type="button" class="pkg-tab active" data-race-pkg="all" role="tab">all packages</button>
+        <div class="pkg-cards" id="pkg-cards" aria-live="polite"></div>
+        <div class="pkg-tabs" id="race-pkg-tabs" role="tablist" aria-label="Package filter">
+          <button type="button" class="pkg-tab active" data-race-pkg="all" role="tab">all</button>
           <button type="button" class="pkg-tab" data-race-pkg="coreutils" role="tab">coreutils</button>
           <button type="button" class="pkg-tab" data-race-pkg="grep" role="tab">grep</button>
           <button type="button" class="pkg-tab" data-race-pkg="findutils" role="tab">findutils</button>
           <button type="button" class="pkg-tab" data-race-pkg="diffutils" role="tab">diffutils</button>
         </div>
-        <div id="race-grid" aria-live="polite">
-          <!-- filled by app.js: sections per package -->
-        </div>
-
-        <div class="cold-panel" id="cold-panel" hidden>
-          <div class="cold-head">
-            <h3 class="subhead" style="margin:0">Cold process spawn</h3>
-            <p class="muted small" id="cold-caption">Entry tools · mean wall ms per run</p>
-          </div>
-          <div class="cold-chart-wrap">
-            <svg class="cold-chart" id="cold-chart" viewBox="0 0 640 220" role="img" aria-label="Cold startup line chart: f00 vs GNU"></svg>
-            <div class="cold-legend">
-              <span class="leg f00"><i></i> f00tils</span>
-              <span class="leg gnu"><i></i> GNU</span>
-              <span class="muted small" id="cold-ratio"></span>
-            </div>
-          </div>
-        </div>
-
+        <div id="race-grid" aria-live="polite"></div>
         <p class="muted small bench-foot-links">
-          Machine data:
-          <a href="bench/suite.json">suite.json</a> ·
-          <a href="bench/suite.md">suite.md</a> (full per-package tables) ·
-          scoreboard tabs below
+          <a href="bench/suite.json">suite.json</a> · <a href="bench/suite.md">suite.md</a>
         </p>
       </div>
     </section>
@@ -167,10 +163,8 @@
       <div class="wrap">
         <h2>Scoreboard</h2>
         <p class="muted">
-          Four GNU packages, one multicall.
-          <strong>coreutils 106/106</strong> ·
-          <strong>userland 9/9</strong> (grep · findutils · diffutils) ·
-          <span id="scoreboard-speed-claim">per-set speed vs GNU</span>.
+          <strong>115/115</strong> shipped ·
+          <span id="scoreboard-speed-claim">per-set speed vs GNU</span>
         </p>
         <div class="pkg-tabs" id="pkg-tabs" role="tablist">
           <button type="button" class="pkg-tab active" data-pkg="coreutils" role="tab">coreutils</button>
@@ -178,135 +172,14 @@
           <button type="button" class="pkg-tab" data-pkg="findutils" role="tab">findutils</button>
           <button type="button" class="pkg-tab" data-pkg="diffutils" role="tab">diffutils</button>
         </div>
-
-        <h3 class="subhead">What we replace</h3>
-        <div class="table-wrap">
-          <table class="matrix compact">
-            <thead>
-              <tr>
-                <th>GNU package</th>
-                <th>Tools</th>
-                <th>Shipped</th>
-                <th><code>--core</code></th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>coreutils</strong></td>
-                <td>106</td>
-                <td><strong>106/106</strong></td>
-                <td>full (common cases)</td>
-                <td>Primary set · full scoreboard tab</td>
-              </tr>
-              <tr>
-                <td><strong>grep</strong></td>
-                <td>3</td>
-                <td><strong>3/3</strong></td>
-                <td>full common</td>
-                <td><code>grep</code> <code>egrep</code> <code>fgrep</code></td>
-              </tr>
-              <tr>
-                <td><strong>findutils</strong></td>
-                <td>2</td>
-                <td><strong>2/2</strong></td>
-                <td>full common</td>
-                <td><code>find</code> <code>xargs</code></td>
-              </tr>
-              <tr>
-                <td><strong>diffutils</strong></td>
-                <td>4</td>
-                <td><strong>4/4</strong></td>
-                <td>full common</td>
-                <td><code>diff</code> <code>cmp</code> <code>diff3</code> <code>sdiff</code></td>
-              </tr>
-              <tr>
-                <td colspan="2"><strong>Total</strong></td>
-                <td><strong>115/115</strong></td>
-                <td colspan="2">+ hub extras: <code>config</code>, <code>hostname</code>, <code>kill</code>, <code>rev</code>, …</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3 class="subhead">Ecosystem</h3>
-        <div class="table-wrap">
-          <table class="matrix compact">
-            <thead>
-              <tr>
-                <th>Capability</th>
-                <th>GNU</th>
-                <th>f00tils</th>
-                <th>uutils</th>
-                <th>busybox / toybox</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Tool names</td>
-                <td>Yes</td>
-                <td><strong>115</strong> (4 pkgs)</td>
-                <td>Growing</td>
-                <td>Subset</td>
-              </tr>
-              <tr>
-                <td>Script drop-in</td>
-                <td>Yes</td>
-                <td><strong><code>--core</code></strong></td>
-                <td>Varies</td>
-                <td>Reduced</td>
-              </tr>
-              <tr>
-                <td>Modern default UX</td>
-                <td>No</td>
-                <td><strong>Yes</strong></td>
-                <td>Partial</td>
-                <td>Minimal</td>
-              </tr>
-              <tr>
-                <td>Suite JSON/CSV</td>
-                <td>No</td>
-                <td><strong>f00/v1</strong></td>
-                <td>Limited</td>
-                <td>No</td>
-              </tr>
-              <tr>
-                <td>Freestanding ASM</td>
-                <td>No</td>
-                <td><strong>Yes</strong></td>
-                <td>No</td>
-                <td>C</td>
-              </tr>
-              <tr>
-                <td>Multicall binary</td>
-                <td>No*</td>
-                <td><strong>Yes</strong></td>
-                <td>Optional</td>
-                <td>Yes</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted small">*GNU ships many separate binaries across packages.</p>
-
-        <h3 class="subhead">Tools — ship status + speed</h3>
-        <p class="muted small" id="bench-meta">Select a package tab · totals are never blended across sets</p>
         <div class="stat-row" id="bench-stats" hidden>
           <div class="stat"><span class="stat-val" id="stat-overall">—</span><span class="stat-lbl" id="stat-overall-lbl">set geo</span></div>
           <div class="stat"><span class="stat-val" id="stat-pct">—</span><span class="stat-lbl">% faster</span></div>
           <div class="stat"><span class="stat-val" id="stat-tools">—</span><span class="stat-lbl">tools timed</span></div>
-          <div class="stat"><span class="stat-val" id="stat-median">—</span><span class="stat-lbl">median vs GNU</span></div>
+          <div class="stat"><span class="stat-val" id="stat-median">—</span><span class="stat-lbl">median</span></div>
           <div class="stat"><span class="stat-val" id="stat-best">—</span><span class="stat-lbl">best win</span></div>
-          <div class="stat"><span class="stat-val" id="stat-n">—</span><span class="stat-lbl">runs (median)</span></div>
+          <div class="stat"><span class="stat-val" id="stat-n">—</span><span class="stat-lbl">runs</span></div>
         </div>
-        <div class="progress-bar" id="pkg-progress" role="img" aria-label="package progress">
-          <div class="progress-fill" id="pkg-progress-fill" style="width:100%"></div>
-        </div>
-        <p class="muted small" id="scoreboard-desc">
-          Each tab is one GNU package set (coreutils · grep · findutils · diffutils), not one 115-tool blob.
-          Rows show ship / <code class="mono">--core</code> depth / modern, plus timed
-          <code class="mono">f00-* --core</code> vs that package’s GNU binary when a safe race exists.
-        </p>
         <div class="table-wrap">
           <table class="matrix compact" id="scoreboard-table">
             <thead>
@@ -319,88 +192,20 @@
                 <th>modern</th>
                 <th>GNU ms</th>
                 <th>f00 ms</th>
-                <th>vs GNU (wall · CPU)</th>
+                <th>wall · CPU</th>
               </tr>
             </thead>
             <tbody id="scoreboard-body">
-              <tr><td colspan="9" class="muted">Loading scoreboard…</td></tr>
+              <tr><td colspan="9" class="muted">Loading…</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="muted small">
-          Machine data:
-          <a href="bench/suite.json">suite.json</a> ·
-          <a href="bench/suite.md">suite.md</a>
-          · extras: <code>hostname</code>, <code>kill</code>, <code>rev</code>
-          · flag depth:
-          <a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-COMPLIANCE.md">GNU-COMPLIANCE.md</a>
-        </p>
-      </div>
-    </section>
-
-    <section class="section" id="shots">
-      <div class="wrap">
-        <h2>In color</h2>
-        <p class="muted">Real <code class="mono">f00-*</code> output with ANSI colors.</p>
-        <div class="shot-grid">
-          <figure class="shot-card">
-            <img src="assets/screenshots/f00-ls-la.png" alt="Color long listing" loading="lazy" width="1000" height="420" />
-            <figcaption><code class="mono">f00-ls -la</code></figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img src="assets/screenshots/f00-core-vs-modern.png" alt="Modern versus --core" loading="lazy" width="920" height="592" />
-            <figcaption>Modern default vs <code class="mono">--core</code></figcaption>
-          </figure>
-          <figure class="shot-card">
-            <img src="assets/screenshots/f00-suite.png" alt="Multicall tools" loading="lazy" width="960" height="480" />
-            <figcaption>Multicall suite samples</figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="config">
-      <div class="wrap">
-        <h2>Config &amp; settings</h2>
-        <p class="muted">
-          Bare <code class="mono">f00</code> opens the config hub/TUI (Themes · Settings · Plugins).
-          Persist to <code class="mono">~/.config/f00/config</code> (XDG). Suite-wide — not ls-only.
-        </p>
-        <div class="table-wrap">
-          <table class="matrix compact">
-            <thead>
-              <tr><th>Setting</th><th>What it does</th><th>Scope</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>replace</code></td><td>Bare names on PATH run f00tils (install default on)</td><td>PATH / shell</td></tr>
-              <tr><td><code>core</code></td><td>Prefer GNU-plain presentation (like always <code>--core</code>)</td><td>all tools</td></tr>
-              <tr><td><code>theme</code></td><td>Named theme (truecolor / terminal / f00)</td><td>suite chrome + ls types</td></tr>
-              <tr><td><code>color</code></td><td>auto / always / never (+ <code>NO_COLOR</code>)</td><td>suite</td></tr>
-              <tr><td><code>icons</code></td><td>nerd / ascii / off</td><td>ls-class modern</td></tr>
-              <tr><td>animations / spinner</td><td>Motion on long work</td><td>suite</td></tr>
-              <tr><td>git / hyperlink / dirs-first / ignore-files</td><td>Modern ls extras</td><td>ls</td></tr>
-              <tr><td>headers / line-numbers / syntax</td><td>Modern cat chrome</td><td>cat</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <pre class="code-block"><code>f00                  # TUI: Themes · Settings · Plugins
-f00-config           # CLI for themes / replace / keys
-f00-config replace off   # keep GNU bare names on PATH
-f00-ls --core -la        # one-shot script-safe mode</code></pre>
       </div>
     </section>
 
     <section class="section" id="install">
       <div class="wrap">
         <h2>Install</h2>
-        <p class="muted">
-          Default install: multicall <code class="mono">f00</code> + every <code class="mono">f00-*</code>
-          for the <strong>full tool list</strong> (coreutils + grep + findutils + diffutils + hub extras)
-          + <strong>bare names</strong> (<code class="mono">ls</code>, <code class="mono">grep</code>,
-          <code class="mono">find</code>, <code class="mono">diff</code>, …) so PATH supersedes GNU.
-          Not a hand-picked subset — <code class="mono">F00_TOOLS=all</code> is the default.
-        </p>
-        <h3>One-liner</h3>
         <div class="install-block">
           <div class="install-row">
             <div class="install-cmd">
@@ -410,93 +215,32 @@ f00-ls --core -la        # one-shot script-safe mode</code></pre>
             <button type="button" class="copy-btn" data-copy="#install-line-2">copy</button>
           </div>
         </div>
-        <div class="table-wrap" style="margin-top:1.25rem">
-          <table class="matrix compact">
-            <thead><tr><th>Env</th><th>Effect</th></tr></thead>
-            <tbody>
-              <tr><td><code>INSTALL_DIR</code></td><td>Bin dir (default <code>~/.local/bin</code>)</td></tr>
-              <tr><td><code>F00_VERSION</code></td><td>Release tag (default: latest)</td></tr>
-              <tr><td><code>F00_LOCAL</code></td><td>Local <code>asm/</code> with <code>./f00</code></td></tr>
-              <tr><td><code>F00_TOOLS</code></td><td><code>all</code> (default) or comma list</td></tr>
-              <tr><td><code>F00_SUPERSEDE=1</code></td><td><strong>Default:</strong> bare names for every installed tool</td></tr>
-              <tr><td><code>F00_SUPERSEDE=0</code></td><td>Only <code>f00</code> + <code>f00-*</code> (side-by-side)</td></tr>
-              <tr><td><code>F00_ALIAS=1</code></td><td>Optional shell aliases (usually unnecessary with supersede)</td></tr>
-              <tr><td><code>F00_MAN=1</code></td><td>Install man pages (default on)</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <pre class="code-block"><code># pin version
+        <pre class="code-block"><code># pin
 curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.3 bash
 
-# local build
-curl -fsSL https://f00.sh/install.sh | F00_LOCAL=$PWD/asm bash
-
-# f00-* only (keep GNU bare names)
+# keep GNU bare names
 curl -fsSL https://f00.sh/install.sh | F00_SUPERSEDE=0 bash
 
-# later: turn PATH replace off without reinstall
+# source
+git clone https://github.com/theesfeld/f00.git
+cd f00/asm &amp;&amp; make &amp;&amp; make install
+
+f00                 # config TUI
 f00-config replace off</code></pre>
-
-        <h3>From source</h3>
-        <pre class="code-block"><code>git clone https://github.com/theesfeld/f00.git
-cd f00/asm
-make &amp;&amp; make smoke &amp;&amp; make install
-# needs: nasm, ld · Linux x86-64</code></pre>
-      </div>
-    </section>
-
-    <section class="section" id="packages">
-      <div class="wrap">
-        <h2>Packages</h2>
-        <p class="muted">Release assets: tarball, deb, rpm, and Arch package for Linux x86-64.</p>
-        <div class="table-wrap">
-          <table class="matrix compact">
-            <thead><tr><th>Channel</th><th>Status</th><th>Notes</th></tr></thead>
-            <tbody>
-              <tr><td>Install script</td><td><strong>Primary</strong></td><td><code>curl -fsSL https://f00.sh/install.sh | bash</code></td></tr>
-              <tr><td>GitHub Releases</td><td><strong>Shipped</strong></td><td><code>.tar.gz</code>, <code>.deb</code>, <code>.rpm</code>, <code>.pkg.tar.zst</code></td></tr>
-              <tr><td>Homebrew</td><td>Formula</td><td><code>brew install theesfeld/tap/f00</code></td></tr>
-              <tr><td>AUR</td><td>PKGBUILD</td><td><code>yay -S f00</code></td></tr>
-              <tr><td>Debian / Ubuntu</td><td><code>.deb</code></td><td><code>sudo dpkg -i f00_*_amd64.deb</code></td></tr>
-              <tr><td>Fedora / RHEL</td><td><code>.rpm</code></td><td><code>sudo rpm -Uvh f00-*.x86_64.rpm</code></td></tr>
-              <tr><td>Arch (local)</td><td><code>.pkg.tar.zst</code></td><td><code>sudo pacman -U f00-*-x86_64.pkg.tar.zst</code></td></tr>
-              <tr><td>Nix</td><td>Experimental</td><td><code>flake.nix</code> · x86_64-linux</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <pre class="code-block"><code>curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.3/f00_0.16.3_amd64.deb
-sudo dpkg -i f00_0.16.3_amd64.deb
-
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.3/f00-0.16.3-1.x86_64.rpm
-sudo rpm -Uvh f00-0.16.3-1.x86_64.rpm
-
-curl -fsSLO https://github.com/theesfeld/f00/releases/download/v0.16.3/f00-0.16.3-1-x86_64.pkg.tar.zst
-sudo pacman -U f00-0.16.3-1-x86_64.pkg.tar.zst</code></pre>
-      </div>
-    </section>
-
-    <section class="section" id="docs">
-      <div class="wrap">
-        <h2>Docs</h2>
-        <ul>
-          <li><a href="https://github.com/theesfeld/f00#readme">GitHub README</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/COREUTILS-PROGRESS.md">Coreutils scoreboard</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-USERLAND-PROGRESS.md">Userland scoreboard (grep · find · diff)</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-COMPLIANCE.md">GNU compliance</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/CHANGELOG.md">Changelog</a></li>
-          <li>Man: <code class="mono">man f00</code> · <code class="mono">man f00-ls</code> · …</li>
-        </ul>
+        <p class="muted small">
+          Linux x86-64 · <a href="#scoreboard">scoreboard</a> ·
+          <a href="https://github.com/theesfeld/f00#readme">README</a>
+        </p>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
-      <p>f00tils · freestanding assembly GNU userland · binary <code class="mono">f00</code> · MIT · <span data-version>v0.16.3</span></p>
-      <p><a href="https://github.com/theesfeld/f00">GitHub</a> · <a href="#install">Install</a> · <a href="#scoreboard">Scoreboard</a></p>
+      <p>f00tils · freestanding ASM · MIT · <span data-version>v0.16.3</span></p>
+      <p><a href="https://github.com/theesfeld/f00">GitHub</a> · <a href="#install">Install</a></p>
     </div>
   </footer>
-
   <script src="app.js" defer></script>
 </body>
 </html>

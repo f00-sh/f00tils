@@ -23,7 +23,7 @@ UTILS := ls cat true false yes nproc tty whoami basename dirname \
 	base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
 grep egrep fgrep find xargs diff cmp diff3 sdiff
 
-.PHONY: all clean install links test smoke parity speed ux-check aarch64 aarch64-smoke
+.PHONY: all clean install links test smoke parity check speed ux-check aarch64 aarch64-smoke
 
 # Freestanding Linux aarch64 multicall (gas + qemu-user)
 aarch64:
@@ -31,6 +31,10 @@ aarch64:
 
 aarch64-smoke: aarch64
 	$(MAKE) -C port/aarch64 smoke
+
+# Boring-solid x86-64 bar: build + smoke + parity (not speed — run make speed separately)
+check: $(TARGET) links smoke parity
+	@echo "check ok (smoke + parity)"
 
 all: $(TARGET) links
 
@@ -83,7 +87,7 @@ install: $(TARGET) links
 		done; \
 	fi
 
-test: smoke
+test: check
 
 smoke: $(TARGET) links
 	./f00-ls --version
@@ -106,31 +110,9 @@ smoke: $(TARGET) links
 	printf 'hi\n' | ./f00-base64
 	@echo "smoke ok"
 
-# GNU coreutils --core parity for id/date/uname/hash/base64/nproc
+# Boring-solid: full --core battery (shipped f00-* vs GNU)
 parity: $(TARGET) links
-	@set -e; \
-	diff -u <(id) <(./f00-id --core); \
-	diff -u <(id -G) <(./f00-id --core -G); \
-	diff -u <(id -nG) <(./f00-id --core -nG); \
-	diff -u <(id -un) <(./f00-id --core -un); \
-	diff -u <(uname -a) <(./f00-uname --core -a); \
-	diff -u <(uname -srm) <(./f00-uname --core -srm); \
-	diff -u <(uname -p) <(./f00-uname --core -p); \
-	diff -u <(nproc) <(./f00-nproc --core); \
-	diff -u <(nproc --all) <(./f00-nproc --core --all); \
-	diff -u <(nproc --ignore=2) <(./f00-nproc --core --ignore=2); \
-	printf 'parity-payload' > /tmp/f00_parity.bin; \
-	diff -u <(md5sum /tmp/f00_parity.bin) <(./f00-md5sum --core /tmp/f00_parity.bin); \
-	diff -u <(md5sum -b /tmp/f00_parity.bin) <(./f00-md5sum --core -b /tmp/f00_parity.bin); \
-	diff -u <(sha256sum /tmp/f00_parity.bin) <(./f00-sha256sum --core /tmp/f00_parity.bin); \
-	diff -u <(printf hi | base64) <(printf hi | ./f00-base64 --core); \
-	diff -u <(LC_ALL=C date -u -d @0) <(./f00-date --core -u -d @0); \
-	diff -u <(LC_ALL=C date -u -d @0 -R) <(./f00-date --core -u -d @0 -R); \
-	diff -u <(LC_ALL=C date -u -d @0 -Iseconds) <(./f00-date --core -u -d @0 -Iseconds); \
-	diff -u <(LC_ALL=C date -u -d @0 --rfc-3339=seconds) <(./f00-date --core -u -d @0 --rfc-3339=seconds); \
-	diff -u <(LC_ALL=C date -u -d @0 '+%Y-%m-%d %H:%M:%S %z %Z %F %T %s') \
-	        <(./f00-date --core -u -d @0 '+%Y-%m-%d %H:%M:%S %z %Z %F %T %s'); \
-	echo "parity ok (UTC freestanding date; compare with LC_ALL=C date -u)"
+	bash benches/parity.sh
 
 # Speed gates: representative + full suite wall/CPU (all four GNU packages)
 speed: $(TARGET) links
@@ -143,11 +125,5 @@ speed-stress: $(TARGET) links
 	@chmod +x benches/speed-stress.sh benches/full-speed-gate.sh
 	./benches/speed-stress.sh
 
-# Speed gate + full parity battery when present
-ux-check: $(TARGET) links
-	@chmod +x benches/speed-gate.sh
-	./benches/speed-gate.sh
-	@if [ -x benches/parity.sh ] || [ -f benches/parity.sh ]; then \
-		chmod +x benches/parity.sh; \
-		./benches/parity.sh; \
-	fi
+# Alias: check already covers smoke+parity; speed stays optional
+ux-check: check
