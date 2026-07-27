@@ -5,12 +5,12 @@
   "to": "Maintainers and Release Operators",
   "from": "Project Engineering",
   "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
-  "ref": "packaging conflicts/provides /usr/bin bare names, v0.16.10",
+  "ref": "house docs pack + package-manifest sync; packaging bare names v0.16.10",
   "date": "2026-07-27",
   "doc_id": "SOP-F00-OPS-001",
   "doc_title": "STANDARD OPERATING PROCEDURE",
   "version": "v0.16.10",
-  "opening": "Bottom line: Distro packages install bare names into /usr/bin and conflict with coreutils/findutils/grep/diffutils. After paru -S f00, find/grep/diff/ls are f00 in every session including TTY \u2014 no PATH setup. --core is still never auto for scripts.",
+  "opening": "Bottom line: Distro packages install bare names into /usr/bin and conflict with coreutils/findutils/grep/diffutils. After paru -S f00, find/grep/diff/ls are f00 in every session including TTY \u2014 no PATH setup. Every ship or ops/docs change keeps README + NASA SOP PDF + site Documents + NASA release memo (on tag) in step. --core is still never auto for scripts.",
   "sections": [
     {
       "heading": "1. Purpose",
@@ -616,7 +616,7 @@
         },
         {
           "n": "12.4",
-          "text": "Refresh root file_id.diz for this version. Commit it. Attach it as a GitHub Release asset. Do not spotlight it on the website."
+          "text": "Refresh root file_id.diz for this version. Commit it. Show a fixed-width Scene card preview in README. Attach the same file as a GitHub Release asset. Do not spotlight the card on the public website (project rule)."
         },
         {
           "n": "12.5",
@@ -624,19 +624,28 @@
         },
         {
           "n": "12.6",
-          "text": "Confirm man page(s), README.md, and site match behavior."
+          "text": "Confirm man page(s), README.md, and site Documents links match behavior and point at the current SOP PDF and release memo PDF."
         },
         {
           "n": "12.7",
+          "text": "Render NASA SOP and NASA release memo PDFs via memo-pdf (nasa-sop / nasa-memo). Commit JSON sources and PDFs under docs/. Link both from README and site."
+        },
+        {
+          "n": "12.8",
           "text": "Create an annotated tag and push it.",
           "code": "git tag -a vX.Y.Z -m \"vX.Y.Z\"\ngit push origin vX.Y.Z"
         },
         {
-          "n": "12.8",
-          "text": "Release workflow (tag v*) builds Linux x86-64 ASM, runs smoke/parity/speed-gate, verifies binary version, packages tarball, publishes GitHub Release."
+          "n": "12.9",
+          "text": "Release workflow (tag v*) builds Linux x86-64 ASM, runs smoke/parity/speed-gate, verifies binary version, packages tarball, publishes GitHub Release with SOP PDF, memo PDF, and file_id.diz."
         },
         {
-          "n": "12.9",
+          "n": "12.10",
+          "text": "After SHA256SUMS exist for the release, sync package manifests so Formula and AUR match the tag.",
+          "code": "scripts/sync-package-manifests.sh X.Y.Z path/to/SHA256SUMS\ngit add Formula packaging/aur && git commit -m \"chore(release): sync package manifests to vX.Y.Z\""
+        },
+        {
+          "n": "12.11",
           "text": "Smoke-test the public install path. Do not move or reuse a published tag for different bits.",
           "code": "curl -fsSL https://f00.sh/install.sh | F00_VERSION=vX.Y.Z bash\nf00 --version"
         }

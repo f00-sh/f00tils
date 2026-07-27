@@ -6,6 +6,11 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+### Documents
+- House docs triad hygiene for v0.16.10: README Scene card preview + Documents row for `file_id.diz`; man `f00(1)` FILES/SEE ALSO for the scene card
+- Operator NASA SOP re-rendered (release ship steps: README scene card, `sync-package-manifests` for Formula/AUR after release)
+- Homebrew `Formula/f00.rb` synced to **0.16.10** checksums (was stale at 0.15.1)
+
 ## [0.16.10] - 2026-07-27
 
 ### Changed

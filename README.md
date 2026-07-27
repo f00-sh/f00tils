@@ -18,6 +18,33 @@ curl -fsSL https://f00.sh/install.sh | bash
 | Release memo 0.16.10 | [`docs/memo-release-0.16.10.pdf`](docs/memo-release-0.16.10.pdf) · [JSON source](docs/memo-release-0.16.10.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Site | [https://f00.sh](https://f00.sh) |
+| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/theesfeld/f00/releases/latest/download/file_id.diz) |
+
+### Scene card
+
+Release identity (`file_id.diz` — ACiD / 16colo.rs style). Ships on every GitHub Release; not spotlighted on the public site.
+
+```
+░▒▓████████████████████████████████████████████▓▒░░░
+█▓▒░  f 0 0 t i l s  ·  scene card  ·  v0.16.10 ░▒▓█ 
+████████████████████████████████████████████████████
+█  ▄████████▄   ▄███████▄   ▄███████▄              █
+█  ███▀▀▀▀███   ███▀▀▀▀███  ███▀▀▀▀███  freest.    █
+█  ███        ▄ ███     ███ ███     ███  ASM       █
+█  ████████   █ ███     ███ ███     ███  suite     █
+█  ███        █ ███     ███ ███     ███  multi     █
+█  ███        █ ███▄▄▄▄███  ███▄▄▄▄███  call       █
+█  ▀          ▀  ▀██████▀    ▀██████▀   f00-*      █
+████████████████████████████████████████████████████
+█  MIT · 2026-07-27 · 115 tools · 4 GNU packages  █
+█  modern default · --core for scripts             █
+█  coreutils · grep · findutils · diffutils        █
+█  coreutils 2.6× · per-set totals (not blended)   █
+█  core 2.6× · grep 3.2× · find 4.1× · diff 2.9×   █
+█  https://f00.sh · github:theesfeld/f00           █
+████████████████████████████████████████████████████
+  ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    
+```
 
 ---
 

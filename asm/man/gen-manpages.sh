@@ -275,6 +275,11 @@ Write machine-readable summaries when supported.
 .nf
 cd asm && make && make smoke
 .fi
+.SH FILES
+.TP
+.I file_id.diz
+Release scene card (ACiD / 16colo.rs style). Root of the source tree; also a
+GitHub Release asset for each published version. Not installed by packages.
 .SH AUTHOR
 f00 contributors. License MIT.
 .SH SEE ALSO
@@ -283,6 +288,9 @@ f00 contributors. License MIT.
 .BR ls (1)
 .PP
 https://f00.sh
+.PP
+.I file_id.diz
+\\(em release scene card / archive description on GitHub Releases.
 EOF
 
 n_written=0
