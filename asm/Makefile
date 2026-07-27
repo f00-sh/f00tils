@@ -23,7 +23,7 @@ UTILS := ls cat true false yes nproc tty whoami basename dirname \
 	base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
 grep egrep fgrep find xargs diff cmp diff3 sdiff
 
-.PHONY: all clean install links test smoke parity check speed ux-check aarch64 aarch64-smoke
+.PHONY: all clean install links test smoke parity check speed hot ux-check aarch64 aarch64-smoke
 
 # Freestanding Linux aarch64 multicall (gas + qemu-user)
 aarch64:
@@ -114,11 +114,16 @@ smoke: $(TARGET) links
 parity: $(TARGET) links
 	bash benches/parity.sh
 
+# Real-work wall+CPU (sort multi-line, ls non-trivial tree) — not spawn theater
+hot: $(TARGET) links
+	python3 benches/hot-path-speed.py .
+
 # Speed gates: representative + full suite wall/CPU (all four GNU packages)
 speed: $(TARGET) links
 	@chmod +x benches/speed-gate.sh benches/full-speed-gate.sh benches/speed-stress.sh
 	./benches/speed-gate.sh
 	./benches/full-speed-gate.sh
+	$(MAKE) hot
 
 # Structural law-2 proof: ≥5 consecutive full-speed-gate passes at EPS=50µs
 speed-stress: $(TARGET) links

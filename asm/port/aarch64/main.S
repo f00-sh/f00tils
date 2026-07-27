@@ -35,6 +35,10 @@ f00_main:
 	bl	streq
 	cbnz	w0, do_echo
 	mov	x0, x21
+	adr	x1, n_pwd
+	bl	streq
+	cbnz	w0, do_pwd
+	mov	x0, x21
 	adr	x1, n_grep
 	bl	streq
 	cbnz	w0, do_grep
@@ -59,6 +63,21 @@ do_version:
 	adr	x0, ver_msg
 	bl	putline
 	mov	w0, #0
+	b	out
+do_pwd:
+	/* getcwd via Linux aarch64 syscall 17 */
+	adr	x0, pwd_buf
+	mov	x1, #4096
+	mov	x8, #17
+	svc	#0
+	cmp	x0, #0
+	b.lt	pwd_err
+	adr	x0, pwd_buf
+	bl	putline
+	mov	w0, #0
+	b	out
+pwd_err:
+	mov	w0, #1
 	b	out
 do_echo:
 	mov	x21, #1			/* i */
@@ -120,6 +139,7 @@ pref_f00:	.asciz "f00-"
 n_true:		.asciz "true"
 n_false:	.asciz "false"
 n_echo:		.asciz "echo"
+n_pwd:		.asciz "pwd"
 n_grep:		.asciz "grep"
 n_f00:		.asciz "f00"
 n_version:	.asciz "version"
@@ -128,3 +148,4 @@ ver_msg:	.asciz "f00 (f00tils) aarch64 freestanding · MIT · https://f00.sh"
 spc:		.byte 32
 nl:		.byte 10
 	.align 3
+pwd_buf:	.space 4096

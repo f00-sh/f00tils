@@ -6,10 +6,10 @@ Everything here is optional depth or machine-generated. Prefer not to add new es
 
 | File | Role |
 |------|------|
-| `COREUTILS-PROGRESS.md` | Generated/hand scoreboard (optional) |
-| `GNU-USERLAND-PROGRESS.md` | Userland scoreboard (optional) |
-| `GNU-COMPLIANCE.md` | Flag-level depth (archive-grade; not product contract) |
+| `COREUTILS-PROGRESS.md` | Kept only because `scripts/gen-coreutils-progress.py` still writes it + `site/coreutils-progress.json` |
+| `GNU-USERLAND-PROGRESS.md` | Optional human scoreboard (site races use `suite.json`) |
+| `GNU-COMPLIANCE.md` | Stub — not product contract |
 | `COMPLETENESS.md` | One-page gate checklist |
 | `ROADMAP.md` | Near-term only |
 
-Deleted as product narrative (Elon pass): long CONFIG/TERMINAL-UX/MODERN/SYNC essays — use `f00` TUI + README instead.
+Live benches/scoreboard: **site** (`suite.json`). Do not reintroduce dual-doc novels.

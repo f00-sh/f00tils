@@ -23,11 +23,11 @@ $(TARGET): $(OBJS)
 	@echo "built aarch64 $$(file $@ | sed 's/.*: //')"
 
 links: $(TARGET)
-	@for u in true false echo grep version; do ln -sf f00 f00-$$u; ln -sf f00 $$u; done
-	@echo "links: f00-{true,false,echo,grep}"
+	@for u in true false echo pwd grep version; do ln -sf f00 f00-$$u; ln -sf f00 $$u; done
+	@echo "links: f00-{true,false,echo,pwd,grep}"
 
 clean:
-	rm -f $(OBJS) $(TARGET) f00-* true false echo grep version
+	rm -f $(OBJS) $(TARGET) f00-* true false echo pwd grep version
 
 # smoke under qemu-user (includes no-trailing-newline last-line -P case)
 smoke: $(TARGET) links
@@ -37,6 +37,8 @@ smoke: $(TARGET) links
 	$$QEMU ./f00-true; test $$? -eq 0; \
 	$$QEMU ./f00-false; test $$? -eq 1; \
 	echo hi | $$QEMU ./f00-echo hi | grep -q hi; \
+	p=$$($$QEMU ./f00-pwd); test -n "$$p"; \
+	echo "$$p" | grep -q /; \
 	printf 'a1\n' > "$$SCR/g-a64-nl"; \
 	$$QEMU ./f00-grep --core -P '\\d' "$$SCR/g-a64-nl" | grep -q a1; \
 	printf 'a9' > "$$SCR/g-a64-nonl"; \

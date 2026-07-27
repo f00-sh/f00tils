@@ -47,13 +47,17 @@ diff --core a b         # normal format, script-safe
 
 ---
 
-## Install
+## Install (primary path)
+
+**Primary:** tarball + [`install.sh`](install.sh) (site copy must match — `make sync-install`).
 
 ```bash
 curl -fsSL https://f00.sh/install.sh | bash
 # pin: F00_VERSION=v0.16.3
 # side-by-side only: F00_SUPERSEDE=0
 ```
+
+deb/rpm/AUR/brew exist as **secondary** packages; they do not replace install.sh as the default story.
 
 From source: `cd asm && make && make install` (nasm, ld · Linux x86-64).  
 aarch64 port: `cd asm && make aarch64 && make aarch64-smoke` (aarch64-linux-gnu-as/ld · qemu-user).
@@ -62,6 +66,12 @@ aarch64 port: `cd asm && make aarch64 && make aarch64-smoke` (aarch64-linux-gnu-
 f00                 # config TUI
 f00-config          # CLI
 f00-config replace off
+```
+
+### Real-work speed (not spawn theater)
+
+```bash
+cd asm && make hot   # sort 200k lines + ls 500 files: wall+CPU vs GNU
 ```
 
 ---

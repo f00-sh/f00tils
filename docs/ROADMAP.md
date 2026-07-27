@@ -7,6 +7,6 @@ Ship truth: [README](../README.md) · [f00.sh](https://f00.sh)
 - `grep -P` subset · `diff -r` · aarch64 freestanding multicall
 
 ## Next (thin)
-- One boring release path (tarball + install.sh only, until packages are automatic)
-- Wider aarch64 surface toward 115
-- Runtime: hot paths only when `make check` is green
+- Packages stay secondary to tarball + `install.sh` (`make sync-install`)
+- aarch64: add tools only with smoke hooks (no unhooked 115 rush)
+- More hot paths (grep multi-MiB `-F`) after `make check` + `make hot` stay green
