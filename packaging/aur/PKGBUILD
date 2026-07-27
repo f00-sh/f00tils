@@ -1,13 +1,15 @@
 # Maintainer: theesfeld
 # f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)
 #
+# Bare names (ls/find/grep/diff/…) live in /usr/lib/f00/bin → f00.
+# PATH is set for *every* zsh via /etc/zsh/zshenv and login shells via profile.d.
+# No overwriting /usr/bin/* (no conflicts with GNU packages).
+#
 # If upgrade fails with "exists in filesystem" on f00-grep / /usr/lib/f00/bin/*:
 #   sudo scripts/arch-clean-unowned-f00.sh
-#   # or: pacman -S f00 --overwrite '/*'
-# Those orphans come from pre-0.16.8 packages (coreutils-only links) mixed with
-# a root install.sh into /usr. Never mix install.sh → /usr with the AUR package.
+# Never mix install.sh → /usr with the AUR package.
 pkgname=f00
-pkgver=0.16.8
+pkgver=0.16.9
 pkgrel=1
 pkgdesc="f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)"
 arch=('x86_64')
@@ -15,8 +17,8 @@ url="https://f00.sh"
 license=('MIT')
 depends=()
 options=('!strip')
-source=("https://github.com/theesfeld/f00/releases/download/v${pkgver}/f00-0.16.8-linux-x86_64.tar.gz")
-sha256sums=('9325ddfaa5356cb38f55a68e643c1b7ae37ff0d7e012948114268be8c099fb31')
+source=("https://github.com/theesfeld/f00/releases/download/v${pkgver}/f00-${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
 
 package() {
   local root
@@ -25,19 +27,18 @@ package() {
     root="${srcdir}/f00-${pkgver}-x86_64-linux"
   fi
   if [[ ! -d "${root}" ]]; then
-    # tarball may extract a single top dir — find the binary
     root="$(dirname "$(find "${srcdir}" -type f -name f00 | head -n1)")"
   fi
   install -Dm755 "${root}/f00" "${pkgdir}/usr/bin/f00"
-  # shell integration: bare names in /usr/lib/f00/bin, PATH via profile.d (default ON)
-  mkdir -p "${pkgdir}/usr/lib/f00/bin"
-  # profile snippets ship from release packaging tree when present; embed fallbacks
-  if [[ -f "${root}/share/f00/f00.sh" ]]; then
-    install -Dm644 "${root}/share/f00/f00.sh" "${pkgdir}/etc/profile.d/f00.sh"
+
+  mkdir -p "${pkgdir}/usr/lib/f00/bin" "${pkgdir}/usr/lib/f00/shell"
+
+  # Shared PATH logic (profile.d + zshenv source this)
+  if [[ -f "${root}/share/f00/path.sh" ]]; then
+    install -Dm644 "${root}/share/f00/path.sh" "${pkgdir}/usr/lib/f00/shell/path.sh"
   else
-    install -Dm644 /dev/stdin "${pkgdir}/etc/profile.d/f00.sh" <<'EOS'
-# f00tils — default coreutils replacement via PATH (see f00-config replace)
-_f00_libbin="/usr/lib/f00/bin"
+    install -Dm644 /dev/stdin "${pkgdir}/usr/lib/f00/shell/path.sh" <<'EOS'
+# f00tils bare-name PATH (fallback embedded in PKGBUILD)
 _f00_replace_enabled() {
   local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}/f00/config"
   [ -n "${HOME:-}" ] || return 0
@@ -47,18 +48,49 @@ _f00_replace_enabled() {
   fi
   return 0
 }
-if [ -d "$_f00_libbin" ] && _f00_replace_enabled; then
+_f00_path_prepend() {
+  local d="$1"
+  [ -n "$d" ] && [ -d "$d" ] || return 0
   case ":${PATH:-}:" in
-    *":${_f00_libbin}:"*) ;;
-    *) PATH="${_f00_libbin}${PATH:+:}${PATH:-}"; export PATH ;;
+    *":${d}:"*) ;;
+    *) PATH="${d}${PATH:+:}${PATH:-}"; export PATH ;;
   esac
+}
+if _f00_replace_enabled; then
+  if [ -n "${HOME:-}" ] && [ -x "${HOME}/.local/bin/f00" ]; then
+    _f00_path_prepend "${HOME}/.local/bin"
+  fi
+  _f00_path_prepend "/usr/lib/f00/bin"
 fi
-unset _f00_libbin
-unset -f _f00_replace_enabled 2>/dev/null || true
+unset -f _f00_replace_enabled _f00_path_prepend 2>/dev/null || true
 EOS
   fi
-  # Full multicall surface: coreutils + grep + findutils + diffutils (+ hub)
-  # Keep in sync with scripts/tools-all.txt and asm/Makefile UTILS.
+
+  # bash/sh login
+  if [[ -f "${root}/share/f00/f00.sh" ]]; then
+    install -Dm644 "${root}/share/f00/f00.sh" "${pkgdir}/etc/profile.d/f00.sh"
+  else
+    install -Dm644 /dev/stdin "${pkgdir}/etc/profile.d/f00.sh" <<'EOS'
+# f00tils
+[ -r /usr/lib/f00/shell/path.sh ] && . /usr/lib/f00/shell/path.sh
+EOS
+  fi
+
+  # EVERY zsh (non-login terminals included) — required on Arch
+  if [[ -f "${root}/share/f00/zshenv" ]]; then
+    install -Dm644 "${root}/share/f00/zshenv" "${pkgdir}/etc/zsh/zshenv"
+  else
+    install -Dm644 /dev/stdin "${pkgdir}/etc/zsh/zshenv" <<'EOS'
+# f00tils — every zsh
+[[ -r /usr/lib/f00/shell/path.sh ]] && emulate sh -c 'source /usr/lib/f00/shell/path.sh'
+EOS
+  fi
+
+  # fish
+  if [[ -f "${root}/share/f00/f00.fish" ]]; then
+    install -Dm644 "${root}/share/f00/f00.fish" "${pkgdir}/etc/fish/conf.d/f00.fish"
+  fi
+
   local u
   for u in ls cat true false yes nproc tty whoami basename dirname \
            head tail wc tee seq echo pwd sleep \
@@ -77,6 +109,7 @@ EOS
   done
   ln -s f00 "${pkgdir}/usr/bin/f00-["
   ln -s ../../../bin/f00 "${pkgdir}/usr/lib/f00/bin/["
+
   if [[ -f "${root}/LICENSE" ]]; then
     install -Dm644 "${root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   fi

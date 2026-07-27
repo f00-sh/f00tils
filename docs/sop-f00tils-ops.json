@@ -5,12 +5,12 @@
   "to": "Maintainers and Release Operators",
   "from": "Project Engineering",
   "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
-  "ref": "AGENTS.md, README.md, install.sh, docs/MODERN-FEATURES.md, v0.16.8",
+  "ref": "packaging/shell, PKGBUILD, /etc/zsh/zshenv, v0.16.9",
   "date": "2026-07-27",
   "doc_id": "SOP-F00-OPS-001",
   "doc_title": "STANDARD OPERATING PROCEDURE",
-  "version": "v0.16.8",
-  "opening": "Bottom line: --core is never auto-detected from scripts or non-TTY. Pipes only suppress chrome. For GNU-identical PATH drop-in use export F00_CORE=1, config core=true, or pass --core. Build with cd asm && make && make check. Regenerate screenshots every release with scripts/render-brand-assets.py.",
+  "version": "v0.16.9",
+  "opening": "Bottom line: After package install (paru -S f00), bare names (find/grep/diff/ls) must resolve to f00 in a new shell with zero manual PATH steps. Arch non-login zsh uses /etc/zsh/zshenv. GNU remains in /usr/bin; replace is PATH-first /usr/lib/f00/bin. --core is never auto for scripts.",
   "sections": [
     {
       "heading": "1. Purpose",

@@ -18,7 +18,7 @@
         else
           pkgs.stdenv.mkDerivation {
             pname = "f00";
-            version = "0.16.8";
+            version = "0.16.9";
             src = ./.;
             nativeBuildInputs = [ pkgs.nasm pkgs.binutils pkgs.gnumake ];
             buildPhase = ''

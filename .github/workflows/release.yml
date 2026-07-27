@@ -82,13 +82,17 @@ jobs:
           set -euo pipefail
           VER="${{ steps.meta.outputs.version }}"
           STAGE="dist/f00-${VER}-linux-x86_64"
-          mkdir -p "$STAGE/man/man1"
+          mkdir -p "$STAGE/man/man1" "$STAGE/share/f00"
           install -m755 asm/f00 "$STAGE/f00"
           if [[ -d asm/man/man1 ]]; then
             cp -a asm/man/man1/f00*.1 "$STAGE/man/man1/" 2>/dev/null || true
           fi
           for f in README.md LICENSE CHANGELOG.md file_id.diz; do
             [[ -f "$f" ]] && cp "$f" "$STAGE/"
+          done
+          # Shell PATH hooks (AUR/nfpm install these — zshenv is required for Arch terminals)
+          for f in path.sh f00.sh zshenv f00.fish; do
+            [[ -f "packaging/shell/$f" ]] && cp "packaging/shell/$f" "$STAGE/share/f00/"
           done
           mkdir -p dist
           tar -C dist -czf "dist/f00-${VER}-linux-x86_64.tar.gz" "f00-${VER}-linux-x86_64"

@@ -48,7 +48,9 @@ render_nfpm() {
     -e "s|\${MAN_DIR}|${man_dir}|g" \
     -e "s|\${LINKS_DIR}|${links_dir}|g" \
     -e "s|\${SUPERSEDE_DIR}|${supersede_dir}|g" \
+    -e "s|\${PATH_SH}|${ROOT}/packaging/shell/path.sh|g" \
     -e "s|\${PROFILE_SH}|${ROOT}/packaging/shell/f00.sh|g" \
+    -e "s|\${ZSHENV}|${ROOT}/packaging/shell/zshenv|g" \
     -e "s|\${PROFILE_FISH}|${ROOT}/packaging/shell/f00.fish|g" \
     "${TEMPLATE}" > "${cfg}"
 }

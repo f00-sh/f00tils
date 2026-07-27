@@ -1,0 +1,106 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+7 0 obj
+<< /Length 2923 >>
+stream
+0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
+0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
+0.000 G 1.00 w
+72.00 682.00 m 540.00 682.00 l S
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 659.80 Tm (Reply to Attn of:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 180.00 659.80 Tm (REL/F00) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 635.80 Tm (TO:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 635.80 Tm (Maintainers and Users) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 615.80 Tm (FROM:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 615.80 Tm (Project Engineering) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 595.80 Tm (SUBJECT:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 595.80 Tm (Release memo - f00tils 0.16.9) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 575.80 Tm (REF:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 575.80 Tm (Arch zsh bare-name PATH, packaging/shell, v0.16.8) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 537.80 Tm (Bottom line: 0.16.9 makes package replace work immediately after paru/pacman for zsh) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 523.80 Tm (terminals. Root cause: Arch non-login zsh never loads /etc/profile.d, so only login shells got) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 509.80 Tm (/usr/lib/f00/bin. Ship /etc/zsh/zshenv + shared path.sh so find/grep/diff/ls resolve to f00 with no) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 495.80 Tm (user steps.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 474.80 Tm (1. Problem) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 454.80 Tm (which find ? /usr/bin/find after install; users expected coreutils-like bare-name replace for the) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 440.80 Tm (full suite.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 413.80 Tm (2. Fix) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 393.80 Tm (- /etc/zsh/zshenv sources /usr/lib/f00/shell/path.sh for every zsh) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 375.80 Tm (- profile.d + fish conf.d unchanged purpose; path logic centralized) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 357.80 Tm (- Tarball ships share/f00 hooks for AUR/nfpm) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 339.80 Tm (- Still no overwrite of /usr/bin/find \(no file conflicts with findutils\)) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 315.80 Tm (3. Verify) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 295.80 Tm (3.1 paru -S f00 \(or upgrade\); open new terminal \(no source required\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 274.80 Tm (3.2 which find grep diff ls ? /usr/lib/f00/bin/...) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 253.80 Tm (3.3 find --version ? f00-find) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 232.80 Tm (3.4 replace = false disables PATH prepend) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 205.80 Tm (4. Install) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 185.80 Tm (curl -fsSL https://f00.sh/install.sh | bash * pin F00_VERSION=v0.16.9 * AUR: f00) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (1) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+9 0 obj
+<< /Length 398 >>
+stream
+72.00 718.00 m 252.00 718.00 l S
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 693.00 Tm (Project Engineering) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 679.00 Tm (f00tils release) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 655.00 Tm (Date: 2026-07-27) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 639.00 Tm (cc: ['https://f00.sh', 'github.com/theesfeld/f00']) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (2) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [8 0 R 10 0 R] /Count 2 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+13 0 obj
+<< /Title (Release memo - f00tils 0.16.9) /Author (Project Engineering) /Subject (NASA NAII 1450.3 formal memorandum) /Producer (memo-pdf skill) /Creator (memo-pdf) >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000087 00000 n 
+0000000158 00000 n 
+0000000231 00000 n 
+0000000301 00000 n 
+0000000376 00000 n 
+0000000444 00000 n 
+0000003419 00000 n 
+0000003596 00000 n 
+0000004045 00000 n 
+0000004223 00000 n 
+0000004288 00000 n 
+0000004339 00000 n 
+trailer
+<< /Size 14 /Root 12 0 R /Info 13 0 R >>
+startxref
+4523
+%%EOF

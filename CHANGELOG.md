@@ -6,6 +6,15 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.9] - 2026-07-27
+
+### Fixed
+- **Arch/zsh bare-name replace after `paru`**: install `/etc/zsh/zshenv` so *every* zsh (non-login terminals included) prepends `/usr/lib/f00/bin`. Previously only login shells loaded `profile.d`, so `which find` stayed `/usr/bin/find` while `ls` “felt” replaced when PATH was already warm.
+- Package ships shared `/usr/lib/f00/shell/path.sh` + profile.d + fish conf.d + zshenv (full coreutils+grep+findutils+diffutils bare names).
+
+### Changed
+- Release tarball includes `share/f00/{path.sh,f00.sh,zshenv,f00.fish}` for AUR/nfpm
+
 ## [0.16.8] - 2026-07-27
 
 ### Fixed

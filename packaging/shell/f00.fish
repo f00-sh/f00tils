@@ -1,23 +1,34 @@
-# f00tils — fish: default coreutils replacement via PATH
-# See /etc/profile.d/f00.sh for the same policy.
+# f00tils — fish (conf.d loads for every fish session)
+# Bare names → /usr/lib/f00/bin when replace is enabled.
 
-set -l _f00_libbin /usr/lib/f00/bin
-set -l _f00_cfg
-if set -q XDG_CONFIG_HOME
-    set _f00_cfg $XDG_CONFIG_HOME/f00/config
-else
-    set _f00_cfg $HOME/.config/f00/config
+function __f00_replace_enabled
+    set -l cfg "$HOME/.config/f00/config"
+    if set -q XDG_CONFIG_HOME
+        set cfg "$XDG_CONFIG_HOME/f00/config"
+    end
+    if not test -f "$cfg"
+        return 0
+    end
+    if grep -Eiq '^[[:space:]]*replace[[:space:]]*=[[:space:]]*(false|no|0|none)([[:space:]]|#|$)' "$cfg" 2>/dev/null
+        return 1
+    end
+    return 0
 end
 
-set -l _f00_on 1
-if test -f $_f00_cfg
-    if string match -qir '^\s*replace\s*=\s*(false|no|0|none)(\s|#|$)' (cat $_f00_cfg 2>/dev/null)
-        set _f00_on 0
+function __f00_path_prepend
+    set -l d $argv[1]
+    test -n "$d"; or return
+    test -d "$d"; or return
+    if not contains -- "$d" $PATH
+        set -gx PATH "$d" $PATH
     end
 end
 
-if test -d $_f00_libbin; and test $_f00_on -eq 1
-    if not contains -- $_f00_libbin $PATH
-        set -gx PATH $_f00_libbin $PATH
+if __f00_replace_enabled
+    if test -n "$HOME"; and test -x "$HOME/.local/bin/f00"
+        __f00_path_prepend "$HOME/.local/bin"
     end
+    __f00_path_prepend /usr/lib/f00/bin
 end
+
+functions -e __f00_replace_enabled __f00_path_prepend

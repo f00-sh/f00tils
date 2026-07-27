@@ -1,6 +1,6 @@
 # nfpm template for f00 ASM suite.
 # Placeholders: VERSION, ARCH (amd64), BIN_PATH, MAN_DIR, LINKS_DIR,
-#               SUPERSEDE_DIR, PROFILE_SH, PROFILE_FISH
+#               SUPERSEDE_DIR, PATH_SH, PROFILE_SH, ZSHENV, PROFILE_FISH
 name: f00
 arch: ${ARCH}
 platform: linux
@@ -12,8 +12,9 @@ description: |
   f00tils (f00) replaces GNU coreutils + grep + findutils + diffutils (115 tools).
   One freestanding x86-64 assembly multicall binary (no libc).
   Default: bare names (ls/cat/grep/find/diff/…) via /usr/lib/f00/bin on PATH.
+  PATH is enabled for every zsh (/etc/zsh/zshenv) and login shells (profile.d).
   Toggle: replace = false in ~/.config/f00/config, or f00-config replace off.
-  --core for script-safe GNU-identical presentation.
+  --core / F00_CORE=1 for script-safe GNU-identical presentation.
 homepage: https://f00.sh
 license: MIT
 contents:
@@ -26,15 +27,23 @@ contents:
     type: tree
     file_info:
       mode: 0755
-  # Bare coreutils names — not in /usr/bin (avoids package file conflicts).
-  # /etc/profile.d/f00.sh prepends this dir by default.
+  # Bare names — not in /usr/bin (avoids package file conflicts with GNU).
   - src: ${SUPERSEDE_DIR}/
     dst: /usr/lib/f00/bin/
     type: tree
     file_info:
       mode: 0755
+  - src: ${PATH_SH}
+    dst: /usr/lib/f00/shell/path.sh
+    file_info:
+      mode: 0644
   - src: ${PROFILE_SH}
     dst: /etc/profile.d/f00.sh
+    file_info:
+      mode: 0644
+  # Critical on Arch: non-login zsh (default terminal) never loads profile.d
+  - src: ${ZSHENV}
+    dst: /etc/zsh/zshenv
     file_info:
       mode: 0644
   - src: ${PROFILE_FISH}
