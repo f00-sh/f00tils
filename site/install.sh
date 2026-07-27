@@ -264,6 +264,15 @@ main() {
   local dir bin
   local tmp=""
   dir="$(pick_dir)"
+  # Pacman owns /usr/bin/f00 — never plant unowned siblings next to it (AUR upgrades break).
+  case "$dir" in
+    /usr|/usr/*)
+      if command -v pacman >/dev/null 2>&1 && pacman -Q f00 &>/dev/null; then
+        die "f00 is installed via pacman/paru; upgrade with: paru -Syu f00  (do not install.sh into ${dir})"
+      fi
+      log "${DIM}warning: installing into ${dir} leaves files pacman does not own; prefer paru -S f00 or ~/.local/bin${RESET}"
+      ;;
+  esac
   mkdir -p "$dir"
 
   if [[ -n "${F00_LOCAL:-}" ]]; then
