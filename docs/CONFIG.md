@@ -6,6 +6,10 @@ Use the product:
 f00              # TUI
 f00-config       # CLI
 f00-config show
+f00-config replace status
 ```
 
-Ship narrative: [README](../README.md). Long config essays removed (Elon pass).
+XDG tree: `~/.config/f00` (config + themes).  
+Install seed and toggles: `replace = true|false`, `f00-config theme list|set|pick`.
+
+Ship narrative: [README](../README.md).
