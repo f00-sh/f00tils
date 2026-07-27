@@ -69,6 +69,8 @@ def main() -> int:
     for lab, pat, body in cases:
         check(lab, pat, body)
     check("invalid-class", "[", "x\n", expect_err=True)
+    # last line without trailing newline (EOF residual)
+    check("no-trailing-nl", "\\d", b"a9")
     # long-form flag
     with tempfile.TemporaryDirectory() as wd:
         path = os.path.join(wd, "t")

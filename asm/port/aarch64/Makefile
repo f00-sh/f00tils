@@ -29,13 +29,20 @@ links: $(TARGET)
 clean:
 	rm -f $(OBJS) $(TARGET) f00-* true false echo grep version
 
-# smoke under qemu-user
+# smoke under qemu-user (includes no-trailing-newline last-line -P case)
 smoke: $(TARGET) links
 	@QEMU=$${QEMU:-qemu-aarch64-static}; \
+	SCR=$${SCRATCH:-/tmp/f00-a64-smoke}; mkdir -p "$$SCR"; \
 	$$QEMU ./f00 --version 2>/dev/null || $$QEMU ./f00; \
 	$$QEMU ./f00-true; test $$? -eq 0; \
 	$$QEMU ./f00-false; test $$? -eq 1; \
 	echo hi | $$QEMU ./f00-echo hi | grep -q hi; \
-	printf 'a1\n' > /tmp/g-a64-t; \
-	$$QEMU ./f00-grep --core -P '\\d' /tmp/g-a64-t | grep -q a1; \
+	printf 'a1\n' > "$$SCR/g-a64-nl"; \
+	$$QEMU ./f00-grep --core -P '\\d' "$$SCR/g-a64-nl" | grep -q a1; \
+	printf 'a9' > "$$SCR/g-a64-nonl"; \
+	out=$$($$QEMU ./f00-grep --core -P '\\d' "$$SCR/g-a64-nonl"); \
+	test "$$out" = "a9"; \
+	$$QEMU ./f00-grep --core -P '\\d' "$$SCR/g-a64-nonl" >/dev/null; \
+	test $$? -eq 0; \
+	printf 'a9' | $$QEMU ./f00-grep --core -P '\\d' | grep -qx a9; \
 	echo "aarch64 smoke ok"

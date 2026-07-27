@@ -16,6 +16,9 @@ grep_main:
 	mov	x22, #0			/* file path or 0=stdin */
 	mov	x23, #0			/* want_p */
 	mov	x24, #1			/* arg i */
+	/* reset match flag each invocation (static BSS otherwise sticky) */
+	adr	x0, had_match
+	strb	wzr, [x0]
 1:	cmp	x24, x19
 	b.ge	2f
 	ldr	x0, [x20, x24, lsl #3]
@@ -88,13 +91,16 @@ rl:
 	mov	x2, #1
 	bl	sys_read
 	cmp	x0, #0
-	b.le	done_file
+	b.lt	eof_maybe		/* error: still flush residual */
+	b.eq	eof_maybe		/* EOF: flush last line if no trailing \n */
 	ldrb	w1, [x24, x23]
 	cmp	w1, #10
 	b.eq	got_line
 	add	x23, x23, #1
 	cmp	x23, #4094
 	b.lo	rl
+	/* line too long: treat as line break */
+	b	got_line
 got_line:
 	/* NUL terminate without newline */
 	strb	wzr, [x24, x23]
@@ -106,7 +112,6 @@ got_line:
 	/* print line */
 	mov	x0, x24
 	bl	putline
-	mov	w19, #1			/* had_match flag in high use — use stack */
 	/* set match flag */
 	adr	x0, had_match
 	mov	w1, #1
@@ -114,15 +119,24 @@ got_line:
 next_line:
 	mov	x23, #0
 	b	rl
+eof_maybe:
+	/* last line without trailing newline: still search residual buffer */
+	cbz	x23, done_file
+	strb	wzr, [x24, x23]
+	mov	x0, x24
+	mov	x1, x21
+	bl	pcre_search
+	cbz	w0, done_file
+	mov	x0, x24
+	bl	putline
+	adr	x0, had_match
+	mov	w1, #1
+	strb	w1, [x0]
 done_file:
 	cbz	x22, no_close
 	mov	x0, x25
 	bl	sys_close
 no_close:
-	adr	x0, had_match
-	ldrb	w0, [x0]
-	cmp	w0, #0
-	cset	w0, eq			/* 0 match->exit0, no match->exit1: if had=0 exit 1 */
 	/* had_match=1 -> exit 0; had=0 -> exit 1 */
 	adr	x1, had_match
 	ldrb	w1, [x1]
