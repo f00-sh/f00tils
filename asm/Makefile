@@ -25,18 +25,19 @@ grep egrep fgrep find xargs diff cmp diff3 sdiff
 
 .PHONY: all clean install links test smoke parity check speed hot ux-check aarch64 aarch64-smoke
 
-# Freestanding Linux aarch64 multicall (gas + qemu-user)
-aarch64:
-	$(MAKE) -C port/aarch64
-
-aarch64-smoke: aarch64
-	$(MAKE) -C port/aarch64 smoke
+# Default goal must stay x86-64 multicall (CI/release only install nasm).
+all: $(TARGET) links
 
 # Boring-solid x86-64 bar: build + smoke + parity (not speed — run make speed separately)
 check: $(TARGET) links smoke parity
 	@echo "check ok (smoke + parity)"
 
-all: $(TARGET) links
+# Freestanding Linux aarch64 multicall (gas + qemu-user) — opt-in, not default
+aarch64:
+	$(MAKE) -C port/aarch64
+
+aarch64-smoke: aarch64
+	$(MAKE) -C port/aarch64 smoke
 
 $(BUILD):
 	mkdir -p $(BUILD)
