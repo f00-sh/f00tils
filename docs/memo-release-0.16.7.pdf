@@ -1,0 +1,111 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+7 0 obj
+<< /Length 3425 >>
+stream
+0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
+0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
+0.000 G 1.00 w
+72.00 682.00 m 540.00 682.00 l S
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 659.80 Tm (Reply to Attn of:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 180.00 659.80 Tm (REL/F00) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 635.80 Tm (TO:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 635.80 Tm (Maintainers and Users) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 615.80 Tm (FROM:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 615.80 Tm (Project Engineering) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 595.80 Tm (SUBJECT:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 595.80 Tm (Release memo - f00tils 0.16.7) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 575.80 Tm (REF:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 575.80 Tm (CHANGELOG.md, scripts/render-brand-assets.py, site Feature tour, v0.16.6) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 561.80 Tm (surface) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 523.80 Tm (Bottom line: Ship 0.16.7 as a documentation and site patch. Regenerated forced-color PTY) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 509.80 Tm (screenshots that demonstrate real features \(ls, grep, diff, cat, find, multicall tour\), added the) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 495.80 Tm (Feature tour on https://f00.sh, and codified screenshot regen as a mandatory release step in the) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 481.80 Tm (operator SOP. Product binary behavior is unchanged from 0.16.6 locale-correct C/POSIX) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 467.80 Tm (classify.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 446.80 Tm (1. Purpose) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 426.80 Tm (Record what 0.16.7 ships under house prime directive \(README, SOP, site, release memo,) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 412.80 Tm (release assets\).) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 385.80 Tm (2. Changes) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 365.80 Tm (- scripts/render-brand-assets.py: real PTY, truecolor, forced color env; multi-command feature) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 86.00 351.80 Tm (shots) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 333.80 Tm (- New screenshots: f00-grep, f00-diff, f00-cat-find; refreshed hero, ls, core-vs-modern, suite) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 315.80 Tm (- Site Feature tour section with explanatory captions; Documents links to this memo) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 297.80 Tm (- SOP procedure 11A: regenerate screenshots every release; release workflow still attaches) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 86.00 283.80 Tm (SOP + memo PDFs) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 259.80 Tm (3. Verification) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 239.80 Tm (3.1 cd asm && make && make check) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 218.80 Tm (3.2 python3 scripts/render-brand-assets.py - hero shows f00 0.16.7) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 197.80 Tm (3.3 README Documents link to docs/memo-release-0.16.7.pdf and sop-f00tils-ops.pdf) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 176.80 Tm (3.4 GitHub Release v0.16.7 assets include SOP, memo, file_id.diz, packages) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 155.80 Tm (3.5 Pages deploy shows #tour with current screenshots) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 128.80 Tm (4. Install) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (1) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+9 0 obj
+<< /Length 523 >>
+stream
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (curl -fsSL https://f00.sh/install.sh | bash \(pin: F00_VERSION=v0.16.7\)) Tj ET
+72.00 675.00 m 252.00 675.00 l S
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 650.00 Tm (Project Engineering) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 636.00 Tm (f00tils release) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 612.00 Tm (Date: 2026-07-27) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 596.00 Tm (cc: ['https://f00.sh', 'github.com/theesfeld/f00']) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (2) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [8 0 R 10 0 R] /Count 2 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+13 0 obj
+<< /Title (Release memo - f00tils 0.16.7) /Author (Project Engineering) /Subject (NASA NAII 1450.3 formal memorandum) /Producer (memo-pdf skill) /Creator (memo-pdf) >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000087 00000 n 
+0000000158 00000 n 
+0000000231 00000 n 
+0000000301 00000 n 
+0000000376 00000 n 
+0000000444 00000 n 
+0000003921 00000 n 
+0000004098 00000 n 
+0000004672 00000 n 
+0000004850 00000 n 
+0000004915 00000 n 
+0000004966 00000 n 
+trailer
+<< /Size 14 /Root 12 0 R /Info 13 0 R >>
+startxref
+5150
+%%EOF

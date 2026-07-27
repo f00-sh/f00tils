@@ -193,8 +193,8 @@ x_status:       resd 1
 x_had_args:     resb 1
 
 section .rodata
-v_find:  db "f00-find (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
-v_xargs: db "f00-xargs (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
+v_find:  db "f00-find (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
+v_xargs: db "f00-xargs (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_find:
     db "Usage: f00-find [-H] [-L] [-P] [PATH...] [EXPRESSION]", 10

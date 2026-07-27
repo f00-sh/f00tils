@@ -6,8 +6,18 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-07-27
+
+### Added
+- Site **Feature tour** (`#tour`): multi-command color-PTY screenshots that explain modern power
+- Screenshot set: `f00-grep`, `f00-diff`, `f00-cat-find` (plus refreshed hero / ls / core-vs-modern / suite)
+
 ### Changed
-- Site feature tour + regenerated color-PTY screenshots (ls/grep/diff/cat/find/suite) on every ship path
+- `scripts/render-brand-assets.py`: real PTY capture (no shell), truecolor ANSI, forced color env; regen every ship
+- README + https://f00.sh Documents links for this release memo; press-kit screenshot table
+
+### Documents
+- Operator SOP updated (screenshot regen on every release); NASA release memo for 0.16.7
 
 ## [0.16.6] - 2026-07-27
 

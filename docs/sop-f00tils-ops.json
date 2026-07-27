@@ -5,12 +5,12 @@
   "to": "Maintainers and Release Operators",
   "from": "Project Engineering",
   "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
-  "ref": "AGENTS.md, README.md, asm/Makefile, install.sh, .github/workflows/release.yml, v0.16.6",
+  "ref": "AGENTS.md, README.md, asm/Makefile, install.sh, scripts/render-brand-assets.py, .github/workflows/release.yml, v0.16.7",
   "date": "2026-07-27",
   "doc_id": "SOP-F00-OPS-001",
   "doc_title": "STANDARD OPERATING PROCEDURE",
-  "version": "v0.16.6",
-  "opening": "Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before you merge. Run make hot / make speed before you claim a speed win. Ship with tarball + install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and CPU. Script-safe GNU clone: pass --core, or set F00_CORE=1 / config core=true. Non-TTY turns chrome off; it does not auto-enable full --core semantics.",
+  "version": "v0.16.7",
+  "opening": "Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before you merge. Run make hot / make speed before you claim a speed win. Ship with tarball + install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and CPU. Every release regenerates color-PTY screenshots (scripts/render-brand-assets.py) and ships NASA SOP + release memo on the GitHub Release.",
   "sections": [
     {
       "heading": "1. Purpose",
@@ -519,8 +519,88 @@
       ]
     },
     {
+      "heading": "11A. Procedure \u2014 regenerate screenshots (every release)",
+      "body": "Public screenshots must match the shipped binary and explain features (multi-command sessions), not decoration one-liners. Capture uses a real PTY and forced color environment.",
+      "steps": [
+        {
+          "n": "11A.1",
+          "text": "Build: cd asm && make (binary version string must match the release)."
+        },
+        {
+          "n": "11A.2",
+          "text": "Regenerate: python3 scripts/render-brand-assets.py"
+        },
+        {
+          "n": "11A.3",
+          "text": "Confirm outputs under site/assets/screenshots/, press-kit/screenshots/, docs/images/."
+        },
+        {
+          "n": "11A.4",
+          "text": "Confirm site Feature tour (#tour) captions still match the shot set."
+        },
+        {
+          "n": "11A.5",
+          "text": "Commit screenshots with the release; never leave stale version strings in hero.png."
+        }
+      ],
+      "flowchart": {
+        "title": "Screenshot regen on ship",
+        "nodes": [
+          {
+            "id": "b",
+            "label": "make (version bump)",
+            "shape": "process"
+          },
+          {
+            "id": "r",
+            "label": "render-brand-assets.py",
+            "shape": "process"
+          },
+          {
+            "id": "v",
+            "label": "Visual check tour shots",
+            "shape": "decision"
+          },
+          {
+            "id": "c",
+            "label": "Commit site + press-kit",
+            "shape": "process"
+          },
+          {
+            "id": "fix",
+            "label": "Fix capture / flags",
+            "shape": "process"
+          }
+        ],
+        "edges": [
+          {
+            "from": "b",
+            "to": "r"
+          },
+          {
+            "from": "r",
+            "to": "v"
+          },
+          {
+            "from": "v",
+            "to": "c",
+            "label": "ok"
+          },
+          {
+            "from": "v",
+            "to": "fix",
+            "label": "stale/wrong"
+          },
+          {
+            "from": "fix",
+            "to": "r"
+          }
+        ]
+      }
+    },
+    {
       "heading": "12. Procedure \u2014 release and ship",
-      "body": "Primary release story: GitHub Release tarball + install.sh. deb/rpm/AUR/brew are secondary.",
+      "body": "Primary release story: GitHub Release tarball + install.sh. deb/rpm/AUR/brew are secondary. Release assets must include file_id.diz, sop-f00tils-ops.pdf, and memo-release-VERSION.pdf (enforced by .github/workflows/release.yml).",
       "steps": [
         {
           "n": "12.1",

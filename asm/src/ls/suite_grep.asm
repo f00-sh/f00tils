@@ -103,7 +103,7 @@ path_len:       resq 1
 stat_buf:       resb 256
 
 section .rodata
-v_grep:  db "f00-grep (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
+v_grep:  db "f00-grep (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_grep:
     db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10

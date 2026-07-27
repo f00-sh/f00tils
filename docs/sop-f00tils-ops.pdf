@@ -19,7 +19,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>
 endobj
 7 0 obj
-<< /Length 3694 >>
+<< /Length 3719 >>
 stream
 0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
 0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
@@ -31,7 +31,7 @@ stream
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 625.65 Tm (Date:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 625.65 Tm (2026-07-27) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 608.65 Tm (Version:) Tj ET
-0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.6) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.7) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 591.65 Tm (Standard:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 591.65 Tm (NASA NAII 1450.3 memorandum layout) Tj ET
 72.00 578.00 m 540.00 578.00 l S
@@ -45,12 +45,12 @@ stream
 0 g BT /F1 12.00 Tf 1 0 0 1 144.00 489.80 Tm (f00tils operator standard operating procedure \(clone, build, gates, install, release\)) Tj ET
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 469.80 Tm (REF:) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 144.00 469.80 Tm (AGENTS.md, README.md, asm/Makefile, install.sh,) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 144.00 455.80 Tm (.github/workflows/release.yml, v0.16.6) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 455.80 Tm (scripts/render-brand-assets.py, .github/workflows/release.yml, v0.16.7) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 417.80 Tm (Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 403.80 Tm (you merge. Run make hot / make speed before you claim a speed win. Ship with tarball +) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 389.80 Tm (install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 375.80 Tm (CPU. Script-safe GNU clone: pass --core, or set F00_CORE=1 / config core=true. Non-TTY) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 361.80 Tm (turns chrome off; it does not auto-enable full --core semantics.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 375.80 Tm (CPU. Every release regenerates color-PTY screenshots \(scripts/render-brand-assets.py\) and ships) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 361.80 Tm (NASA SOP + release memo on the GitHub Release.) Tj ET
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 340.80 Tm (1. Purpose) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 320.80 Tm (This memorandum is the living operator handbook for f00tils \(binary f00 / tools f00-*\). It states) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 306.80 Tm (how to clone the repository, build the freestanding multicall, run quality gates, install, and ship a) Tj ET
@@ -68,7 +68,7 @@ stream
 endstream
 endobj
 8 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 9 0 obj
 << /Length 4873 >>
@@ -171,7 +171,7 @@ stream
 endstream
 endobj
 10 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 11 0 obj
 << /Length 7717 >>
@@ -472,7 +472,7 @@ B
 endstream
 endobj
 12 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 11 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 11 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 13 0 obj
 << /Length 1718 >>
@@ -499,7 +499,7 @@ stream
 endstream
 endobj
 14 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 13 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 13 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 15 0 obj
 << /Length 4799 >>
@@ -706,7 +706,7 @@ B
 endstream
 endobj
 16 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 15 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 15 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 17 0 obj
 << /Length 6986 >>
@@ -980,10 +980,10 @@ B
 endstream
 endobj
 18 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 17 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 17 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 19 0 obj
-<< /Length 3219 >>
+<< /Length 3237 >>
 stream
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 709.80 Tm (9. Procedure - aarch64 port) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 689.80 Tm (The aarch64 path is shipped and grows toward full surface. It is not the default CI/release install) Tj ET
@@ -1016,41 +1016,201 @@ stream
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 225.80 Tm (any edit to install.sh and before release.) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 204.80 Tm (11.1 Sync from repository root.) Tj ET
 0 g BT /F6 9.00 Tf 1 0 0 1 72.00 186.35 Tm (make sync-install) Tj ET
-0 g BT /F2 12.00 Tf 1 0 0 1 72.00 158.80 Tm (12. Procedure - release and ship) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 138.80 Tm (Primary release story: GitHub Release tarball + install.sh. deb/rpm/AUR/brew are secondary.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 117.80 Tm (12.1 Ensure main is green: build, make check, and speed gates as required for the change set.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 158.80 Tm (11A. Procedure - regenerate screenshots \(every release\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 138.80 Tm (Public screenshots must match the shipped binary and explain features \(multi-command) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 124.80 Tm (sessions\), not decoration one-liners. Capture uses a real PTY and forced color environment.) Tj ET
 0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (7) Tj ET
 endstream
 endobj
 20 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 19 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 19 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 21 0 obj
-<< /Length 1688 >>
+<< /Length 5030 >>
 stream
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (12.2 Update version metadata so the binary, man pages, README pin examples, and) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 695.80 Tm (CHANGELOG agree on vMAJOR.MINOR.PATCH.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 674.80 Tm (12.3 Move Unreleased notes in CHANGELOG.md into a dated version section.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 653.80 Tm (12.4 Refresh root file_id.diz for this version. Commit it. Attach it as a GitHub Release asset. Do) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 639.80 Tm (not spotlight it on the website.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 618.80 Tm (12.5 Sync installers \(make sync-install\).) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 597.80 Tm (12.6 Confirm man page\(s\), README.md, and site match behavior.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 576.80 Tm (12.7 Create an annotated tag and push it.) Tj ET
-0 g BT /F6 9.00 Tf 1 0 0 1 72.00 558.35 Tm (git tag -a vX.Y.Z -m "vX.Y.Z") Tj ET
-0 g BT /F6 9.00 Tf 1 0 0 1 72.00 547.35 Tm (git push origin vX.Y.Z) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 525.80 Tm (12.8 Release workflow \(tag v*\) builds Linux x86-64 ASM, runs smoke/parity/speed-gate,) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 511.80 Tm (verifies binary version, packages tarball, publishes GitHub Release.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 490.80 Tm (12.9 Smoke-test the public install path. Do not move or reuse a published tag for different bits.) Tj ET
-0 g BT /F6 9.00 Tf 1 0 0 1 72.00 472.35 Tm (curl -fsSL https://f00.sh/install.sh | F00_VERSION=vX.Y.Z bash) Tj ET
-0 g BT /F6 9.00 Tf 1 0 0 1 72.00 461.35 Tm (f00 --version) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (11A.1 Build: cd asm && make \(binary version string must match the release\).) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 688.80 Tm (11A.2 Regenerate: python3 scripts/render-brand-assets.py) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 667.80 Tm (11A.3 Confirm outputs under site/assets/screenshots/, press-kit/screenshots/, docs/images/.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 646.80 Tm (11A.4 Confirm site Feature tour \(#tour\) captions still match the shot set.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 625.80 Tm (11A.5 Commit screenshots with the release; never leave stale version strings in hero.png.) Tj ET
+0 g BT /F3 12.00 Tf 1 0 0 1 72.00 604.80 Tm (Figure. Screenshot regen on ship) Tj ET
+0.220 G 1.05 w
+306.00 559.00 m
+S
+0.220 G 1.05 w
+306.00 559.00 m 306.00 531.00 l S
+0.220 g
+306.00 531.00 m
+303.07 537.50 l
+308.93 537.50 l
+h
+f
+0.220 G 1.05 w
+306.00 495.00 m
+S
+0.220 G 1.05 w
+306.00 495.00 m 306.00 467.00 l S
+0.220 g
+306.00 467.00 m
+303.07 473.50 l
+308.93 473.50 l
+h
+f
+0.220 G 1.05 w
+306.00 419.00 m
+306.00 407.80 l
+249.49 407.80 l
+306.00 419.00 m
+306.00 407.80 l
+249.49 407.80 l
+S
+0.220 G 1.05 w
+249.49 407.80 m 249.49 391.00 l S
+0.220 g
+249.49 391.00 m
+246.56 397.50 l
+252.41 397.50 l
+h
+f
+1.000 g 1.000 G 0.10 w 309.78 408.00 12.45 11.00 re B
+0 g BT /F4 8.00 Tf 1 0 0 1 311.78 411.00 Tm (ok) Tj ET
+0.220 G 1.05 w
+306.00 419.00 m
+306.00 406.40 l
+372.88 406.40 l
+306.00 419.00 m
+306.00 406.40 l
+372.88 406.40 l
+S
+0.220 G 1.05 w
+372.88 406.40 m 372.88 391.00 l S
+0.220 g
+372.88 391.00 m
+369.96 397.50 l
+375.81 397.50 l
+h
+f
+1.000 g 1.000 G 0.10 w 316.99 406.40 44.90 11.00 re B
+0 g BT /F4 8.00 Tf 1 0 0 1 318.99 409.40 Tm (stale/wrong) Tj ET
+0.220 G 1.05 w
+372.88 391.00 m
+372.88 448.20 l
+306.00 448.20 l
+372.88 391.00 m
+372.88 448.20 l
+306.00 448.20 l
+S
+0.220 G 1.05 w
+306.00 448.20 m 306.00 495.00 l S
+0.220 g
+306.00 495.00 m
+308.93 488.50 l
+303.07 488.50 l
+h
+f
+0.960 g
+0.180 G 1.15 w
+258.74 595.00 m
+353.26 595.00 l
+357.13 595.00 360.26 591.87 360.26 588.00 c
+360.26 566.00 l
+360.26 562.13 357.13 559.00 353.26 559.00 c
+258.74 559.00 l
+254.87 559.00 251.74 562.13 251.74 566.00 c
+251.74 588.00 l
+251.74 591.87 254.87 595.00 258.74 595.00 c
+h
+B
+0 g BT /F4 9.00 Tf 1 0 0 1 263.74 574.85 Tm (make \(version bump\)) Tj ET
+0.960 g
+0.180 G 1.15 w
+254.48 531.00 m
+357.52 531.00 l
+361.38 531.00 364.52 527.87 364.52 524.00 c
+364.52 502.00 l
+364.52 498.13 361.38 495.00 357.52 495.00 c
+254.48 495.00 l
+250.62 495.00 247.48 498.13 247.48 502.00 c
+247.48 524.00 l
+247.48 527.87 250.62 531.00 254.48 531.00 c
+h
+B
+0 g BT /F4 9.00 Tf 1 0 0 1 259.48 510.85 Tm (render-brand-assets.py) Tj ET
+0.930 g
+0.180 G 1.15 w
+306.00 467.00 m
+366.27 443.00 l
+306.00 419.00 l
+245.73 443.00 l
+h
+B
+0 g BT /F4 9.00 Tf 1 0 0 1 280.74 446.35 Tm (Visual check) Tj ET
+0 g BT /F4 9.00 Tf 1 0 0 1 286.24 435.35 Tm (tour shots) Tj ET
+0.960 g
+0.180 G 1.15 w
+198.60 391.00 m
+300.37 391.00 l
+304.23 391.00 307.37 387.87 307.37 384.00 c
+307.37 362.00 l
+307.37 358.13 304.23 355.00 300.37 355.00 c
+198.60 355.00 l
+194.74 355.00 191.60 358.13 191.60 362.00 c
+191.60 384.00 l
+191.60 387.87 194.74 391.00 198.60 391.00 c
+h
+B
+0 g BT /F4 9.00 Tf 1 0 0 1 203.60 370.85 Tm (Commit site + press-kit) Tj ET
+0.960 g
+0.180 G 1.15 w
+332.37 391.00 m
+413.40 391.00 l
+417.26 391.00 420.40 387.87 420.40 384.00 c
+420.40 362.00 l
+420.40 358.13 417.26 355.00 413.40 355.00 c
+332.37 355.00 l
+328.50 355.00 325.37 358.13 325.37 362.00 c
+325.37 384.00 l
+325.37 387.87 328.50 391.00 332.37 391.00 c
+h
+B
+0 g BT /F4 9.00 Tf 1 0 0 1 337.37 370.85 Tm (Fix capture / flags) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 322.80 Tm (12. Procedure - release and ship) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 302.80 Tm (Primary release story: GitHub Release tarball + install.sh. deb/rpm/AUR/brew are secondary.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 288.80 Tm (Release assets must include file_id.diz, sop-f00tils-ops.pdf, and memo-release-VERSION.pdf) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 274.80 Tm (\(enforced by .github/workflows/release.yml\).) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 253.80 Tm (12.1 Ensure main is green: build, make check, and speed gates as required for the change set.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 232.80 Tm (12.2 Update version metadata so the binary, man pages, README pin examples, and) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 218.80 Tm (CHANGELOG agree on vMAJOR.MINOR.PATCH.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 197.80 Tm (12.3 Move Unreleased notes in CHANGELOG.md into a dated version section.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 176.80 Tm (12.4 Refresh root file_id.diz for this version. Commit it. Attach it as a GitHub Release asset. Do) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 162.80 Tm (not spotlight it on the website.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 141.80 Tm (12.5 Sync installers \(make sync-install\).) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 120.80 Tm (12.6 Confirm man page\(s\), README.md, and site match behavior.) Tj ET
 0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (8) Tj ET
 endstream
 endobj
 22 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 21 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 21 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 23 0 obj
-<< /Length 5247 >>
+<< /Length 892 >>
+stream
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (12.7 Create an annotated tag and push it.) Tj ET
+0 g BT /F6 9.00 Tf 1 0 0 1 72.00 691.35 Tm (git tag -a vX.Y.Z -m "vX.Y.Z") Tj ET
+0 g BT /F6 9.00 Tf 1 0 0 1 72.00 680.35 Tm (git push origin vX.Y.Z) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 658.80 Tm (12.8 Release workflow \(tag v*\) builds Linux x86-64 ASM, runs smoke/parity/speed-gate,) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 644.80 Tm (verifies binary version, packages tarball, publishes GitHub Release.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 623.80 Tm (12.9 Smoke-test the public install path. Do not move or reuse a published tag for different bits.) Tj ET
+0 g BT /F6 9.00 Tf 1 0 0 1 72.00 605.35 Tm (curl -fsSL https://f00.sh/install.sh | F00_VERSION=vX.Y.Z bash) Tj ET
+0 g BT /F6 9.00 Tf 1 0 0 1 72.00 594.35 Tm (f00 --version) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (9) Tj ET
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 23 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+25 0 obj
+<< /Length 5248 >>
 stream
 0 g BT /F3 12.00 Tf 1 0 0 1 72.00 709.80 Tm (Figure. Release and deploy flow) Tj ET
 0.220 G 1.05 w
@@ -1290,13 +1450,13 @@ B
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 151.80 Tm (Use packaging scripts under scripts/ and configs under packaging/ and Formula/ when you) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 137.80 Tm (intentionally ship secondary channels. They must not replace tarball + install.sh as the default) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 123.80 Tm (install story.) Tj ET
-0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (9) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 301.00 40.00 Tm (10) Tj ET
 endstream
 endobj
-24 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 23 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+26 0 obj
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 25 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
-25 0 obj
+27 0 obj
 << /Length 5443 >>
 stream
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (- scripts/build-linux-packages.sh) Tj ET
@@ -1387,13 +1547,13 @@ stream
 0 g BT /F1 9.50 Tf 1 0 0 1 225.76 119.42 Tm (Upgrade to Node 24-era pins per house rules.) Tj ET
 540.00 131.50 m 540.00 112.00 l S
 72.00 112.00 m 540.00 112.00 l S
-0 g BT /F1 10.00 Tf 1 0 0 1 301.00 40.00 Tm (10) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 301.00 40.00 Tm (11) Tj ET
 endstream
 endobj
-26 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 25 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+28 0 obj
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 27 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
-27 0 obj
+29 0 obj
 << /Length 2021 >>
 stream
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 709.80 Tm (18. References) Tj ET
@@ -1417,23 +1577,23 @@ stream
 0 g BT /F1 11.00 Tf 1 0 0 1 72.00 362.00 Tm (Date: 2026-07-27) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 72.00 346.00 Tm (Enclosure: None. Companion sources are in-repository paths listed in section 18.) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 72.00 332.00 Tm (cc: Maintainers, Release Operators) Tj ET
-0 g BT /F1 10.00 Tf 1 0 0 1 301.00 40.00 Tm (11) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 301.00 40.00 Tm (12) Tj ET
 endstream
 endobj
-28 0 obj
-<< /Type /Page /Parent 29 0 R /MediaBox [0 0 612 792] /Contents 27 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
-endobj
-29 0 obj
-<< /Type /Pages /Kids [8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R] /Count 11 >>
-endobj
 30 0 obj
-<< /Type /Catalog /Pages 29 0 R >>
+<< /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 29 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 31 0 obj
+<< /Type /Pages /Kids [8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R 30 0 R] /Count 12 >>
+endobj
+32 0 obj
+<< /Type /Catalog /Pages 31 0 R >>
+endobj
+33 0 obj
 << /Title (STANDARD OPERATING PROCEDURE) /Author (Project Engineering) /Subject (NASA NAII 1450.3 SOP memorandum) /Producer (memo-pdf skill) /Creator (memo-pdf) >>
 endobj
 xref
-0 32
+0 34
 0000000000 65535 f 
 0000000015 00000 n 
 0000000087 00000 n 
@@ -1442,32 +1602,34 @@ xref
 0000000301 00000 n 
 0000000376 00000 n 
 0000000444 00000 n 
-0000004190 00000 n 
-0000004367 00000 n 
-0000009292 00000 n 
-0000009470 00000 n 
-0000017240 00000 n 
-0000017419 00000 n 
-0000019190 00000 n 
-0000019369 00000 n 
-0000024221 00000 n 
-0000024400 00000 n 
-0000031439 00000 n 
-0000031618 00000 n 
-0000034890 00000 n 
-0000035069 00000 n 
-0000036810 00000 n 
-0000036989 00000 n 
-0000042289 00000 n 
-0000042468 00000 n 
-0000047964 00000 n 
-0000048143 00000 n 
-0000050217 00000 n 
-0000050396 00000 n 
-0000050525 00000 n 
-0000050576 00000 n 
+0000004215 00000 n 
+0000004392 00000 n 
+0000009317 00000 n 
+0000009495 00000 n 
+0000017265 00000 n 
+0000017444 00000 n 
+0000019215 00000 n 
+0000019394 00000 n 
+0000024246 00000 n 
+0000024425 00000 n 
+0000031464 00000 n 
+0000031643 00000 n 
+0000034933 00000 n 
+0000035112 00000 n 
+0000040195 00000 n 
+0000040374 00000 n 
+0000041318 00000 n 
+0000041497 00000 n 
+0000046798 00000 n 
+0000046977 00000 n 
+0000052473 00000 n 
+0000052652 00000 n 
+0000054726 00000 n 
+0000054905 00000 n 
+0000055041 00000 n 
+0000055092 00000 n 
 trailer
-<< /Size 32 /Root 30 0 R /Info 31 0 R >>
+<< /Size 34 /Root 32 0 R /Info 33 0 R >>
 startxref
-50756
+55272
 %%EOF
