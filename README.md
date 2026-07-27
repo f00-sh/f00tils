@@ -8,7 +8,7 @@ Replaces **coreutils · grep · findutils · diffutils** — **115** tools. Bina
 curl -fsSL https://f00.sh/install.sh | bash
 ```
 
-[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.4`
+[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.5`
 
 ---
 
@@ -53,7 +53,7 @@ diff --core a b         # normal format, script-safe
 
 ```bash
 curl -fsSL https://f00.sh/install.sh | bash
-# pin: F00_VERSION=v0.16.4
+# pin: F00_VERSION=v0.16.5
 # side-by-side only: F00_SUPERSEDE=0
 ```
 

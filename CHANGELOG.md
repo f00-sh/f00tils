@@ -6,6 +6,31 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-07-27
+
+### Added
+- Fail-closed `asm/benches/abc-evidence.py` (A/B/C: matrix ⊆ docs, modern smoke, multi-MiB law-2 limbs, suite-shaped `split -l 50`)
+- `make abc` atomic gate (check + hot + abc-evidence, pipefail, f00 sha256 evidence)
+- Multi-key quicksort for plain `sort` (C-locale full-line work); hot frozen `LC_ALL=C` + `/usr/bin` oracles
+- `split`: bulk multi-line write path + GNU-compatible suffixes (`aa`…`yz`, then `zaaa`…)
+- Modern grep power: `--json`/`--csv`, `--type EXT`, `--ignore-file` (skip `.git`), `--binary` (NUL policy)
+- Modern find/diff/cat extras: find `.git` skip + JSON/CSV; diff `--word-diff` + JSON/CSV; cat shebang paint
+- `diff -c` under `LC_ALL=C`: GNU ctime headers (`Www Mmm dd HH:MM:SS YYYY`); `-u` keeps ISO+tz
+- `cmp` locale-aware differ word: `char` (C/POSIX) vs `byte` (multibyte locales)
+
+### Fixed
+- Hot `find`/`diff` oracles no longer resolve to installed f00 via `PATH` (`/usr/bin/*` only)
+- Sort past-cliff: anonymous mmap + full read (avoids MAP_PRIVATE COW per-line NULs)
+- Sort blank-field `-k` without `-t`: include separator blanks (GNU without `-b`); multi-blank fixtures parity
+- Grep `-i -F` dual first-byte 32B SSE path; page-safe word `strlen`/`strcmp`
+- Diff multi-MiB `-q` word-wise `memcmp_n`; multi-hunk `-u` unique-hash LCS path
+
+### Changed
+- `docs/MODERN-FEATURES.md`: grep row documents `--type EXT`
+- `site/bench/suite.json`: `split` remeasured WIN (~1.21× wall); honesty notes for spawn-scale + known debt
+- full-speed-gate: freeze `PATH`/`LC_ALL=C`; suite-shaped split fixture; `tsort`/`shuf` explicit `skip-known-debt-*`
+- `docs/COREUTILS-PROGRESS.md`: notes for split win + tsort/shuf debt
+
 ### Fixed
 - Arch/AUR upgrade path: unowned userland links (pre-0.16.4 coreutils-only package + root `install.sh` into `/usr`) blocked `paru` with “exists in filesystem”; `scripts/arch-clean-unowned-f00.sh` + install.sh refuses `/usr` when pacman owns `f00`
 

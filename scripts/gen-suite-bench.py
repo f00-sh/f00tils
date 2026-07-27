@@ -680,7 +680,8 @@ def main() -> int:
             "n_runs": N,
             "method": (
                 "warm-cache spawn-inclusive median wall "
-                "+ separate children-rusage CPU (no RSS)"
+                "+ separate children-rusage CPU (no RSS); "
+                "suite geos are spawn-inclusive — multi-MiB engines proved by make hot"
             ),
             "f00_version": subprocess.run(
                 [str(F00), "--version"], capture_output=True, text=True, check=False
@@ -690,8 +691,11 @@ def main() -> int:
             "notes": (
                 "f00 timed as f00-TOOL --core; GNU as /usr/bin/TOOL. "
                 "Wall and CPU are separate averages (never blended). "
-                "Wall = spawn-inclusive perf_counter around subprocess. "
-                "CPU = user+sys via RUSAGE_CHILDREN delta. No RSS."
+                "Wall = spawn-inclusive perf_counter around subprocess "
+                "(includes process start — not multi-MiB engine claims by itself). "
+                "CPU = user+sys via RUSAGE_CHILDREN delta. No RSS. "
+                "Real multi-MiB law-2 proof is make hot (sort/ls/grep/diff/find), "
+                "not these suite geo headlines."
             ),
             "packages": {
                 p: {

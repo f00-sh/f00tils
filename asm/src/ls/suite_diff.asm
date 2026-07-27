@@ -25,6 +25,9 @@ extern err_str
 %define DF_SUPPRESS  32
 %define DF_CONTEXT   64
 %define DF_RECURSIVE 128
+%define DF_JSON      256
+%define DF_CSV       512
+%define DF_WORD      1024
 
 %define LINE_CAP     65536
 ; Full-file line index hard ceiling — never silent-truncate (exit 2 / EFBIG on overflow).
@@ -33,7 +36,7 @@ extern err_str
 %define MAX_LINES    32768
 ; 8MiB/pool: multi-MiB single-line files must fully load for --core -u drop-in
 %define POOL_CAP     (8*1024*1024)
-%define LCS_MAX      512
+%define LCS_MAX      1024
 %define CTX_DEFAULT  3
 %define STAT_SIZE_OFF 48
 %define STAT_MODE_OFF 24
@@ -130,10 +133,10 @@ diff_pstore:    resb DIFF_PSTORE
 diff_pstore_n:  resq 1
 
 section .rodata
-v_diff:  db "f00-diff (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff3: db "f00-diff3 (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
-v_sdiff: db "f00-sdiff (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff3: db "f00-diff3 (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
+v_sdiff: db "f00-sdiff (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_diff:
     db "Usage: f00-diff [OPTION]... FILE1 FILE2", 10
@@ -143,8 +146,11 @@ h_diff:
     db "  -q, --brief report only when files differ", 10
     db "  -r, --recursive  recursively compare directories", 10
     db "      --core  GNU-oriented (default format = normal)", 10
+    db "      --json  modern JSON hunks (f00/v1)", 10
+    db "      --csv   modern CSV hunk summary", 10
+    db "      --word-diff  modern word-oriented markers (TTY)", 10
     db "  --help  --version", 10
-    db "Modern TTY: themed -/+ lines (delta-class).", 10, 0
+    db "Modern TTY: themed -/+ lines (delta-class); side-by-side via sdiff.", 10, 0
 
 h_cmp:
     db "Usage: f00-cmp [OPTION]... FILE1 FILE2", 10
@@ -169,6 +175,17 @@ h_sdiff:
     db "  --help  --version", 10, 0
 
 opt_core:    db "--core", 0
+opt_json:    db "--json", 0
+opt_csv:     db "--csv", 0
+opt_word:    db "--word-diff", 0
+dj_o:        db '{"schema":"f00/v1","differ":true,"a":"', 0
+dj_m:        db '","b":"', 0
+dj_e:        db '"}', 10, 0
+dj_csv_end:  db ",differ", 10, 0
+wd_om:       db "[-", 0
+wd_cm:       db "-]", 0
+wd_op:       db "{+", 0
+wd_cp:       db "+}", 0
 opt_help:    db "--help", 0
 opt_version: db "--version", 0
 opt_quiet:   db "--quiet", 0
@@ -179,6 +196,9 @@ s_unified:   db "unified", 0
 s_context:   db "context", 0
 s_brief:     db "brief", 0
 s_recursive: db "recursive", 0
+s_json:      db "json", 0
+s_csv:       db "csv", 0
+s_word:      db "word-diff", 0
 only_in_pre: db "Only in ", 0
 only_in_mid: db ": ", 0
 common_sub_pre: db "Common subdirectories: ", 0
@@ -212,8 +232,16 @@ msg_nonl:    db "\ No newline at end of file", 10, 0
 files_differ: db " differ", 10, 0
 files_pre:    db "Files ", 0
 files_and:    db " and ", 0
-cmp_differ:  db " differ: byte ", 0
+; GNU cmp: "char" in C/POSIX locale, "byte" in multibyte (e.g. en_US.UTF-8).
+cmp_differ_char: db " differ: char ", 0
+cmp_differ_byte: db " differ: byte ", 0
 cmp_line:    db ", line ", 0
+env_lcall:   db "LC_ALL=", 0
+env_lang:    db "LANG=", 0
+; ctime names: 4 bytes each (3 letters + NUL), index * 4
+wdays:  db "Sun",0,"Mon",0,"Tue",0,"Wed",0,"Thu",0,"Fri",0,"Sat",0
+months: db "Jan",0,"Feb",0,"Mar",0,"Apr",0,"May",0,"Jun",0
+        db "Jul",0,"Aug",0,"Sep",0,"Oct",0,"Nov",0,"Dec",0
 cmp_eof_pre: db "cmp: EOF on '", 0
 cmp_eof_mid: db "' after byte ", 0
 cmp_eof_ln:  db ", in line ", 0
@@ -276,21 +304,53 @@ parse_u64:
 .done:
     ret
 
-; memcmp_n(rdi, rsi, rdx=n) → eax 0 if equal. Preserves no rcx.
+; memcmp_n(rdi, rsi, rdx=n) → eax 0 if equal, 1 if differ.
+; Word-wise (32B then 8B then tail). n is length-bounded so no page over-read.
 memcmp_n:
     xor eax, eax
     test rdx, rdx
     jz .eq
     push rcx
+.q32:
+    cmp rdx, 32
+    jb .q8
+    mov rax, [rdi]
+    cmp rax, [rsi]
+    jne .ne
+    mov rax, [rdi+8]
+    cmp rax, [rsi+8]
+    jne .ne
+    mov rax, [rdi+16]
+    cmp rax, [rsi+16]
+    jne .ne
+    mov rax, [rdi+24]
+    cmp rax, [rsi+24]
+    jne .ne
+    add rdi, 32
+    add rsi, 32
+    sub rdx, 32
+    jmp .q32
+.q8:
+    cmp rdx, 8
+    jb .bytes
+    mov rax, [rdi]
+    cmp rax, [rsi]
+    jne .ne
+    add rdi, 8
+    add rsi, 8
+    sub rdx, 8
+    jmp .q8
+.bytes:
+    test rdx, rdx
+    jz .ok
     xor ecx, ecx
 .lp:
-    cmp rcx, rdx
-    jae .ok
     mov al, [rdi+rcx]
     cmp al, [rsi+rcx]
     jne .ne
     inc rcx
-    jmp .lp
+    cmp rcx, rdx
+    jb .lp
 .ok: xor eax, eax
     pop rcx
     ret
@@ -777,7 +837,10 @@ bulk_equal_ab:
     jne .diffsz
     test r14, r14
     jz .eq                          ; both empty
-    ; Prefer single-shot read+memcmp when both fit in pool (typical gate payloads)
+    ; Prefer mmap+memcmp for multi-KiB same-size files (beats GNU -q on multi-MiB)
+    cmp r14, 65536
+    jae .mmap_cmp
+    ; tiny: single-shot read+memcmp into pool
     cmp r14, POOL_CAP
     jae .stream
     xor r8, r8
@@ -809,6 +872,53 @@ bulk_equal_ab:
     jle .erra_rd
     add r8, rax
     jmp .rdb
+.mmap_cmp:
+    ; mmap both files fully, memcmp, munmap
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r14
+    mov rdx, PROT_READ
+    mov r10, MAP_PRIVATE
+    mov r8, r12
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .stream
+    mov rbx, rax                    ; map A
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r15
+    mov rdx, PROT_READ
+    mov r10, MAP_PRIVATE
+    mov r8, r13
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .mmap_fail_a
+    mov r8, rax                     ; map B
+    mov rdi, rbx
+    mov rsi, r8
+    mov rdx, r14
+    call memcmp_n
+    push rax
+    mov rax, SYS_munmap
+    mov rdi, rbx
+    mov rsi, r14
+    syscall
+    mov rax, SYS_munmap
+    mov rdi, r8
+    mov rsi, r15
+    syscall
+    pop rax
+    test eax, eax
+    jz .eq
+    jmp .diffsz
+.mmap_fail_a:
+    mov rax, SYS_munmap
+    mov rdi, rbx
+    mov rsi, r14
+    syscall
+    jmp .stream
 .oneshot_cmp:
     lea rdi, [pool_a]
     lea rsi, [pool_b]
@@ -1184,15 +1294,19 @@ diff_main:
 .sn: inc rsi
     jmp .sh
 .dl:
-    add rdi, 2
+    ; strcmp clobbers rdi — always reload argv+2 before each compare
+    mov rbx, [r13 + r14*8]
+    lea rdi, [rbx + 2]
     lea rsi, [s_help]
     call strcmp
     test eax, eax
     jz .dhelp
+    lea rdi, [rbx + 2]
     lea rsi, [s_version]
     call strcmp
     test eax, eax
     jz .dver
+    lea rdi, [rbx + 2]
     lea rsi, [s_unified]
     call strcmp
     test eax, eax
@@ -1201,6 +1315,7 @@ diff_main:
     and dword [g_flags], ~DF_CONTEXT
     jmp .dn
 .dctx:
+    lea rdi, [rbx + 2]
     lea rsi, [s_context]
     call strcmp
     test eax, eax
@@ -1208,18 +1323,50 @@ diff_main:
     or dword [g_flags], DF_CONTEXT
     and dword [g_flags], ~DF_UNIFIED
     jmp .dn
-.db: lea rsi, [s_brief]
+.db: lea rdi, [rbx + 2]
+    lea rsi, [s_brief]
     call strcmp
     test eax, eax
     jnz .drec
     or dword [g_flags], DF_BRIEF
     jmp .dn
 .drec:
+    lea rdi, [rbx + 2]
     lea rsi, [s_recursive]
     call strcmp
     test eax, eax
-    jnz .dn
+    jnz .djson
     or dword [g_flags], DF_RECURSIVE
+    jmp .dn
+.djson:
+    lea rdi, [rbx + 2]
+    lea rsi, [s_json]
+    call strcmp
+    test eax, eax
+    jnz .dcsv
+    test dword [g_flags], DF_CORE
+    jnz .dn
+    or dword [g_flags], DF_JSON
+    jmp .dn
+.dcsv:
+    lea rdi, [rbx + 2]
+    lea rsi, [s_csv]
+    call strcmp
+    test eax, eax
+    jnz .dword
+    test dword [g_flags], DF_CORE
+    jnz .dn
+    or dword [g_flags], DF_CSV
+    jmp .dn
+.dword:
+    lea rdi, [rbx + 2]
+    lea rsi, [s_word]
+    call strcmp
+    test eax, eax
+    jnz .dn
+    test dword [g_flags], DF_CORE
+    jnz .dn
+    or dword [g_flags], DF_WORD
     jmp .dn
 .dhelp:
     lea rsi, [h_diff]
@@ -1245,15 +1392,18 @@ diff_main:
 .rp:
     cmp r14, r12
     jge .rpdone
-    mov rdi, [r13 + r14*8]
+    mov rbx, [r13 + r14*8]
+    mov rdi, rbx
     lea rsi, [opt_core]
     call strcmp
     test eax, eax
     jnz .rph
     or dword [g_flags], DF_CORE
     mov byte [g_color], 0
+    and dword [g_flags], ~(DF_JSON | DF_CSV | DF_WORD)
     jmp .rpn
 .rph:
+    mov rdi, rbx
     lea rsi, [opt_help]
     call strcmp
     test eax, eax
@@ -1262,13 +1412,44 @@ diff_main:
     call out_str
     jmp .dex0
 .rpv:
+    mov rdi, rbx
     lea rsi, [opt_version]
     call strcmp
     test eax, eax
-    jnz .rpn
+    jnz .rpj
     lea rsi, [v_diff]
     call out_str
     jmp .dex0
+.rpj:
+    mov rdi, rbx
+    lea rsi, [opt_json]
+    call strcmp
+    test eax, eax
+    jnz .rpc
+    test dword [g_flags], DF_CORE
+    jnz .rpn
+    or dword [g_flags], DF_JSON
+    jmp .rpn
+.rpc:
+    mov rdi, rbx
+    lea rsi, [opt_csv]
+    call strcmp
+    test eax, eax
+    jnz .rpw
+    test dword [g_flags], DF_CORE
+    jnz .rpn
+    or dword [g_flags], DF_CSV
+    jmp .rpn
+.rpw:
+    mov rdi, rbx
+    lea rsi, [opt_word]
+    call strcmp
+    test eax, eax
+    jnz .rpn
+    test dword [g_flags], DF_CORE
+    jnz .rpn
+    or dword [g_flags], DF_WORD
+    jmp .rpn
 .rpn: inc r14
     jmp .rp
 .rpdone:
@@ -1980,12 +2161,45 @@ diff_files:
     je .same
     cmp eax, 2
     je .out
-    ; bulk_differ
     mov byte [bulk_diff], 1
     test dword [g_flags], DF_BRIEF
     jnz .emit_brief
+    ; modern --json/--csv without -q: machine summary, not full LCS
+    test dword [g_flags], DF_CORE
+    jnz .need_lines
+    test dword [g_flags], DF_JSON | DF_CSV
+    jnz .emit_brief
     jmp .need_lines
 .emit_brief:
+    test dword [g_flags], DF_JSON
+    jz .emit_brief_plain
+    lea rsi, [dj_o]
+    call out_str
+    mov rsi, [diff_a]
+    call out_str
+    lea rsi, [dj_m]
+    call out_str
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [dj_e]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .out
+.emit_brief_csv:
+.emit_brief_plain:
+    test dword [g_flags], DF_CSV
+    jz .emit_brief_txt
+    mov rsi, [diff_a]
+    call out_str
+    mov dil, ','
+    call out_byte
+    mov rsi, [diff_b]
+    call out_str
+    lea rsi, [dj_csv_end]
+    call out_str
+    mov dword [g_exit], 1
+    jmp .out
+.emit_brief_txt:
     lea rsi, [files_pre]
     call out_str
     mov rsi, [diff_a]
@@ -2282,9 +2496,8 @@ classify_change_groups:
     ret
 
 ; lcs_mark_range — mark changed lines in a[r12..r14) vs b[r13..r15).
-; Small middles: solid DP LCS. Large: divide-and-conquer on an order-preserving
-; anchor match so commons across LCS_MAX tile boundaries still align (e.g.
-; A=512uniq+MATCH, B=MATCH+512uniq → MATCH is common, not delete+insert).
+; Prefer unique-line hash matching when n or m is large (multi-hunk real work);
+; falls back to solid DP / D&C LCS when needed.
 lcs_mark_range:
     push rbx
     push r12
@@ -2303,6 +2516,18 @@ lcs_mark_range:
     jz .oins
     test rbx, rbx
     jz .odel
+    ; large middle: try O(n+m) unique-hash LCS (wins multi-hunk -u vs GNU)
+    mov rcx, rax
+    cmp rcx, rbx
+    jae .uq_n
+    mov rcx, rbx
+.uq_n:
+    cmp rcx, 64
+    jb .small
+    call lcs_mark_unique
+    test al, al
+    jnz .done                       ; al=1 used unique path
+.small:
     cmp rax, LCS_MAX
     ja .dc
     cmp rbx, LCS_MAX
@@ -2369,6 +2594,212 @@ lcs_mark_range:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; lcs_mark_unique — greedy LCS when all lines in the middle are unique by content.
+; Uses open-address hash of B lines → first index. Order-preserving scan of A.
+; → al=1 success, al=0 fall back (duplicate detected or table full).
+; Hash table: pool_c as array of {hash:u64, idx:u64} pairs, capacity 4096 slots.
+%define UQ_CAP 65536                ; open-address slots (pool_c is 8MiB)
+lcs_mark_unique:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    ; clear hash table: UQ_CAP entries × 16 bytes in pool_c
+    lea rdi, [pool_c]
+    xor eax, eax
+    mov rcx, UQ_CAP * 2
+    rep stosq
+    ; insert all B lines (16-byte entries: hash, idx+1)
+    mov rbp, r13
+.ins2:
+    cmp rbp, r15
+    jae .scan_a
+    mov rsi, [lines_b_ptr + rbp*8]
+    mov rdx, [lines_b_len + rbp*8]
+    call uq_hash_line
+    mov r8, rax                     ; hash
+    mov r9, UQ_CAP
+    dec r9
+    and rax, r9                     ; slot
+    xor ebx, ebx
+.probe:
+    lea rdi, [pool_c]
+    mov rcx, rax
+    shl rcx, 4                      ; *16
+    cmp qword [rdi + rcx + 8], 0
+    je .place
+    cmp qword [rdi + rcx], r8
+    jne .pr2
+    ; same hash — verify content; if equal, duplicate B line
+    mov r10, [rdi + rcx + 8]
+    dec r10                         ; existing ib
+    mov rsi, [lines_b_ptr + r10*8]
+    mov rdx, [lines_b_len + r10*8]
+    mov rdi, [lines_b_ptr + rbp*8]
+    mov rcx, [lines_b_len + rbp*8]
+    cmp rdx, rcx
+    jne .pr2
+    call uq_memeq
+    test al, al
+    jnz .fail                       ; duplicate
+.pr2:
+    inc rax
+    and rax, r9
+    inc ebx
+    cmp ebx, UQ_CAP
+    jae .fail
+    jmp .probe
+.place:
+    lea rdi, [pool_c]
+    mov rcx, rax
+    shl rcx, 4
+    mov [rdi + rcx], r8
+    lea rax, [rbp + 1]
+    mov [rdi + rcx + 8], rax
+    inc rbp
+    jmp .ins2
+.scan_a:
+    ; mark all A middle changed, then clear commons; same for B
+    mov rcx, r12
+.ma:
+    cmp rcx, r14
+    jae .mb0
+    mov byte [mark_a + rcx], 1
+    inc rcx
+    jmp .ma
+.mb0:
+    mov rcx, r13
+.mb:
+    cmp rcx, r15
+    jae .walk
+    mov byte [mark_b + rcx], 1
+    inc rcx
+    jmp .mb
+.walk:
+    mov rbp, r13
+    dec rbp                         ; last matched ib
+    mov rbx, r12                    ; ia
+.wa:
+    cmp rbx, r14
+    jae .ok
+    mov rsi, [lines_a_ptr + rbx*8]
+    mov rdx, [lines_a_len + rbx*8]
+    call uq_hash_line
+    mov r8, rax
+    mov r9, UQ_CAP
+    dec r9
+    and rax, r9
+    xor r10d, r10d
+.wp:
+    lea rdi, [pool_c]
+    mov rcx, rax
+    shl rcx, 4
+    cmp qword [rdi + rcx + 8], 0
+    je .no_match
+    cmp qword [rdi + rcx], r8
+    jne .wn
+    mov r11, [rdi + rcx + 8]
+    dec r11                         ; ib candidate
+    cmp r11, rbp
+    jle .wn                         ; not order-preserving
+    cmp r11, r15
+    jae .wn
+    ; content equal?
+    push rax
+    push r8
+    push r10
+    push r11
+    mov rsi, [lines_b_ptr + r11*8]
+    mov rdx, [lines_b_len + r11*8]
+    mov rdi, [lines_a_ptr + rbx*8]
+    mov rcx, [lines_a_len + rbx*8]
+    cmp rdx, rcx
+    jne .wn2
+    call uq_memeq
+    test al, al
+    jz .wn2
+    pop r11
+    pop r10
+    pop r8
+    pop rax
+    ; match: clear marks
+    mov byte [mark_a + rbx], 0
+    mov byte [mark_b + r11], 0
+    mov rbp, r11
+    jmp .wnext
+.wn2:
+    pop r11
+    pop r10
+    pop r8
+    pop rax
+.wn:
+    inc rax
+    and rax, r9
+    inc r10
+    cmp r10, UQ_CAP
+    jb .wp
+.no_match:
+.wnext:
+    inc rbx
+    jmp .wa
+.ok:
+    mov al, 1
+    jmp .out
+.fail:
+    xor al, al
+.out:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; uq_hash_line(rsi=ptr, rdx=len) → rax
+uq_hash_line:
+    push rbx
+    xor eax, eax
+    mov rcx, 0x100000001b3
+    xor ebx, ebx
+.uh:
+    cmp rbx, rdx
+    jae .uhd
+    movzx r8d, byte [rsi + rbx]
+    xor rax, r8
+    imul rax, rcx
+    inc rbx
+    jmp .uh
+.uhd:
+    pop rbx
+    ret
+
+; uq_memeq(rdi=a, rsi=b, rdx=len) → al=1 equal (rcx ignored if rdx set)
+; expects rdx=len, rdi/rsi ptrs; uses rcx as counter
+uq_memeq:
+    push rcx
+    mov rcx, rdx
+    test rcx, rcx
+    jz .eq
+.lp:
+    mov al, [rdi]
+    cmp al, [rsi]
+    jne .ne
+    inc rdi
+    inc rsi
+    dec rcx
+    jnz .lp
+.eq:
+    mov al, 1
+    pop rcx
+    ret
+.ne:
+    xor al, al
+    pop rcx
     ret
 
 ; lcs_find_anchor — find order-preserving common line in range.
@@ -3480,11 +3911,23 @@ emit_line_del:
     cmp byte [g_color], 0
     je .p
     call color_err
-.p: mov dil, '-'
+.p: test dword [g_flags], DF_WORD
+    jnz .wd
+    mov dil, '-'
     call out_byte
     mov rsi, [lines_a_ptr + rbx*8]
     mov rdx, [lines_a_len + rbx*8]
     call out_strn
+    jmp .n0
+.wd: ; modern word-diff markers: [-text-]
+    lea rsi, [wd_om]
+    call out_str
+    mov rsi, [lines_a_ptr + rbx*8]
+    mov rdx, [lines_a_len + rbx*8]
+    call out_strn
+    lea rsi, [wd_cm]
+    call out_str
+.n0:
     test dword [g_flags], DF_CORE
     jnz .n
     cmp byte [g_color], 0
@@ -3505,11 +3948,23 @@ emit_line_add:
     cmp byte [g_color], 0
     je .p
     call color_ok
-.p: mov dil, '+'
+.p: test dword [g_flags], DF_WORD
+    jnz .wd
+    mov dil, '+'
     call out_byte
     mov rsi, [lines_b_ptr + rbp*8]
     mov rdx, [lines_b_len + rbp*8]
     call out_strn
+    jmp .n0
+.wd: ; modern word-diff markers: {+text+}
+    lea rsi, [wd_op]
+    call out_str
+    mov rsi, [lines_b_ptr + rbp*8]
+    mov rdx, [lines_b_len + rbp*8]
+    call out_strn
+    lea rsi, [wd_cp]
+    call out_str
+.n0:
     test dword [g_flags], DF_CORE
     jnz .n
     cmp byte [g_color], 0
@@ -3523,8 +3978,10 @@ emit_line_add:
     ret
 
 
-; emit_unified_path_hdr(rsi=prefix "--- "/"+++ ", rdi=path)
-; GNU: PREFIX path TAB YYYY-MM-DD HH:MM:SS.nnnnnnnnn ±HHMM\n
+; emit_unified_path_hdr(rsi=prefix "--- "/"+++ "/"*** "/"--- ", rdi=path)
+; GNU unified (-u): always ISO YYYY-MM-DD HH:MM:SS.nnnnnnnnn ±HHMM
+; GNU context (-c) under C/POSIX: ctime "Www Mmm dd HH:MM:SS YYYY"
+; GNU context under multibyte locale: same ISO as -u
 emit_unified_path_hdr:
     push rbx
     push r12
@@ -3555,6 +4012,15 @@ emit_unified_path_hdr:
     mov rdi, [mtime_sec]
     add rdi, rax
     call civil_from_epoch
+    ; context + C locale → ctime; else ISO
+    test dword [g_flags], DF_CONTEXT
+    jz .iso
+    call locale_is_c
+    test al, al
+    jz .iso
+    call emit_mtime_ctime
+    jmp .nl
+.iso:
     call emit_mtime_fields
     jmp .nl
 .nomtime:
@@ -3562,6 +4028,14 @@ emit_unified_path_hdr:
     mov qword [mtime_nsec], 0
     mov qword [tz_off], 0
     call civil_from_epoch
+    test dword [g_flags], DF_CONTEXT
+    jz .nom_iso
+    call locale_is_c
+    test al, al
+    jz .nom_iso
+    call emit_mtime_ctime
+    jmp .nl
+.nom_iso:
     call emit_mtime_fields
 .nl: mov dil, 10
     call out_byte
@@ -3748,6 +4222,126 @@ emit_mtime_fields:
     div rcx                         ; rax=minutes
     mov edi, eax
     call out_u2
+    pop r12
+    pop rbx
+    ret
+
+; emit_mtime_ctime — GNU context under C: "Www Mmm dd HH:MM:SS YYYY"
+; Uses num_tmp from civil_from_epoch (local civil) + mtime_sec/tz for DOW.
+emit_mtime_ctime:
+    push rbx
+    push r12
+    push r13
+    ; weekday from local calendar day: 1970-01-01 = Thu
+    ; local days = (mtime_sec + tz_off) / 86400 ; handle negative
+    mov rax, [mtime_sec]
+    add rax, [tz_off]
+    mov rcx, 86400
+    cqo
+    idiv rcx
+    ; dow: (days + 4) % 7 with Sun=0 (Thu=4 for day 0)
+    add rax, 4
+    mov rcx, 7
+    cqo
+    idiv rcx                        ; rdx = 0..6 Sun..Sat
+    ; if negative remainder, fix
+    test rdx, rdx
+    jns .dow_ok
+    add rdx, 7
+.dow_ok:
+    lea rsi, [wdays + rdx*4]        ; each name 4 bytes "Mon\0"
+    call out_str
+    mov dil, ' '
+    call out_byte
+    ; month name
+    movzx eax, byte [num_tmp + 4]   ; 1..12
+    dec eax
+    lea rsi, [months + rax*4]
+    call out_str
+    mov dil, ' '
+    call out_byte
+    ; day space-padded width 2: " 1".."31"
+    movzx eax, byte [num_tmp + 5]
+    cmp eax, 10
+    jae .d2
+    mov dil, ' '
+    call out_byte
+    movzx eax, byte [num_tmp + 5]
+    add al, '0'
+    mov dil, al
+    call out_byte
+    jmp .tod
+.d2:
+    movzx edi, byte [num_tmp + 5]
+    call out_u2
+.tod:
+    mov dil, ' '
+    call out_byte
+    movzx edi, byte [num_tmp + 6]
+    call out_u2
+    mov dil, ':'
+    call out_byte
+    movzx edi, byte [num_tmp + 7]
+    call out_u2
+    mov dil, ':'
+    call out_byte
+    movzx edi, byte [num_tmp + 8]
+    call out_u2
+    mov dil, ' '
+    call out_byte
+    mov edi, [num_tmp]
+    call out_u64
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; locale_is_c → al=1 if LC_ALL/LANG is C or POSIX (or unset → C)
+locale_is_c:
+    push rbx
+    push r12
+    mov r12, [g_envp]
+    test r12, r12
+    jz .yes
+    lea rsi, [env_lcall]
+    call env_lookup_prefix
+    test rax, rax
+    jnz .cls
+    lea rsi, [env_lang]
+    call env_lookup_prefix
+    test rax, rax
+    jz .yes
+.cls:
+    cmp byte [rax], 0
+    je .yes
+    cmp byte [rax], 'C'
+    jne .pos
+    cmp byte [rax+1], 0
+    je .yes
+    cmp byte [rax+1], '.'
+    je .yes
+    jmp .no
+.pos:
+    ; "POSIX"
+    cmp byte [rax], 'P'
+    jne .no
+    cmp byte [rax+1], 'O'
+    jne .no
+    cmp byte [rax+2], 'S'
+    jne .no
+    cmp byte [rax+3], 'I'
+    jne .no
+    cmp byte [rax+4], 'X'
+    jne .no
+    cmp byte [rax+5], 0
+    je .yes
+.no:
+    xor al, al
+    pop r12
+    pop rbx
+    ret
+.yes:
+    mov al, 1
     pop r12
     pop rbx
     ret
@@ -3963,6 +4557,121 @@ tz_offset_for:
     pop r14
     pop r13
     pop r12
+    pop rbx
+    ret
+
+; cmp_differ_msg → rsi = " differ: char " or " differ: byte " (GNU locale rule)
+; C/POSIX (or unset → treat as C only if both empty) → char; else byte.
+cmp_differ_msg:
+    push rbx
+    push r12
+    mov r12, [g_envp]
+    test r12, r12
+    jz .use_char
+    ; prefer LC_ALL
+    lea rsi, [env_lcall]
+    call env_lookup_prefix          ; rax = value ptr or 0
+    test rax, rax
+    jz .try_lang
+    jmp .classify
+.try_lang:
+    lea rsi, [env_lang]
+    call env_lookup_prefix
+    test rax, rax
+    jz .use_char
+.classify:
+    ; empty value → char
+    cmp byte [rax], 0
+    je .use_char
+    ; "C" or "POSIX" or "C.*" → char; else byte
+    cmp byte [rax], 'C'
+    jne .pos
+    cmp byte [rax+1], 0
+    je .use_char
+    cmp byte [rax+1], '.'
+    je .use_char
+    jmp .use_byte
+.pos:
+    ; POSIX
+    cmp byte [rax], 'P'
+    jne .use_byte
+    cmp byte [rax+1], 'O'
+    jne .use_byte
+    cmp byte [rax+2], 'S'
+    jne .use_byte
+    cmp byte [rax+3], 'I'
+    jne .use_byte
+    cmp byte [rax+4], 'X'
+    jne .use_byte
+    cmp byte [rax+5], 0
+    je .use_char
+.use_byte:
+    lea rsi, [cmp_differ_byte]
+    pop r12
+    pop rbx
+    ret
+.use_char:
+    lea rsi, [cmp_differ_char]
+    pop r12
+    pop rbx
+    ret
+
+; env_lookup_prefix(rsi=prefix like "LC_ALL=") → rax = value after '=' or 0
+env_lookup_prefix:
+    push rbx
+    push r12
+    push r13
+    mov r12, [g_envp]
+    mov r13, rsi
+    test r12, r12
+    jz .no
+.lp:
+    mov rbx, [r12]
+    test rbx, rbx
+    jz .no
+    mov rdi, rbx
+    mov rsi, r13
+    call env_prefix_eq
+    test al, al
+    jnz .hit
+    add r12, 8
+    jmp .lp
+.hit:
+    ; skip past prefix length
+    mov rdi, r13
+    call strlen
+    add rbx, rax
+    mov rax, rbx
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.no:
+    xor eax, eax
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; env_prefix_eq(rdi=envstr, rsi=prefix) → al=1 if envstr starts with prefix
+env_prefix_eq:
+    push rbx
+.lp:
+    mov al, [rsi]
+    test al, al
+    jz .yes
+    mov bl, [rdi]
+    cmp al, bl
+    jne .no
+    inc rdi
+    inc rsi
+    jmp .lp
+.yes:
+    mov al, 1
+    pop rbx
+    ret
+.no:
+    xor al, al
     pop rbx
     ret
 
@@ -4350,7 +5059,7 @@ cmp_files:
     call out_byte
     mov rsi, [diff_b]
     call out_str
-    lea rsi, [cmp_differ]
+    call cmp_differ_msg             ; rsi = " differ: char|byte "
     call out_str
     mov rdi, r14
     call out_u64

@@ -341,6 +341,8 @@
 %define CLOCK_MONOTONIC 1
 
 %define CLONE_VM      0x00000100
+%define CLONE_FS      0x00000200
+%define CLONE_FILES   0x00000400
 %define CLONE_VFORK   0x00004000
 %define SIGCHLD       17
 

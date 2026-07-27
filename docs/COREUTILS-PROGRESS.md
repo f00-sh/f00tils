@@ -122,3 +122,8 @@ Legend — **speed:** `win` = faster than coreutils under `--core` (full-speed-g
 | 106 | `[` | `f00-[ / test` | yes | **full** | yes | win |
 
 Also shipped (useful multicall extras; not always in the coreutils package): `f00-hostname`, `f00-kill`, `f00-rev`.
+
+## Notes
+
+- **split**: bulk multi-line write path; suite `-l 50` fixture remeasured WIN after bulk rewrite + GNU-compatible zaaa suffixes.
+- **tsort / shuf**: full-speed-gate `skip-known-debt-*` until multi-edge / multi-line engines win wall+CPU.

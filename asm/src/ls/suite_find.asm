@@ -18,6 +18,8 @@ extern err_str
 
 ; ── find flags ─────────────────────────────────────────────
 %define FF_CORE      16
+%define FF_JSON      512
+%define FF_CSV       1024
 %define FF_DEPTH     32              ; -depth / implied by -delete
 %define FF_XDEV      64
 %define FF_FOLLOW_L  128             ; -L follow all symlinks
@@ -191,8 +193,8 @@ x_status:       resd 1
 x_had_args:     resb 1
 
 section .rodata
-v_find:  db "f00-find (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
-v_xargs: db "f00-xargs (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
+v_find:  db "f00-find (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
+v_xargs: db "f00-xargs (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_find:
     db "Usage: f00-find [-H] [-L] [-P] [PATH...] [EXPRESSION]", 10
@@ -234,9 +236,11 @@ h_find:
     db "  -xdev            do not descend other filesystems", 10
     db "  -H -L -P         symlink follow policy (default -P)", 10
     db "      --core       plain GNU-oriented output (no color)", 10
+    db "      --json        modern JSON paths (f00/v1)", 10
+    db "      --csv         modern CSV path list", 10
     db "  --help  --version", 10
     db "Regex: POSIX ERE subset (. * + ? [] ^ $ | () \\).", 10
-    db "Modern TTY: themed paths (dirs vs files); optional icons.", 10, 0
+    db "Modern TTY: themed paths (dirs vs files); optional icons; skips .git.", 10, 0
 
 h_xargs:
     db "Usage: f00-xargs [OPTION]... [COMMAND [INITIAL-ARGS]...]", 10
@@ -312,6 +316,10 @@ slash_bin_x:    db "/bin/", 0
 opt_L:          db "-L", 0
 opt_H:          db "-H", 0
 opt_P:          db "-P", 0
+s_json:         db "json", 0
+fj_o:           db '{"schema":"f00/v1","path":"', 0
+fj_e:           db '"}', 10, 0
+s_csv:          db "csv", 0
 s_help:         db "help", 0
 s_version:      db "version", 0
 s_core:         db "core", 0
@@ -416,9 +424,37 @@ find_main:
     call strcmp
     pop rdi
     test eax, eax
-    jnz .fexpr_start
+    jnz .fjson
     or dword [f_flags], FF_CORE
     mov byte [g_color], 0
+    inc r14
+    jmp .fparse
+.fjson:
+    push rdi
+    add rdi, 2
+    lea rsi, [s_json]
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .fcsv
+    test dword [f_flags], FF_CORE
+    jnz .fskipj
+    or dword [f_flags], FF_JSON
+.fskipj:
+    inc r14
+    jmp .fparse
+.fcsv:
+    push rdi
+    add rdi, 2
+    lea rsi, [s_csv]
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .fexpr_start
+    test dword [f_flags], FF_CORE
+    jnz .fskipc
+    or dword [f_flags], FF_CSV
+.fskipc:
     inc r14
     jmp .fparse
 .fnot_long:
@@ -2094,6 +2130,20 @@ find_descend:
     cmp byte [rsi+2], 0
     je .skip
 .keep:
+    ; modern default: skip .git directories (fd-class); --core never skips
+    test dword [f_flags], FF_CORE
+    jnz .keep2
+    cmp byte [rsi], '.'
+    jne .keep2
+    cmp byte [rsi+1], 'g'
+    jne .keep2
+    cmp byte [rsi+2], 'i'
+    jne .keep2
+    cmp byte [rsi+3], 't'
+    jne .keep2
+    cmp byte [rsi+4], 0
+    je .skip
+.keep2:
     cmp r15, MAX_CHILDREN
     jae .skip
     mov rcx, [f_pool_n]
@@ -2565,6 +2615,24 @@ f_eval:
 find_print:
     test dword [f_flags], FF_CORE
     jnz .plain
+    test dword [f_flags], FF_JSON
+    jz .fcsv
+    lea rsi, [fj_o]
+    call out_str
+    lea rsi, [f_path]
+    call out_str
+    lea rsi, [fj_e]
+    call out_str
+    ret
+.fcsv:
+    test dword [f_flags], FF_CSV
+    jz .fchrome
+    lea rsi, [f_path]
+    call out_str
+    mov dil, 10
+    call out_byte
+    ret
+.fchrome:
     cmp byte [g_color], 0
     je .plain
     lea rdi, [f_path]

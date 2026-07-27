@@ -30,7 +30,8 @@ extern ui_spinner_start, ui_spinner_tick, ui_spinner_stop
 ; In-memory load ceiling for sort/uniq/shuf/etc. Demand-paged BSS.
 ; Real-work hot path: 200k × ~33B ≈ 6.6MiB — keep headroom for multi-file concat.
 %define BIG_CAP   (16*1024*1024)
-%define MAX_LINES 262144
+%define MAX_LINES 524288              ; past 262k-line cliff (line tables only)
+%define SORT_MMAP_MAX (48*1024*1024)  ; sort file mmap spill past BIG_CAP
 %define LINE_CAP  8192
 %define MAP_N     256
 %define RL_SLOTS  8
@@ -136,6 +137,13 @@ field_sel:   resb 4096           ; working selection (for complement)
 big_buf:     resb BIG_CAP
 line_ptrs:   resq MAX_LINES
 counts:      resq MAX_LINES      ; also original indices for stable sort
+line_base:   resq 1              ; active text base (big_buf or sort mmap)
+sort_map:    resq 1              ; munmap if non-zero
+sort_map_len: resq 1
+key_starts_ptr: resq 1           ; mmap'd key ptrs for plain -k (0 if none)
+num_vals_ptr:   resq 1           ; mmap'd -n values (0 if none)
+keys_ready:  resb 1
+nums_ready:  resb 1
 scratch:     resb 64
 rand_buf:    resb 8
 expr_toks:   resq 128
@@ -146,6 +154,10 @@ rl_pos:      resq RL_SLOTS
 rl_end:      resq RL_SLOTS
 rl_data:     resb RL_SLOTS * RL_BUFSZ
 qstack:      resq 256            ; iterative quicksort (lo,hi) pairs
+mk_par_lo:   resq 1
+mk_par_hi:   resq 1
+mk_par_dep:  resq 1
+mk_child_stack: resq 1
 
 section .rodata
 nl:     db 10,0
@@ -611,37 +623,87 @@ split_lines:
     push r12
     push r13
     push r14
-    mov r12, rax
-    xor r13, r13
+    push r15
+    mov r12, rax                    ; size
+    xor r13, r13                    ; nlines
     mov r14b, [line_delim]
     test r12, r12
     jz .done
+    mov rbx, [line_base]
+    test rbx, rbx
+    jnz .have_base
     lea rbx, [big_buf]
+.have_base:
     mov [line_ptrs], rbx
     mov qword [counts], 0
     inc r13
-    xor ecx, ecx
-.lp:
-    cmp rcx, r12
-    jae .done
-    cmp byte [big_buf+rcx], r14b
-    jne .nx
-    mov byte [big_buf+rcx], 0
+    xor ecx, ecx                    ; offset
+    ; fast path: delim == '\n' → SWAR scan 8 bytes at a time
+    cmp r14b, 10
+    jne .lp_byte
+    mov r8, 0x0a0a0a0a0a0a0a0a
+    mov r9, 0x0101010101010101
+    mov r15, 0x8080808080808080
+.lp_sw:
+    mov rax, r12
+    sub rax, rcx
+    cmp rax, 8
+    jb .lp_byte
+    mov rdx, [rbx+rcx]
+    mov rax, rdx
+    xor rax, r8                     ; 0 bytes where newline
+    mov rdi, rax
+    sub rdi, r9
+    not rax
+    and rdi, rax
+    and rdi, r15
+    jz .sw_adv                      ; no newline in block
+    ; find first newline byte in block
+    xor esi, esi
+.sw_b:
+    cmp byte [rbx+rcx], r14b
+    je .sw_hit
+    inc rcx
+    inc esi
+    cmp esi, 8
+    jb .sw_b
+    jmp .lp_sw
+.sw_hit:
+    mov byte [rbx+rcx], 0
     lea rax, [rcx+1]
     cmp rax, r12
     jae .done
     cmp r13, MAX_LINES
     jae .ovlines
-    lea rdx, [big_buf+rax]
+    lea rdx, [rbx+rax]
+    mov [line_ptrs+r13*8], rdx
+    mov [counts+r13*8], r13
+    inc r13
+    mov rcx, rax
+    jmp .lp_sw
+.sw_adv:
+    add rcx, 8
+    jmp .lp_sw
+.lp_byte:
+    cmp rcx, r12
+    jae .done
+    cmp byte [rbx+rcx], r14b
+    jne .nx
+    mov byte [rbx+rcx], 0
+    lea rax, [rcx+1]
+    cmp rax, r12
+    jae .done
+    cmp r13, MAX_LINES
+    jae .ovlines
+    lea rdx, [rbx+rax]
     mov [line_ptrs+r13*8], rdx
     mov [counts+r13*8], r13
     inc r13
 .nx: inc rcx
-    jmp .lp
+    jmp .lp_byte
 .ovlines:
     jmp die_efbig
 .done:
-    ; if buffer non-empty and does not end with delim, last line already recorded
     ; fix original indices 0..n-1
     xor ecx, ecx
 .idx:
@@ -653,6 +715,7 @@ split_lines:
 .fin:
     mov [nlines], r13
     mov rax, r13
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -816,7 +879,9 @@ skip_blanks:
 .s: inc rdi
     jmp .sb
 
+; is_blank(cl) → ZF=1 if space or tab
 ; get field N (1-based) of line rdi with delim sil → rax=ptr, rdx=len
+; sil=0 → GNU blank-separated fields (runs of space/tab); else single-char delim
 get_field:
     push rbx
     push r12
@@ -825,6 +890,8 @@ get_field:
     mov r12, rdi
     mov r13b, sil
     mov r14d, edx
+    test r13b, r13b
+    jz .blank_mode
     mov ebx, 1
     mov rax, r12
 .gf:
@@ -852,6 +919,75 @@ get_field:
     inc rax
     jmp .fl
 .flen:
+    mov rdx, rax
+    sub rdx, rsi
+    mov rax, rsi
+    jmp .go
+; ── blank-separated (GNU default for -k without -t) ──
+; Field N starts at line begin (N=1) or at the first blank after field N-1's
+; non-blanks. Leading blanks of the field are INCLUDED in the key range
+; (GNU without -b). line_key_ptr applies OF_BLANK (-b) via skip_blanks after.
+.blank_mode:
+    mov rax, r12                    ; line start
+    mov ebx, 1
+.bl_gf:
+    ; rax = start of current field (may be blanks)
+    cmp ebx, r14d
+    je .bl_found
+    ; consume this field's leading blanks
+.bl_lead:
+    mov cl, [rax]
+    test cl, cl
+    jz .miss
+    cmp cl, ' '
+    je .bl_ls
+    cmp cl, 9
+    je .bl_ls
+    jmp .bl_nb
+.bl_ls:
+    inc rax
+    jmp .bl_lead
+    ; consume non-blanks
+.bl_nb:
+    mov cl, [rax]
+    test cl, cl
+    jz .miss                        ; no more fields
+    cmp cl, ' '
+    je .bl_next
+    cmp cl, 9
+    je .bl_next
+    inc rax
+    jmp .bl_nb
+.bl_next:
+    ; now at blanks that begin the next field
+    inc ebx
+    jmp .bl_gf
+.bl_found:
+    mov rsi, rax                    ; start of field N (incl. leading blanks)
+    ; end = after leading blanks + non-blanks (trailing blanks belong to next field)
+.bl_fl_lead:
+    mov cl, [rax]
+    test cl, cl
+    jz .bl_flen
+    cmp cl, ' '
+    je .bl_fl_ls
+    cmp cl, 9
+    je .bl_fl_ls
+    jmp .bl_fl_nb
+.bl_fl_ls:
+    inc rax
+    jmp .bl_fl_lead
+.bl_fl_nb:
+    mov cl, [rax]
+    test cl, cl
+    jz .bl_flen
+    cmp cl, ' '
+    je .bl_flen
+    cmp cl, 9
+    je .bl_flen
+    inc rax
+    jmp .bl_fl_nb
+.bl_flen:
     mov rdx, rax
     sub rdx, rsi
     mov rax, rsi
@@ -1241,10 +1377,40 @@ line_cmp:
     mov r14, rdi                    ; full line a
     mov r15, rsi                    ; full line b
     ; ── fast path: plain lexicographic full-line (hot-path default) ──
+    ; precomputed -n (full-line numeric, no key field)
+    cmp byte [nums_ready], 0
+    je .not_numfast
+    test dword [opt_flags], OF_NUM
+    jz .not_numfast
+    cmp qword [key_field], 0
+    jne .not_numfast
+    mov r8, [num_vals_ptr]
+    mov rax, [num_a]
+    mov rbx, [r8 + rax*8]
+    mov rax, [num_b]
+    mov rax, [r8 + rax*8]
+    cmp rbx, rax
+    jl .lt
+    jg .gt
+    xor eax, eax
+    jmp .tie
+.not_numfast:
     test dword [opt_flags], OF_KEYPATH
     jnz .slow
     cmp qword [key_field], 0
-    jne .slow
+    je .plain_full
+    ; plain -k: key table by original index (num_a/num_b = counts[slot])
+    cmp byte [keys_ready], 0
+    je .slow
+    mov r8, [key_starts_ptr]
+    mov rax, [num_a]
+    mov rdi, [r8 + rax*8]
+    mov rax, [num_b]
+    mov rsi, [r8 + rax*8]
+    call strcmp
+    jmp .tie
+.plain_full:
+    ; word strcmp via shared helper (preserves r8/r9 for call-site contracts)
     mov rdi, r14
     mov rsi, r15
     call strcmp
@@ -1432,7 +1598,19 @@ hash_str:
 %define QS_THRESH 24
 %define QS_FRAME  3
 %define QS_MAXQ   252               ; multiple of 3; headroom under 256
+%define MK_THRESH 16                ; multi-key insertion cutoff
 shell_sort:
+    ; Fast path: plain full-line (no -k/-n/…/-r/-s). Multi-key quicksort
+    ; beats glibc under LC_ALL=C on multi-hundred-k line loads.
+    test dword [opt_flags], OF_STABLE | OF_REV
+    jnz .classic
+    test dword [opt_flags], OF_KEYPATH
+    jnz .classic
+    cmp qword [key_field], 0
+    jne .classic
+    call multikey_qsort
+    ret
+.classic:
     push rbx
     push r12
     push r13
@@ -1701,6 +1879,276 @@ shell_sort:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; ═══════════════════════════════════════════════════════════
+; multikey_qsort — Bentley–Sedgewick multi-key quicksort on line_ptrs
+; for plain full-line sort (and -r). Unstable; ignores counts[].
+; Stack frames: (lo,hi,depth) as 3 qwords on qstack (reuse).
+; ═══════════════════════════════════════════════════════════
+multikey_qsort:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov rax, [nlines]
+    cmp rax, 2
+    jb .mk_ret
+    ; serial multi-key (parallel path deferred — CLONE_VM integration TBD)
+    ; seed stack: lo=0, hi=n-1, depth=0
+    mov rax, [nlines]
+    mov qword [qstack], 0
+    dec rax
+    mov [qstack+8], rax
+    mov qword [qstack+16], 0
+    mov ebp, QS_FRAME
+.mk_main:
+    test ebp, ebp
+    jz .mk_ret
+    sub ebp, QS_FRAME
+    mov r14, [qstack+rbp*8]         ; lo
+    mov r15, [qstack+rbp*8+8]       ; hi
+    mov r13, [qstack+rbp*8+16]      ; depth
+    mov rax, r15
+    sub rax, r14
+    cmp rax, MK_THRESH
+    jbe .mk_ins
+    ; Fast all-equal at this depth: O(n) scan, no swaps; advance depth.
+.mk_alleq:
+    mov rax, [line_ptrs+r14*8]
+    call mk_char_at
+    mov r12d, eax                   ; candidate char
+    mov rbx, r14
+.mk_ae:
+    inc rbx
+    cmp rbx, r15
+    ja .mk_ae_yes
+    mov rax, [line_ptrs+rbx*8]
+    call mk_char_at
+    cmp eax, r12d
+    je .mk_ae
+    jmp .mk_part_setup              ; not all equal
+.mk_ae_yes:
+    test r12d, r12d
+    jz .mk_main                     ; all exhausted strings
+    inc r13                         ; depth++
+    jmp .mk_alleq                   ; try next depth (common prefix)
+.mk_part_setup:
+    ; median-of-3 on char at depth: positions lo, mid, hi
+    mov r12, r14
+    add r12, r15
+    shr r12, 1                      ; mid
+    ; sort3 of chars (and swap pointers) via mk_char_at
+    mov rax, [line_ptrs+r14*8]
+    call mk_char_at                 ; uses r13=depth
+    mov ebx, eax
+    mov rax, [line_ptrs+r12*8]
+    call mk_char_at
+    cmp ebx, eax
+    jbe .mk_m1
+    mov rax, [line_ptrs+r14*8]
+    mov rcx, [line_ptrs+r12*8]
+    mov [line_ptrs+r14*8], rcx
+    mov [line_ptrs+r12*8], rax
+.mk_m1:
+    mov rax, [line_ptrs+r14*8]
+    call mk_char_at
+    mov ebx, eax
+    mov rax, [line_ptrs+r15*8]
+    call mk_char_at
+    cmp ebx, eax
+    jbe .mk_m2
+    mov rax, [line_ptrs+r14*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+r14*8], rcx
+    mov [line_ptrs+r15*8], rax
+.mk_m2:
+    mov rax, [line_ptrs+r12*8]
+    call mk_char_at
+    mov ebx, eax
+    mov rax, [line_ptrs+r15*8]
+    call mk_char_at
+    cmp ebx, eax
+    jbe .mk_m3
+    mov rax, [line_ptrs+r12*8]
+    mov rcx, [line_ptrs+r15*8]
+    mov [line_ptrs+r12*8], rcx
+    mov [line_ptrs+r15*8], rax
+.mk_m3:
+    ; pivot char = median → move mid to lo as v
+    mov rax, [line_ptrs+r12*8]
+    mov rcx, [line_ptrs+r14*8]
+    mov [line_ptrs+r12*8], rcx
+    mov [line_ptrs+r14*8], rax
+    mov rax, [line_ptrs+r14*8]
+    call mk_char_at
+    mov r12d, eax                   ; v = pivot char (r12d)
+    ; 3-way partition: lt=rbx, i=rsi, gt=rdi
+    mov rbx, r14                    ; lt
+    lea rsi, [r14+1]                ; i
+    mov rdi, r15                    ; gt
+.mk_part:
+    cmp rsi, rdi
+    ja .mk_pend
+    mov rax, [line_ptrs+rsi*8]
+    call mk_char_at                 ; t in eax
+    cmp eax, r12d
+    jb .mk_lt
+    ja .mk_gt
+.mk_eq:
+    inc rsi
+    jmp .mk_part
+.mk_lt:
+    ; swap lt, i; lt++; i++
+    mov rax, [line_ptrs+rbx*8]
+    mov rcx, [line_ptrs+rsi*8]
+    mov [line_ptrs+rbx*8], rcx
+    mov [line_ptrs+rsi*8], rax
+    inc rbx
+    inc rsi
+    jmp .mk_part
+.mk_gt:
+    ; swap i, gt; gt--
+    mov rax, [line_ptrs+rsi*8]
+    mov rcx, [line_ptrs+rdi*8]
+    mov [line_ptrs+rsi*8], rcx
+    mov [line_ptrs+rdi*8], rax
+    dec rdi
+    jmp .mk_part
+.mk_pend:
+    ; regions: [lo, lt-1] <v, [lt, gt] ==v, [gt+1, hi] >v
+    ; rdi is gt, rbx is lt
+    ; push larger sides first if room
+    ; left: lo .. lt-1
+    mov rax, rbx
+    sub rax, r14                    ; left size (lt-lo)
+    mov rcx, r15
+    sub rcx, rdi                    ; right size (hi-gt)
+    ; push right then left (or by size)
+    cmp rax, rcx
+    jae .mk_left_big
+    ; right bigger: push right, then left
+    cmp rcx, 1
+    jbe .mk_pl
+    cmp ebp, QS_MAXQ
+    jae .mk_pl
+    lea rdx, [rdi+1]
+    mov [qstack+rbp*8], rdx
+    mov [qstack+rbp*8+8], r15
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+.mk_pl:
+    cmp rax, 1
+    jbe .mk_eq_push
+    cmp ebp, QS_MAXQ
+    jae .mk_eq_push
+    mov [qstack+rbp*8], r14
+    lea rdx, [rbx-1]
+    mov [qstack+rbp*8+8], rdx
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+    jmp .mk_eq_push
+.mk_left_big:
+    cmp rax, 1
+    jbe .mk_pr
+    cmp ebp, QS_MAXQ
+    jae .mk_pr
+    mov [qstack+rbp*8], r14
+    lea rdx, [rbx-1]
+    mov [qstack+rbp*8+8], rdx
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+.mk_pr:
+    cmp rcx, 1
+    jbe .mk_eq_push
+    cmp ebp, QS_MAXQ
+    jae .mk_eq_push
+    lea rdx, [rdi+1]
+    mov [qstack+rbp*8], rdx
+    mov [qstack+rbp*8+8], r15
+    mov [qstack+rbp*8+16], r13
+    add ebp, QS_FRAME
+.mk_eq_push:
+    ; equal bucket: recurse depth+1 if pivot char != 0 and size > 1
+    test r12d, r12d
+    jz .mk_main
+    mov rax, rdi
+    sub rax, rbx
+    cmp rax, 0                      ; gt-lt >= 0 → size = gt-lt+1 >= 1
+    jl .mk_main
+    cmp rax, 0
+    je .mk_eq1
+    ; size >= 2
+    cmp ebp, QS_MAXQ
+    jae .mk_main
+    mov [qstack+rbp*8], rbx
+    mov [qstack+rbp*8+8], rdi
+    lea rdx, [r13+1]
+    mov [qstack+rbp*8+16], rdx
+    add ebp, QS_FRAME
+    jmp .mk_main
+.mk_eq1:
+    ; single equal element — done
+    jmp .mk_main
+.mk_ins:
+    ; insertion sort [r14..r15] comparing full strings (strcmp)
+    mov r12, r14
+    inc r12
+.mk_il:
+    cmp r12, r15
+    ja .mk_main
+    mov rax, [line_ptrs+r12*8]
+    mov [num_c], rax                ; temp hold line
+    mov rbx, r12
+.mk_ij:
+    cmp rbx, r14
+    jbe .mk_iput
+    lea rax, [rbx-1]
+    mov rdi, [line_ptrs+rax*8]
+    mov rsi, [num_c]
+    call strcmp
+    test eax, eax
+    jle .mk_iput
+    lea rax, [rbx-1]
+    mov rcx, [line_ptrs+rax*8]
+    mov [line_ptrs+rbx*8], rcx
+    dec rbx
+    jmp .mk_ij
+.mk_iput:
+    mov rax, [num_c]
+    mov [line_ptrs+rbx*8], rax
+    inc r12
+    jmp .mk_il
+.mk_ret:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; mk_char_at(rax=cstr, r13=depth) → eax = unsigned char or 0 if string shorter
+; Does not read past the terminating NUL.
+mk_char_at:
+    push rcx
+    mov rcx, r13
+    test rcx, rcx
+    jz .at
+.lp:
+    cmp byte [rax], 0
+    je .z
+    inc rax
+    dec rcx
+    jnz .lp
+.at:
+    movzx eax, byte [rax]
+    pop rcx
+    ret
+.z: xor eax, eax
+    pop rcx
     ret
 
 ; heap_sort_range: sort line_ptrs[r14..r15] inclusive (O(n log n), worst-case).
@@ -2694,7 +3142,7 @@ hcut: db "Usage: f00-cut OPTION... [FILE]...",10
       db "  printf 'a,b,c\n' | f00-cut -d, -f2",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vcut: db "f00-cut (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vcut: db "f00-cut (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -3556,7 +4004,7 @@ htr: db "Usage: f00-tr [OPTION]... SET1 [SET2]",10
      db "  f00-tr -d '\\r'",10
      db 10
      db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vtr: db "f00-tr (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vtr: db "f00-tr (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -3626,6 +4074,10 @@ sort_main:
     mov rdi, [r13+r14*8]
 .kset:
     call parse_keydef
+    ; GNU: without -t, -k uses blank-separated fields (delim=0 sentinel)
+    cmp byte [delim], 9
+    jne .sn
+    mov byte [delim], 0
     jmp .sn
 .s8: cmp al, 't'
     jne .s9
@@ -4087,13 +4539,25 @@ sort_main:
     jnz .sh
     test dword [flags], F_VER
     jnz .sv
-    ; load
+    ; load: single regular file may mmap past BIG_CAP (spill without +BSS)
+    mov qword [sort_map], 0
+    mov qword [sort_map_len], 0
+    mov qword [key_starts_ptr], 0
+    mov qword [num_vals_ptr], 0
+    mov byte [keys_ready], 0
+    mov byte [nums_ready], 0
+    lea rax, [big_buf]
+    mov [line_base], rax
     xor r15, r15
     cmp qword [npaths], 0
+    je .sstdin
+    cmp qword [npaths], 1
     jne .sfiles
-    xor rdi, rdi
-    call append_path
-    jmp .ssort
+    mov rdi, [paths]
+    call sort_try_mmap
+    test rax, rax
+    jns .ssort                  ; rax = size, map ready
+    ; fall through to BSS append
 .sfiles:
     xor r14, r14
 .sfl:
@@ -4106,11 +4570,19 @@ sort_main:
 .sloaded:
     mov byte [big_buf+r15], 0
     mov rax, r15
+    jmp .ssort
+.sstdin:
+    xor rdi, rdi
+    call append_path
+    mov byte [big_buf+r15], 0
+    mov rax, r15
 .ssort:
     ; modern TTY spinner while loading/sorting (no-op under --core / pipes)
     lea rsi, [s_spin_sort]
     call ui_spinner_start
     call split_lines
+    call sort_precompute_keys
+    call sort_precompute_nums
     call ui_spinner_tick
     test dword [opt_flags], OF_CHECK
     jnz .scheck
@@ -4124,17 +4596,21 @@ sort_main:
     jz .semit_all
     lea rdi, [nm_sort]
     call emit_json_lines
+    call sort_munmap
     jmp xexit
 .semit_all:
     call redir_out_file
     xor r14, r14
 .se:
     cmp r14, [nlines]
-    jae xexit
+    jae .sdone
     mov rsi, [line_ptrs+r14*8]
     call emit_line
     inc r14
     jmp .se
+.sdone:
+    call sort_munmap
+    jmp xexit
 .scheck:
     call ui_spinner_stop
     ; verify sorted; exit 1 if not. line_cmp already applies -r
@@ -4143,7 +4619,7 @@ sort_main:
     mov rax, r14
     inc rax
     cmp rax, [nlines]
-    jae xexit
+    jae .sc_ok_exit
     mov rdi, [line_ptrs+r14*8]
     mov rsi, [line_ptrs+rax*8]
     mov qword [num_a], r14
@@ -4159,13 +4635,18 @@ sort_main:
 .scok:
     inc r14
     jmp .sc
+.sc_ok_exit:
+    call sort_munmap
+    jmp xexit
 .cbad:
     mov dword [g_exit], 1
     test dword [opt_flags], OF_CHECKQ
-    jnz xexit
+    jnz .cbad_x
     ; stderr: f00-sort: disorder detected
     lea rsi, [sort_disorder]
     call err_str
+.cbad_x:
+    call sort_munmap
     jmp xexit
 .sh: lea rsi, [hsort]
     call out_str
@@ -4173,6 +4654,236 @@ sort_main:
 .sv: lea rsi, [vsort]
     call out_str
     jmp xexit
+
+; sort_try_mmap(rdi=path) → rax=byte size on map success, -1 to fall back to BSS load
+sort_try_mmap:
+    push rbx
+    push r12
+    push r13
+    mov rsi, rdi
+    call open_rd
+    cmp rax, -4096
+    jae .no
+    mov r12, rax                    ; fd
+    sub rsp, 144
+    mov rax, SYS_fstat
+    mov rdi, r12
+    mov rsi, rsp
+    syscall
+    test rax, rax
+    jnz .nocl
+    mov eax, [rsp+24]               ; st_mode
+    and eax, 0o170000
+    cmp eax, 0o100000               ; S_IFREG
+    jne .nocl
+    mov r13, [rsp+48]               ; st_size
+    add rsp, 144
+    cmp r13, BIG_CAP
+    jbe .cl_no                      ; fits BSS path
+    mov rax, SORT_MMAP_MAX
+    cmp r13, rax
+    ja .cl_efbig
+    test r13, r13
+    jz .cl_no
+    ; Anonymous map + full read: sequential fill beats MAP_PRIVATE file
+    ; COW (split_lines writes a NUL per line → multi-thousand page faults).
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r13
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .cl_no
+    mov rbx, rax                    ; base
+    mov [line_base], rax
+    mov [sort_map], rax
+    mov [sort_map_len], r13
+    xor r8, r8                      ; filled
+.rd:
+    cmp r8, r13
+    jae .rd_done
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [rbx+r8]
+    mov rdx, r13
+    sub rdx, r8
+    syscall
+    cmp rax, -4096
+    jae .rd_fail
+    test rax, rax
+    jz .rd_fail                     ; unexpected EOF
+    add r8, rax
+    jmp .rd
+.rd_done:
+    mov rdi, r12
+    call close_fd
+    mov rax, r13
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.rd_fail:
+    mov rax, SYS_munmap
+    mov rdi, rbx
+    mov rsi, r13
+    syscall
+    mov qword [sort_map], 0
+    mov rdi, r12
+    call close_fd
+    jmp .no
+.cl_efbig:
+    mov rdi, r12
+    call close_fd
+    jmp die_efbig
+.cl_no:
+    mov rdi, r12
+    call close_fd
+.no:
+    mov rax, -1
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.nocl:
+    add rsp, 144
+    mov rdi, r12
+    call close_fd
+    jmp .no
+
+sort_munmap:
+    push rbx
+    mov rdi, [sort_map]
+    test rdi, rdi
+    jz .k
+    mov rsi, [sort_map_len]
+    mov rax, SYS_munmap
+    syscall
+    mov qword [sort_map], 0
+.k: mov rdi, [key_starts_ptr]
+    test rdi, rdi
+    jz .n
+    mov rsi, [nlines]
+    shl rsi, 3
+    mov rax, SYS_munmap
+    syscall
+    mov qword [key_starts_ptr], 0
+    mov byte [keys_ready], 0
+.n: mov rdi, [num_vals_ptr]
+    test rdi, rdi
+    jz .r
+    mov rsi, [nlines]
+    shl rsi, 3
+    mov rax, SYS_munmap
+    syscall
+    mov qword [num_vals_ptr], 0
+    mov byte [nums_ready], 0
+.r: pop rbx
+    ret
+
+; sort_precompute_keys — for plain -k (no OF_KEYPATH filters), cache key starts
+; by original index in key_starts[] (counts[] keeps orig idx through swaps)
+sort_precompute_keys:
+    mov byte [keys_ready], 0
+    cmp qword [key_field], 0
+    je .no
+    test dword [opt_flags], OF_KEYPATH
+    jnz .no
+    cmp qword [key_field_end], 0
+    jne .no
+    cmp qword [key_char], 0
+    jne .no
+    cmp qword [key_char_end], 0
+    jne .no
+    push rbx
+    push r12
+    ; mmap nlines*8 anonymous
+    mov rax, [nlines]
+    test rax, rax
+    jz .nok
+    shl rax, 3
+    mov r12, rax
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r12
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .nok
+    mov [key_starts_ptr], rax
+    xor ebx, ebx
+.lp:
+    cmp rbx, [nlines]
+    jae .ok
+    mov rdi, [line_ptrs + rbx*8]
+    call line_key_ptr
+    mov rcx, [key_starts_ptr]
+    mov [rcx + rbx*8], rdi
+    inc rbx
+    jmp .lp
+.ok:
+    mov byte [keys_ready], 1
+    pop r12
+    pop rbx
+    ret
+.nok:
+    pop r12
+    pop rbx
+.no:
+    ret
+
+; sort_precompute_nums — full-line -n only (no key field, not gennum/human)
+sort_precompute_nums:
+    mov byte [nums_ready], 0
+    test dword [opt_flags], OF_NUM
+    jz .no
+    test dword [opt_flags], OF_GENNUM | OF_HUMAN
+    jnz .no
+    cmp qword [key_field], 0
+    jne .no
+    push rbx
+    push r12
+    mov rax, [nlines]
+    test rax, rax
+    jz .nok
+    shl rax, 3
+    mov r12, rax
+    mov rax, SYS_mmap
+    xor edi, edi
+    mov rsi, r12
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1
+    xor r9, r9
+    syscall
+    cmp rax, -4096
+    jae .nok
+    mov [num_vals_ptr], rax
+    xor ebx, ebx
+.lp:
+    cmp rbx, [nlines]
+    jae .ok
+    mov rdi, [line_ptrs + rbx*8]
+    call parse_i64
+    mov rcx, [num_vals_ptr]
+    mov [rcx + rbx*8], rax
+    inc rbx
+    jmp .lp
+.ok:
+    mov byte [nums_ready], 1
+    pop r12
+    pop rbx
+    ret
+.nok:
+    pop r12
+    pop rbx
+.no:
+    ret
 
 ; parse KEYDEF F[.C][OPTS][,F[.C][OPTS]] — simplified: F[.C][,F[.C]]
 parse_keydef:
@@ -4370,7 +5081,7 @@ hsort: db "Usage: f00-sort [OPTION]... [FILE]...",10
        db "  printf 'b\\na\\n' | f00-sort",10
        db 10
        db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vsort: db "f00-sort (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vsort: db "f00-sort (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 sort_disorder: db "f00-sort: disorder detected",10,0
 
 section .text
@@ -4773,7 +5484,7 @@ huniq: db "Usage: f00-uniq [OPTION]... [INPUT [OUTPUT]]",10
       db "  sort file | f00-uniq -c",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vuniq: db "f00-uniq (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vuniq: db "f00-uniq (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -4927,7 +5638,7 @@ hrev: db "Usage: f00-rev [options] [FILE]...",10
       db "  printf 'abc\n' | f00-rev",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vrev: db "f00-rev (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vrev: db "f00-rev (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5012,7 +5723,7 @@ htac: db "Usage: f00-tac [FILE]...",10
       db "  f00-tac file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vtac: db "f00-tac (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vtac: db "f00-tac (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5297,7 +6008,7 @@ hnl: db "Usage: f00-nl [OPTION]... [FILE]...",10
       db "  f00-nl -ba -w4 file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vnl: db "f00-nl (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vnl: db "f00-nl (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5452,7 +6163,7 @@ hfold: db "Usage: f00-fold [OPTION]... [FILE]...",10
       db "  f00-fold -w 40 file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vfold: db "f00-fold (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vfold: db "f00-fold (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5586,7 +6297,7 @@ hexpand: db "Usage: f00-expand [OPTION]... [FILE]...",10
       db "  f00-expand -t 4 file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vexpand: db "f00-expand (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vexpand: db "f00-expand (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5762,7 +6473,7 @@ hunexpand: db "Usage: f00-unexpand [OPTION]... [FILE]...",10
       db "  f00-unexpand -t 4 file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vunexpand: db "f00-unexpand (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vunexpand: db "f00-unexpand (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -5983,7 +6694,7 @@ hpaste: db "Usage: f00-paste [OPTION]... [FILE]...",10
       db "  f00-paste -d, file1 file2",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vpaste: db "f00-paste (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vpaste: db "f00-paste (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -6349,7 +7060,7 @@ hjoin: db "Usage: f00-join [OPTION]... FILE1 FILE2",10
        db "  f00-join -t: -1 1 -2 1 a.txt b.txt",10
        db 10
        db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vjoin: db "f00-join (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vjoin: db "f00-join (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -6591,7 +7302,7 @@ hcomm: db "Usage: f00-comm [OPTION]... FILE1 FILE2",10
        db "  f00-comm -12 a.txt b.txt",10
        db 10
        db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vcomm: db "f00-comm (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vcomm: db "f00-comm (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -6747,7 +7458,7 @@ hfmt: db "Usage: f00-fmt [OPTION]... [FILE]...",10
       db "  f00-fmt -w 60 file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vfmt: db "f00-fmt (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vfmt: db "f00-fmt (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -7261,7 +7972,7 @@ hod: db "Usage: f00-od [OPTION]... [FILE]...",10
       db "  f00-od -tx1z file.bin",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vod: db "f00-od (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vod: db "f00-od (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -7337,79 +8048,218 @@ split_main:
     jnz .sh
     test dword [flags], F_VER
     jnz .sv
+    ; Streaming -l N split: bulk read + bulk write (no full-file line index).
+    ; Beats GNU on suite -l 50 by avoiding per-line open/write/strlen.
+    xor r12, r12                    ; input fd
     cmp qword [npaths], 0
     je .sstin
-    mov rdi, [paths]
-    call load_path
-    jmp .sdo
-.sstin:
-    xor rdi, rdi
-    call load_path
-.sdo:
-    call split_lines
-    xor r14, r14
-    xor r15, r15
-.sfile:
-    cmp r14, [nlines]
-    jae xexit
-    lea rdi, [work]
-    lea rsi, [prefix]
-    call strcpy
-    call strlen_work
-    mov rbx, rax
-    mov rax, r15
-    mov rcx, 26
-    xor rdx, rdx
-    div rcx
-    add al, 'a'
-    add dl, 'a'
-    mov [work+rbx], al
-    mov [work+rbx+1], dl
-    mov byte [work+rbx+2], 0
-    lea rsi, [work]
-    call open_wr
+    mov rsi, [paths]
+    cmp byte [rsi], '-'
+    jne .sopen
+    cmp byte [rsi+1], 0
+    je .sstin
+.sopen:
+    call open_rd
     cmp rax, -4096
     jae die1
-    mov rbx, rax
+    mov r12, rax
+    jmp .sstream
+.sstin:
     xor r12, r12
-.sw:
-    cmp r14, [nlines]
-    jae .sclose
-    cmp r12, [n_lines]
-    jae .sclose
-    mov rsi, [line_ptrs+r14*8]
-    push r12
-    push r14
-    mov rdi, rsi
-    call strlen
-    mov r9, rax
-    mov r8, rsi
-    mov rax, SYS_write
-    mov rdi, rbx
-    mov rsi, r8
-    mov rdx, r9
+.sstream:
+    xor r15, r15                    ; output file index (aa, ab, …)
+    xor r14, r14                    ; lines written into current out file
+    mov rbx, -1                     ; out fd (-1 = none yet; empty input → no files)
+.sread:
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [big_buf]
+    mov rdx, 1048576                ; 1MiB chunk — fewer read syscalls
     syscall
-    mov rax, SYS_write
-    mov rdi, rbx
-    lea rsi, [nl]
-    mov rdx, 1
-    syscall
-    pop r14
-    pop r12
-    inc r14
-    inc r12
-    jmp .sw
-.sclose:
+    test rax, rax
+    js die1
+    jz .seof
+    mov r13, rax                    ; bytes in chunk
+    xor r8, r8                      ; scan offset
+.sscan:
+    cmp r8, r13
+    jae .sread
+    cmp rbx, -1
+    jne .shave
+    call split_open_next
+.shave:
+    ; Bulk span: from r8, include as many full lines as fit in remaining
+    ; line budget (n_lines - r14) or until end of buffer. One write per span.
+    mov r9, r8                      ; span start offset
+    mov r10, [n_lines]
+    sub r10, r14                    ; lines still allowed in this out file
+    test r10, r10
+    jnz .sfind
+    ; budget 0 → rotate (should not happen; guard)
     mov rdi, rbx
     call close_fd
+    mov rbx, -1
     inc r15
-    jmp .sfile
+    xor r14, r14
+    jmp .sscan
+.sfind:
+    lea rdi, [big_buf + r8]
+    mov rcx, r13
+    sub rcx, r8
+    test rcx, rcx
+    jz .sread
+    mov al, 10
+    repne scasb
+    jne .stail                      ; no NL in remainder
+    ; found NL; rdi past it
+    mov rax, rdi
+    lea rcx, [big_buf]
+    sub rax, rcx                    ; new r8 = end offset after this line
+    mov r8, rax
+    inc r14
+    dec r10
+    ; if more budget and more buffer, keep growing span
+    test r10, r10
+    jz .swrite                      ; hit file line quota
+    cmp r8, r13
+    jb .sfind
+.swrite:
+    ; write [big_buf+r9, big_buf+r8)
+    mov rdx, r8
+    sub rdx, r9
+    test rdx, rdx
+    jz .sread
+    lea rsi, [big_buf + r9]
+    mov rax, SYS_write
+    mov rdi, rbx
+    syscall
+    cmp rax, -4096
+    jae die1
+    cmp rax, rdx
+    jne die1                        ; short write
+    ; if quota full, rotate (open next only on more data)
+    mov rax, [n_lines]
+    cmp r14, rax
+    jb .sscan
+    mov rdi, rbx
+    call close_fd
+    mov rbx, -1
+    inc r15
+    xor r14, r14
+    jmp .sscan
+.stail:
+    ; First flush any complete-line span already scanned [r9, r8)
+    mov rdx, r8
+    sub rdx, r9
+    test rdx, rdx
+    jz .stail_partial
+    cmp rbx, -1
+    jne .stail_flush
+    call split_open_next
+.stail_flush:
+    lea rsi, [big_buf + r9]
+    mov rax, SYS_write
+    mov rdi, rbx
+    syscall
+    cmp rax, -4096
+    jae die1
+    cmp rax, rdx
+    jne die1
+    ; if quota filled by that span, rotate before partial
+    mov rax, [n_lines]
+    cmp r14, rax
+    jb .stail_partial
+    mov rdi, rbx
+    call close_fd
+    mov rbx, -1
+    inc r15
+    xor r14, r14
+.stail_partial:
+    ; write remaining bytes without counting a line (no NL yet)
+    mov rdx, r13
+    sub rdx, r8
+    test rdx, rdx
+    jz .sread
+    cmp rbx, -1
+    jne .stailw
+    call split_open_next
+.stailw:
+    lea rsi, [big_buf + r8]
+    mov rax, SYS_write
+    mov rdi, rbx
+    syscall
+    cmp rax, -4096
+    jae die1
+    jmp .sread
+.seof:
+    test r12, r12
+    jz .sdone
+    mov rdi, r12
+    call close_fd
+.sdone:
+    cmp rbx, -1
+    je xexit
+    mov rdi, rbx
+    call close_fd
+    jmp xexit
 .sh: lea rsi, [hsplit]
     call out_str
     jmp xexit
 .sv: lea rsi, [vsplit]
     call out_str
     jmp xexit
+
+; split_open_next: open PREFIXaa style path from r15 index → rbx=fd
+; GNU default -a 2: aa..yz (650 names, first letter a–y), then widen to
+; 4 letters zaaa, zaab, … (reserves z* 2-letter space for longer suffixes).
+split_open_next:
+    push r12
+    push r14
+    lea rdi, [work]
+    lea rsi, [prefix]
+    call strcpy
+    call strlen_work
+    mov r12, rax                    ; prefix len
+    mov rax, r15
+    cmp rax, 650
+    jae .long4
+    ; 2-letter: first = i/26 (0..24 → a..y), second = i%26
+    mov rcx, 26
+    xor rdx, rdx
+    div rcx                         ; rax=first, rdx=second
+    add al, 'a'
+    add dl, 'a'
+    mov [work+r12], al
+    mov [work+r12+1], dl
+    mov byte [work+r12+2], 0
+    jmp .do_open
+.long4:
+    ; 4-letter: 'z' + base26_3(i - 650)
+    sub rax, 650
+    mov byte [work+r12], 'z'
+    mov rcx, 26
+    xor rdx, rdx
+    div rcx                         ; rax=n/26, rdx=d0
+    add dl, 'a'
+    mov [work+r12+3], dl
+    xor rdx, rdx
+    div rcx                         ; rax=n/26/26, rdx=d1
+    add dl, 'a'
+    mov [work+r12+2], dl
+    xor rdx, rdx
+    div rcx                         ; rdx=d2
+    add dl, 'a'
+    mov [work+r12+1], dl
+    mov byte [work+r12+4], 0
+.do_open:
+    lea rsi, [work]
+    call open_wr
+    cmp rax, -4096
+    jae die1
+    mov rbx, rax
+    pop r14
+    pop r12
+    ret
 
 strcpy:
     push rdi
@@ -7448,7 +8298,7 @@ hsplit: db "Usage: f00-split [OPTION]... [FILE [PREFIX]]",10
       db "  f00-split -l 100 big.txt part",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vsplit: db "f00-split (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vsplit: db "f00-split (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -7613,7 +8463,7 @@ hcsplit: db "Usage: f00-csplit FILE LINE [LINE]...",10
          db "  f00-csplit data.txt 10 20",10
          db 10
          db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vcsplit: db "f00-csplit (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vcsplit: db "f00-csplit (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -7905,7 +8755,7 @@ hshuf: db "Usage: f00-shuf [OPTION]... [FILE]",10
       db "  f00-shuf -i 1-10 -n 3",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vshuf: db "f00-shuf (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vshuf: db "f00-shuf (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -8156,7 +9006,7 @@ htsort: db "Usage: f00-tsort [FILE]",10
       db "  f00-tsort deps.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vtsort: db "f00-tsort (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vtsort: db "f00-tsort (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -8369,7 +9219,7 @@ hpr: db "Usage: f00-pr [OPTION]... [FILE]...",10
       db "  f00-pr -t file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vpr: db "f00-pr (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vpr: db "f00-pr (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -8498,7 +9348,7 @@ hptx: db "Usage: f00-ptx [OPTION]... [FILE]...",10
       db "  f00-ptx file.txt",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vptx: db "f00-ptx (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vptx: db "f00-ptx (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -8713,7 +9563,7 @@ hfactor: db "Usage: f00-factor [OPTION] [NUMBER]...",10
       db "  f00-factor -h 12",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vfactor: db "f00-factor (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vfactor: db "f00-factor (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -9167,7 +10017,7 @@ hnumfmt: db "Usage: f00-numfmt [OPTION]... [NUMBER]...",10
       db "  f00-numfmt --to=si 1000000",10
       db 10
       db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vnumfmt: db "f00-numfmt (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vnumfmt: db "f00-numfmt (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0
 
 section .text
 
@@ -9586,4 +10436,4 @@ hexpr: db "Usage: f00-expr EXPRESSION",10
        db "  f00-expr length hello",10
        db 10
        db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-vexpr: db "f00-expr (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+vexpr: db "f00-expr (f00) 0.16.5",10,"License: MIT · https://f00.sh",10,0

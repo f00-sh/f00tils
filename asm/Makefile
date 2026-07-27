@@ -116,8 +116,29 @@ parity: $(TARGET) links
 	bash benches/parity.sh
 
 # Real-work wall+CPU (sort multi-line, ls non-trivial tree) — not spawn theater
+# Frozen LC_ALL=C + /usr/bin oracles (see hot-path-speed.py FROZEN_ENV).
 hot: $(TARGET) links
 	python3 benches/hot-path-speed.py .
+
+# Atomic A+B+C gate: rebuild → check → hot → abc-evidence (fail closed).
+# Tee evidence under SCRATCH when set (goal implementer path).
+abc: $(TARGET) links
+	@set -euo pipefail; \
+	SCR="$${SCRATCH:-/tmp/grok-goal-918d1e4db5d6/implementer}"; \
+	mkdir -p "$$SCR"; \
+	SHA=$$(sha256sum $(TARGET) | awk '{print $$1}'); \
+	MT=$$(stat -c %Y $(TARGET)); \
+	echo "f00 sha256=$$SHA mtime=$$MT" | tee "$$SCR/abc-evidence.log"; \
+	$(MAKE) check 2>&1 | tee "$$SCR/make-check.txt"; \
+	test $${PIPESTATUS[0]} -eq 0; \
+	$(MAKE) hot 2>&1 | tee "$$SCR/make-hot.txt"; \
+	test $${PIPESTATUS[0]} -eq 0; \
+	python3 benches/abc-evidence.py . 2>&1 | tee -a "$$SCR/abc-evidence.log"; \
+	test $${PIPESTATUS[0]} -eq 0; \
+	echo "f00 sha256=$$SHA (post)" >> "$$SCR/abc-evidence.log"; \
+	cp -a "$$SCR/make-check.txt" "$$SCR/make-check-final.txt"; \
+	cp -a "$$SCR/make-hot.txt" "$$SCR/make-hot-final.txt"; \
+	cp -a "$$SCR/abc-evidence.log" "$$SCR/abc-evidence-final.log"
 
 # Speed gates: representative + full suite wall/CPU (all four GNU packages)
 speed: $(TARGET) links

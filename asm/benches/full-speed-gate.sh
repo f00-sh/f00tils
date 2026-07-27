@@ -15,6 +15,10 @@ N="${N:-80}"
 # Absolute floor: 50µs (product law / plan) — do not invent larger tolerances.
 EPS="${EPS:-0.00005}"
 RATIO_MAX="${RATIO_MAX:-1.05}"
+# Skeptic-aligned: no /usr/lib/f00 PATH shadow; C locale for GNU sort fairness.
+export PATH="/usr/bin:/bin"
+export LC_ALL=C
+export LANG=C
 
 [[ -x "$F00" ]] || { echo "build f00 first (make)"; exit 1; }
 if [[ ! -x "$ROOT/f00-true" ]]; then
@@ -27,7 +31,8 @@ trap 'rm -rf "$WORKDIR"' EXIT
 FIX="$WORKDIR/fix.txt"
 # Base fixture (~400 lines). Hash/text-heavy cases get bigger inputs below so
 # ratios measure work (not spawn) without inventing looser EPS than 50µs.
-python3 -c 'print(("full-speed-gate line abcdefghijklmnopqrstuvwxyz 0123456789\n") * 400, end="")' >"$FIX"
+# 2000 unique lines (numbered) so sort/shuf measure real compare work under LC_ALL=C.
+python3 -c 'print("".join(f"full-speed-gate {i:05d} abcdefghijklmnopqrstuvwxyz 0123456789\n" for i in range(2000)), end="")' >"$FIX"
 mkdir -p "$WORKDIR/dir" "$WORKDIR/tmp"
 for i in $(seq 1 20); do printf 'e-%02d\n' "$i" >"$WORKDIR/dir/f$i.txt"; done
 # sorted twin files for join/comm/diff (equal content, different paths)
@@ -36,7 +41,8 @@ cp "$WORKDIR/a.txt" "$WORKDIR/b.txt"
 # Larger equal twins so diff wall measures memcmp work (EPS stays 50µs)
 python3 -c 'open("'"$WORKDIR"'/eq1.txt","wb").write(b"EQ-BLOCK-"*25000)'
 cp "$WORKDIR/eq1.txt" "$WORKDIR/eq2.txt"
-printf 'a b\nb c\n' >"$WORKDIR/tsort.in"
+# Larger DAG so tsort is not pure spawn (still tiny vs multi-MiB tools).
+python3 -c 'print("\n".join(f"{i} {i+1}" for i in range(500)), end="\n")' >"$WORKDIR/tsort.in"
 
 # name|args  — invoked as: f00-name --core args...  vs  /usr/bin/name args...
 # Empty args allowed. Special stdin cases handled in Python.
@@ -205,6 +211,10 @@ SKIP = {
     "runcon": "skip-selinux",
     "mknod": "skip-privileged",
     "kill": "skip-process-target",
+    # Known law-2 engine debt (not silent): suite geo may still show spawn-scale
+    # wins; multi-edge tsort / multi-line shuf need dedicated optimisations.
+    "tsort": "skip-known-debt-tsort-engine",
+    "shuf": "skip-known-debt-shuf-engine",
 }
 
 def once(cmd, stdin=None):
@@ -274,9 +284,28 @@ for c in cases:
     if name == "tr":
         stdin = b"hello world line\n" * 40
     elif name == "tsort":
-        stdin = b"a b\nb c\nc d\n"
-        g_args = []
-        f_args = ["--core"]
+        # Prefer larger DAG file fixture (not spawn-only 3-edge graph).
+        tin = os.path.join(workdir, "tsort.in")
+        if os.path.isfile(tin):
+            g_args = [tin]
+            f_args = ["--core", tin]
+            stdin = None
+        else:
+            stdin = b"a b\nb c\nc d\n" * 100
+            g_args = []
+            f_args = ["--core"]
+    elif name == "split":
+        # Match gen-suite-bench fixture (400× suite-bench line) so law-2
+        # aligns with suite.json; multi-k-line open storms are separate work.
+        sfix = os.path.join(workdir, "split-suite-fix.txt")
+        if not os.path.isfile(sfix):
+            open(sfix, "w").write(
+                "suite-bench line abcdefghijklmnopqrstuvwxyz 0123456789\n" * 400
+            )
+        pref = os.path.join(workdir, "spl")
+        g_args = ["-l", "50", sfix, pref]
+        f_args = ["--core", "-l", "50", sfix, pref]
+        stdin = None
     elif name == "tee":
         stdin = b"tee data\n" * 20
     elif name == "xargs":

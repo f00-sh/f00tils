@@ -105,7 +105,7 @@ def_c_reset: db 27, "[0m", 0
 env_nocolor: db "NO_COLOR", 0
 j_schema:   db "{", 10, '  "schema": "f00/v1",', 10, 0
 j_suite:    db '  "suite": "f00",', 10, 0
-j_ver:      db '  "version": "0.16.4",', 10, 0
+j_ver:      db '  "version": "0.16.5",', 10, 0
 j_util_a:   db '  "util": "', 0
 j_util_b:   db '",', 10, 0
 j_mode_m:   db '  "mode": "modern",', 10, 0
@@ -511,18 +511,52 @@ human_size:
 ; strings / memory
 ; ------------------------------------------------------------
 strlen:
+    ; Word-wise NUL scan with page-safe aligned loads.
+    ; Preserve r8/r9 (call sites assume pre-SWAR clobber set).
+    push r8
+    push r9
     mov rax, rdi
-.lp:
+    ; byte-scan until 8-byte aligned (never cross page mid-load later)
+.align:
+    test rax, 7
+    jz .words
     cmp byte [rax], 0
     je .done
     inc rax
+    jmp .align
+.words:
+    mov r8, 0x0101010101010101
+    mov r9, 0x8080808080808080
+.lp:
+    mov rdx, [rax]                  ; aligned → stays in page
+    mov rcx, rdx
+    sub rcx, r8
+    not rdx
+    and rcx, rdx
+    and rcx, r9
+    jnz .found
+    add rax, 8
     jmp .lp
+.found:
+    mov rdx, [rax]
+.b:
+    test dl, dl
+    jz .done
+    inc rax
+    shr rdx, 8
+    jmp .b
 .done:
     sub rax, rdi
+    pop r9
+    pop r8
     ret
 
 ; strcmp(rdi, rsi) -> rax <0,0,>0
+; Page-safe: align both via byte loop, then word steps only when both aligned;
+; otherwise fall back to byte compare (still correct, still fast on short keys).
 strcmp:
+    push r8
+    push r9
 .lp:
     mov al, [rdi]
     mov cl, [rsi]
@@ -532,18 +566,42 @@ strcmp:
     jz .eq
     inc rdi
     inc rsi
-    jmp .lp
+    ; try word path only when both pointers are 8-aligned
+    mov eax, edi
+    or eax, esi
+    test eax, 7
+    jnz .lp
+    mov r8, 0x0101010101010101
+    mov r9, 0x8080808080808080
+.wlp:
+    mov rax, [rdi]
+    mov rcx, [rsi]
+    cmp rax, rcx
+    jne .lp                         ; mismatch: byte-resolve from here
+    mov rdx, rax
+    sub rdx, r8
+    not rax
+    and rdx, rax
+    and rdx, r9
+    jnz .eq
+    add rdi, 8
+    add rsi, 8
+    jmp .wlp
 .diff:
     movzx eax, al
     movzx ecx, cl
     sub eax, ecx
+    pop r9
+    pop r8
     ret
 .eq:
     xor eax, eax
+    pop r9
+    pop r8
     ret
 
 memcmp:
-    ; rdi, rsi, rdx=len
+    ; rdi, rsi, rdx=len — byte-wise (len-bounded; avoid page over-read)
     test rdx, rdx
     jz .eq
 .lp:

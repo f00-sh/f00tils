@@ -15,6 +15,7 @@ extern g_exit, g_tty, g_color, g_json_core, g_envp, g_util_name
 extern color_path, color_ok, color_dim, color_num, color_hdr, color_reset, color_err
 extern suite_runtime_init
 extern err_str
+extern json_meta_open, json_meta_close
 
 ; ── flags ──────────────────────────────────────────────────
 %define GF_IGNCASE   1
@@ -36,6 +37,11 @@ extern err_str
 %define GF_SMART     65536          ; modern smart-case active
 %define GF_CTX       131072         ; -A/-B/-C/-NUM context mode (even if 0)
 %define GF_PERL      262144         ; -P / --perl-regexp freestanding PCRE subset
+%define GF_JSON      524288         ; modern --json
+%define GF_CSV       1048576        ; modern --csv
+%define GF_BINARY    2097152        ; modern --binary
+%define GF_IGNFILE   4194304        ; modern --ignore-file (best-effort skip)
+%define GF_TYPE      8388608        ; modern --type EXT (extension filter)
 
 %define MAX_PATS     64
 %define READ_CAP     262144
@@ -82,13 +88,22 @@ line_len:       resq 1
 ctx_r_text:     resb CTX_RING_MAX * LINE_CAP
 ; Horspool skip table (case-sensitive -F hot path)
 skip_tab:       resb 256
+; multi -e hit collection (line start/end offsets into mmap)
+%define HIT_MAX 8192
+hit_lo:         resq HIT_MAX
+hit_hi:         resq HIT_MAX
+hit_ln:         resq HIT_MAX        ; line number at hit
+hit_n:          resq 1
+collect_mode:   resb 1              ; 1 = fixed_fast_scan_mem records hits only
+binary_silent:  resb 1              ; 1 = file has NUL and !GF_BINARY (match msg, no lines)
+type_ext:       resb 32             ; modern --type extension (e.g. "py", "c") without dot
 ; recursive walk: path shared; getdents buffer is per-frame on stack
 path_buf:       resb PATH_CAP
 path_len:       resq 1
 stat_buf:       resb 256
 
 section .rodata
-v_grep:  db "f00-grep (f00) 0.16.4", 10, "License: MIT · https://f00.sh", 10, 0
+v_grep:  db "f00-grep (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_grep:
     db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10
@@ -117,9 +132,20 @@ h_grep:
     db "  -r, -R, --recursive     recurse directories", 10
     db "      --core              plain GNU-like output (no color)", 10
     db "      --color[=WHEN]      color matches (modern TTY default)", 10
+    db "      --json              modern machine JSON (f00/v1 matches)", 10
+    db "      --csv               modern CSV: path,line,text", 10
+    db "      --binary            modern: search binary files (no NUL skip)", 10
+    db "      --ignore-file       modern: skip .git path components", 10
+    db "      --type EXT          modern: only paths ending in .EXT", 10
     db "  --help  --version", 10
     db "Modern TTY: theme c_* match highlight (color_ok/dim), smart-case; --core is script-safe.", 10, 0
 
+s_json:     db "json", 0
+s_csv:      db "csv", 0
+s_binary:   db "binary", 0
+s_ignfile:  db "ignore-file", 0
+s_type:     db "type", 0
+s_type_eq:  db "type=", 0
 s_core:     db "core", 0
 s_help:     db "help", 0
 s_version:  db "version", 0
@@ -162,6 +188,7 @@ msg_colon_sp: db ": ", 0
 msg_bad_ctx: db ": invalid context length argument", 10, 0
 msg_bad_re:  db ": invalid regular expression", 10, 0
 msg_bad_cls: db ": missing terminating ] for character class", 10, 0
+msg_binary:  db ": binary file matches", 10, 0
 
 section .text
 
@@ -394,9 +421,72 @@ grep_main:
     call strcmp
     pop rdi
     test eax, eax
-    jnz .l1
+    jnz .l0j
     or dword [g_flags], GF_CORE
     mov byte [g_color], 0
+    and dword [g_flags], ~(GF_JSON | GF_CSV)
+    jmp .next_arg
+.l0j: lea rsi, [s_json]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l0c
+    test dword [g_flags], GF_CORE
+    jnz .next_arg
+    or dword [g_flags], GF_JSON
+    jmp .next_arg
+.l0c: lea rsi, [s_csv]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l0b
+    test dword [g_flags], GF_CORE
+    jnz .next_arg
+    or dword [g_flags], GF_CSV
+    jmp .next_arg
+.l0b: lea rsi, [s_binary]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l0i
+    or dword [g_flags], GF_BINARY
+    jmp .next_arg
+.l0i: lea rsi, [s_ignfile]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l0t
+    or dword [g_flags], GF_IGNFILE
+    jmp .next_arg
+.l0t:
+    ; --type=EXT
+    lea rsi, [s_type_eq]
+    push rdi
+    call str_starts_local
+    pop rdi
+    test eax, eax
+    jz .l0t2
+    add rdi, 5                      ; past "type="
+    call grep_set_type
+    jmp .next_arg
+.l0t2:
+    lea rsi, [s_type]
+    push rdi
+    call strcmp
+    pop rdi
+    test eax, eax
+    jnz .l1
+    test dword [g_flags], GF_CORE
+    jnz .next_arg
+    inc r14
+    cmp r14, r12
+    jge .next_arg
+    mov rdi, [r13 + r14*8]
+    call grep_set_type
     jmp .next_arg
 .l1: lea rsi, [s_ignore]
     push rdi
@@ -1189,6 +1279,117 @@ strcpy_local:
     jmp .lp
 .d: ret
 
+; str_starts_local(rdi=str, rsi=prefix) → eax=1 if str starts with prefix
+str_starts_local:
+    push rdi
+    push rsi
+.ss:
+    mov al, [rsi]
+    test al, al
+    jz .ss_yes
+    cmp al, [rdi]
+    jne .ss_no
+    inc rdi
+    inc rsi
+    jmp .ss
+.ss_yes:
+    mov eax, 1
+    pop rsi
+    pop rdi
+    ret
+.ss_no:
+    xor eax, eax
+    pop rsi
+    pop rdi
+    ret
+
+; grep_set_type(rdi=ext cstr) — store extension without leading dots
+grep_set_type:
+    test dword [g_flags], GF_CORE
+    jnz .gst_ret
+    or dword [g_flags], GF_TYPE
+.gst_skip:
+    cmp byte [rdi], '.'
+    jne .gst_copy
+    inc rdi
+    jmp .gst_skip
+.gst_copy:
+    lea rsi, [type_ext]
+    mov ecx, 31
+.gst_lp:
+    mov al, [rdi]
+    mov [rsi], al
+    test al, al
+    jz .gst_ret
+    inc rdi
+    inc rsi
+    dec ecx
+    jnz .gst_lp
+    mov byte [rsi], 0
+.gst_ret:
+    ret
+
+; type_path_ok(rdi=path) → eax=1 if no type filter or path ends with .EXT
+type_path_ok:
+    test dword [g_flags], GF_TYPE
+    jz .tpo_yes
+    push rbx
+    push r12
+    mov r12, rdi
+    call strlen
+    mov rbx, rax                    ; path len
+    lea rsi, [type_ext]
+    mov rdi, rsi
+    call strlen
+    mov rcx, rax                    ; ext len
+    test rcx, rcx
+    jz .tpo_ok
+    lea rdx, [rcx+1]                ; +dot
+    cmp rbx, rdx
+    jb .tpo_no
+    ; path[len-ext-1] == '.'
+    mov rdi, r12
+    add rdi, rbx
+    sub rdi, rdx
+    cmp byte [rdi], '.'
+    jne .tpo_no
+    inc rdi
+    lea rsi, [type_ext]
+.tpo_cmp:
+    mov al, [rsi]
+    test al, al
+    jz .tpo_ok
+    mov cl, [rdi]
+    ; case-fold A-Z
+    cmp cl, 'A'
+    jb .tpo_c
+    cmp cl, 'Z'
+    ja .tpo_c
+    add cl, 32
+.tpo_c:
+    cmp al, 'A'
+    jb .tpo_c2
+    cmp al, 'Z'
+    ja .tpo_c2
+    add al, 32
+.tpo_c2:
+    cmp al, cl
+    jne .tpo_no
+    inc rsi
+    inc rdi
+    jmp .tpo_cmp
+.tpo_ok:
+    pop r12
+    pop rbx
+.tpo_yes:
+    mov eax, 1
+    ret
+.tpo_no:
+    pop r12
+    pop rbx
+    xor eax, eax
+    ret
+
 ; ═══════════════════════════════════════════════════════════
 ; grep_fd(rdi=display path cstr, rsi=fd)
 ; ═══════════════════════════════════════════════════════════
@@ -1202,12 +1403,18 @@ grep_fd:
     push r15
     mov r12, rdi
     mov r13, rsi
+    ; modern --type: skip non-matching paths
+    mov rdi, r12
+    call type_path_ok
+    test eax, eax
+    jz .type_skip
     lea rdi, [path_buf]
     mov rsi, r12
     call strcpy_local
     mov qword [line_no], 0
     mov qword [file_matches], 0
     mov byte [had_match], 0
+    mov byte [binary_silent], 0
     mov qword [line_len], 0
     ; per-file context state (group sep spans files via ctx_have_out)
     mov qword [ctx_pending], 0
@@ -1216,14 +1423,14 @@ grep_fd:
     mov qword [ctx_rhead], 0
     mov byte [ctx_file_out], 0
 
-    ; ── hot path: simple case-sensitive -F (no -i/-w/-x/-v/-o/context) ──
-    ; beats GNU multi-MiB by Horspool + bulk line fan-out (no per-byte copy)
+    ; ── hot path: -F (fixed) — mmap when possible; SSE simple or line-walk for -i/multi/ctx ──
+    ; Exclude only modes that need different match semantics than fixed substring.
     test dword [g_flags], GF_FIXED
     jz .read
-    test dword [g_flags], GF_IGNCASE | GF_WORD | GF_LINE | GF_INVERT | GF_CTX | GF_ONLY
+    test dword [g_flags], GF_WORD | GF_LINE | GF_INVERT | GF_ONLY
     jnz .read
-    cmp qword [pat_n], 1
-    jne .read
+    cmp qword [pat_n], 0
+    je .read
     cmp qword [pat_len], 0
     je .read
     call grep_fd_fixed_fast         ; r13=fd already set
@@ -1238,6 +1445,18 @@ grep_fd:
     test rax, rax
     jle .eof
     mov r14, rax
+    ; first chunk: detect binary (NUL) unless --binary
+    test dword [g_flags], GF_BINARY
+    jnz .read_ok
+    cmp byte [binary_silent], 0
+    jne .read_ok
+    mov rdi, read_buf
+    mov rsi, r14
+    call mem_has_nul
+    test eax, eax
+    jz .read_ok
+    mov byte [binary_silent], 1
+.read_ok:
     xor r15, r15
     lea rbx, [read_buf]
 .blp:
@@ -1317,6 +1536,31 @@ grep_fd:
     je .after
     call process_line
 .after:
+    ; binary file with match → GNU-style message (no line dump); exit 0/1 not 2
+    cmp byte [binary_silent], 0
+    je .after_norm
+    cmp byte [any_match], 0
+    je .ret
+    cmp byte [had_match], 0
+    je .ret
+    test dword [g_flags], GF_QUIET
+    jnz .ret
+    test dword [g_flags], GF_SILENT
+    jnz .ret
+    ; stderr: f00-grep: path: binary file matches  (do not set had_error)
+    call emit_prog
+    lea rsi, [msg_colon_sp]
+    call err_str
+    lea rsi, [path_buf]
+    cmp byte [rsi], 0
+    jne .bin_p
+    mov rsi, r12
+.bin_p:
+    call err_str
+    lea rsi, [msg_binary]
+    call err_str
+    jmp .ret
+.after_norm:
     test dword [g_flags], GF_QUIET
     jnz .ret
     test dword [g_flags], GF_LIST
@@ -1334,6 +1578,7 @@ grep_fd:
 .nc: test dword [g_flags], GF_COUNT
     jz .ret
     call emit_count
+.type_skip:
 .ret:
     pop r15
     pop r14
@@ -1344,10 +1589,11 @@ grep_fd:
     ret
 
 ; ═══════════════════════════════════════════════════════════
-; grep_fd_fixed_fast — mmap whole file when possible; Horspool over the
-; full map and emit only matching lines (rare-hit multi-MiB path).
-; Fallback: buffered chunk path with same Horspool line scan.
-; r13=fd. Supports -n/-c/-q/-l names.
+; grep_fd_fixed_fast — mmap whole file when possible.
+; Simple case-sensitive single-pattern no-context: SSE2 first-byte scan.
+; -i / multi -e / -A-B-C: line-walk mmap + process_line (context/invert bookkeeping).
+; Fallback: buffered line assembly → process_line.
+; r13=fd.
 ; ═══════════════════════════════════════════════════════════
 grep_fd_fixed_fast:
     push rbx
@@ -1384,16 +1630,52 @@ grep_fd_fixed_fast:
     cmp rax, -4096
     jae .ff_buf
     mov r14, rax                    ; map base
+    ; NUL in first 32KiB → binary unless --binary (do not scan whole multi-MiB)
+    test dword [g_flags], GF_BINARY
+    jnz .ff_scan
     mov rdi, r14
     mov rsi, r12
-    call fixed_fast_scan_mem        ; rdi=base rsi=len
+    mov rax, 32768
+    cmp rsi, rax
+    cmova rsi, rax
+    call mem_has_nul
+    test eax, eax
+    jz .ff_scan
+    mov byte [binary_silent], 1
+.ff_scan:
+    test dword [g_flags], GF_CTX
+    jnz .ff_ctx
+    cmp qword [pat_n], 1
+    jne .ff_multi
+    mov rdi, r14
+    mov rsi, r12
+    call fixed_fast_scan_mem        ; CS or -i SSE path
+    jmp .ff_unmap
+.ff_multi:
+    ; single-pass CS multi; -i still uses N× collect scan (dual first-byte)
+    test dword [g_flags], GF_IGNCASE
+    jnz .ff_multi_i
+    mov rdi, r14
+    mov rsi, r12
+    call fixed_mmap_multi
+    jmp .ff_unmap
+.ff_multi_i:
+    mov rdi, r14
+    mov rsi, r12
+    call fixed_mmap_multi_nscan
+    jmp .ff_unmap
+.ff_ctx:
+    mov rdi, r14
+    mov rsi, r12
+    call fixed_mmap_ctx
+.ff_unmap:
     mov rax, SYS_munmap
     mov rdi, r14
     mov rsi, r12
     syscall
     jmp .ff_done
 .ff_buf:
-    ; buffered fallback (stdin / huge / mmap fail)
+    ; buffered fallback (stdin / huge / mmap fail) — full process_line
     mov qword [line_len], 0
 .ff_read:
     mov rax, SYS_read
@@ -1404,7 +1686,7 @@ grep_fd_fixed_fast:
     test rax, rax
     jle .ff_eof
     mov r14, rax
-    call fixed_fast_scan_chunk
+    call fixed_buf_lines_process
     test dword [g_flags], GF_QUIET
     jz .ff_mc
     cmp byte [any_match], 0
@@ -1419,18 +1701,17 @@ grep_fd_fixed_fast:
     test rax, rax
     jz .ff_read
     cmp [file_matches], rax
-    jae .ff_eof
+    jae .ff_check_ctx
     jmp .ff_read
+.ff_check_ctx:
+    cmp qword [ctx_pending], 0
+    jne .ff_read
+    jmp .ff_eof
 .ff_eof:
     cmp qword [line_len], 0
     je .ff_done
-    inc qword [line_no]
-    lea rdi, [line_buf]
-    mov rsi, [line_len]
-    call fixed_line_has_pat
-    test al, al
-    jz .ff_done
-    call fixed_select_emit
+    call process_line
+    mov qword [line_len], 0
 .ff_done:
     pop r15
     pop r14
@@ -1438,8 +1719,1494 @@ grep_fd_fixed_fast:
     pop rbx
     ret
 
-; fixed_fast_scan_mem(rdi=base, rsi=len) — SSE2 first-byte scan + verify;
+; fixed_mmap_multi_nscan — N× fixed_fast_scan_mem in collect_mode + sort emit
+fixed_mmap_multi_nscan:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov qword [hit_n], 0
+    mov r14, [pat_ptr]
+    mov r15, [pat_len]
+    mov byte [collect_mode], 1
+    xor ebx, ebx
+.ns_pat:
+    cmp rbx, [pat_n]
+    jae .ns_out
+    mov rax, [pat_ptr + rbx*8]
+    mov [pat_ptr], rax
+    mov rax, [pat_len + rbx*8]
+    mov [pat_len], rax
+    ; reset line_no for correct hit_ln per scan
+    mov qword [line_no], 0
+    mov rdi, r12
+    mov rsi, r13
+    call fixed_fast_scan_mem
+    inc rbx
+    jmp .ns_pat
+.ns_out:
+    mov byte [collect_mode], 0
+    mov [pat_ptr], r14
+    mov [pat_len], r15
+    ; sort by lo (insertion; hit counts stay small for rare multi-MiB needles)
+    mov rcx, [hit_n]
+    cmp rcx, 2
+    jb .ns_sorted
+    xor ebx, ebx
+.ns_i:
+    inc rbx
+    cmp rbx, rcx
+    jae .ns_sorted
+    mov r8, [hit_lo + rbx*8]
+    mov r9, [hit_hi + rbx*8]
+    mov r10, [hit_ln + rbx*8]
+    mov rdx, rbx
+.ns_j:
+    test rdx, rdx
+    jz .ns_ins
+    mov rax, [hit_lo + rdx*8 - 8]
+    cmp rax, r8
+    jbe .ns_ins
+    mov [hit_lo + rdx*8], rax
+    mov rax, [hit_hi + rdx*8 - 8]
+    mov [hit_hi + rdx*8], rax
+    mov rax, [hit_ln + rdx*8 - 8]
+    mov [hit_ln + rdx*8], rax
+    dec rdx
+    jmp .ns_j
+.ns_ins:
+    mov [hit_lo + rdx*8], r8
+    mov [hit_hi + rdx*8], r9
+    mov [hit_ln + rdx*8], r10
+    jmp .ns_i
+.ns_sorted:
+    ; reset match bookkeeping (scan may have set it)
+    mov byte [had_match], 0
+    mov byte [any_match], 0
+    mov qword [file_matches], 0
+    xor ebx, ebx
+    mov r14, -1
+.ns_e:
+    cmp rbx, [hit_n]
+    jae .ns_done
+    mov r8, [hit_lo + rbx*8]
+    cmp r8, r14
+    je .ns_sk
+    mov r14, r8
+    mov r9, [hit_hi + rbx*8]
+    mov rax, [hit_ln + rbx*8]
+    mov [line_no], rax
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT
+    jnz .ns_sk
+    lea rsi, [r12 + r8]
+    mov rdx, r9
+    sub rdx, r8
+    mov rcx, [line_no]
+    mov dil, ':'
+    push rbx
+    push r12
+    push r14
+    call emit_grep_line_ex
+    pop r14
+    pop r12
+    pop rbx
+.ns_sk:
+    inc rbx
+    jmp .ns_e
+.ns_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ═══════════════════════════════════════════════════════════
+; fixed_mmap_ctx(rdi=base, rsi=len) — fast collect hits then expand -A/-B/-C
+; Avoids O(n) process_line on every line (was 5–30× slower than GNU on multi-MiB).
+; ═══════════════════════════════════════════════════════════
+fixed_mmap_ctx:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov r12, rdi
+    mov r13, rsi
+    mov qword [hit_n], 0
+    mov qword [ctx_last_prn], 0
+    ; collect hits (single or multi patterns)
+    cmp qword [pat_n], 1
+    jne .cx_mpats
+    mov byte [collect_mode], 1
+    mov qword [line_no], 0
+    mov rdi, r12
+    mov rsi, r13
+    call fixed_fast_scan_mem
+    mov byte [collect_mode], 0
+    jmp .cx_sorted
+.cx_mpats:
+    mov r14, [pat_ptr]
+    mov r15, [pat_len]
+    mov byte [collect_mode], 1
+    xor ebx, ebx
+.cx_mpl:
+    cmp rbx, [pat_n]
+    jae .cx_mpdone
+    mov rax, [pat_ptr + rbx*8]
+    mov [pat_ptr], rax
+    mov rax, [pat_len + rbx*8]
+    mov [pat_len], rax
+    mov qword [line_no], 0
+    mov rdi, r12
+    mov rsi, r13
+    call fixed_fast_scan_mem
+    inc rbx
+    jmp .cx_mpl
+.cx_mpdone:
+    mov byte [collect_mode], 0
+    mov [pat_ptr], r14
+    mov [pat_len], r15
+    ; insertion sort by hit_lo
+    mov rcx, [hit_n]
+    cmp rcx, 2
+    jb .cx_sorted
+    xor ebx, ebx
+.cx_si:
+    inc rbx
+    cmp rbx, rcx
+    jae .cx_sorted
+    mov r8, [hit_lo + rbx*8]
+    mov r9, [hit_hi + rbx*8]
+    mov r10, [hit_ln + rbx*8]
+    mov rdx, rbx
+.cx_sj:
+    test rdx, rdx
+    jz .cx_sins
+    mov rax, [hit_lo + rdx*8 - 8]
+    cmp rax, r8
+    jbe .cx_sins
+    mov [hit_lo + rdx*8], rax
+    mov rax, [hit_hi + rdx*8 - 8]
+    mov [hit_hi + rdx*8], rax
+    mov rax, [hit_ln + rdx*8 - 8]
+    mov [hit_ln + rdx*8], rax
+    dec rdx
+    jmp .cx_sj
+.cx_sins:
+    mov [hit_lo + rdx*8], r8
+    mov [hit_hi + rdx*8], r9
+    mov [hit_ln + rdx*8], r10
+    jmp .cx_si
+.cx_sorted:
+    ; -c/-q/-l: count only (GNU ignores context formatting with these)
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT
+    jz .cx_emit_ctx
+    xor ebx, ebx
+    mov r14, -1
+.cx_cnt:
+    cmp rbx, [hit_n]
+    jae .cx_done
+    mov r8, [hit_lo + rbx*8]
+    cmp r8, r14
+    je .cx_cnt_sk
+    mov r14, r8
+    mov rax, [max_count]
+    test rax, rax
+    jz .cx_cnt_ok
+    cmp [file_matches], rax
+    jae .cx_done
+.cx_cnt_ok:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+.cx_cnt_sk:
+    inc rbx
+    jmp .cx_cnt
+.cx_emit_ctx:
+    ; if -n: fill hit_ln via one monotonic walk (needed for lineno print)
+    test dword [g_flags], GF_NUMBER
+    jz .cx_off
+    xor ebx, ebx
+    xor r10, r10
+    xor r11, r11
+.cx_renum:
+    cmp rbx, [hit_n]
+    jae .cx_off
+    mov r8, [hit_lo + rbx*8]
+.cx_rn_w:
+    cmp r11, r8
+    jae .cx_rn_s
+    cmp byte [r12 + r11], 10
+    jne .cx_rn_i
+    inc r10
+.cx_rn_i:
+    inc r11
+    jmp .cx_rn_w
+.cx_rn_s:
+    lea rax, [r10 + 1]
+    mov [hit_ln + rbx*8], rax
+    inc rbx
+    jmp .cx_renum
+.cx_off:
+    ; offset-based context
+    ; r15 = last_end exclusive offset printed (0 = none)
+    xor r15, r15
+    xor ebx, ebx
+    mov r14, -1                     ; last match lo (dedupe)
+.cx_e:
+    cmp rbx, [hit_n]
+    jae .cx_done
+    mov r8, [hit_lo + rbx*8]
+    cmp r8, r14
+    je .cx_skip
+    mov r14, r8
+    mov r9, [hit_hi + rbx*8]
+    mov rax, [max_count]
+    test rax, rax
+    jz .cx_sel
+    cmp [file_matches], rax
+    jae .cx_done
+.cx_sel:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    ; start_off = walk back ctx_before lines from r8
+    mov rsi, r8
+    mov rcx, [ctx_before]
+.cx_wb:
+    test rcx, rcx
+    jz .cx_wb_done
+    test rsi, rsi
+    jz .cx_wb_done
+    dec rsi
+.cx_wbs:
+    test rsi, rsi
+    jz .cx_wb_dec
+    cmp byte [r12 + rsi - 1], 10
+    je .cx_wb_dec
+    dec rsi
+    jmp .cx_wbs
+.cx_wb_dec:
+    dec rcx
+    jmp .cx_wb
+.cx_wb_done:
+    ; clamp start to last_end
+    cmp rsi, r15
+    jae .cx_start_ok
+    mov rsi, r15
+.cx_start_ok:
+    ; group separator if gap between last_end and start
+    test r15, r15
+    jz .cx_emit_region
+    cmp rsi, r15
+    jbe .cx_emit_region
+    ; "--\n"
+    push rsi
+    push r8
+    push r9
+    push r14
+    push rbx
+    push r15
+    mov dil, '-'
+    call out_byte
+    mov dil, '-'
+    call out_byte
+    mov dil, 10
+    call out_byte
+    pop r15
+    pop rbx
+    pop r14
+    pop r9
+    pop r8
+    pop rsi
+.cx_emit_region:
+    ; emit lines from rsi up to and including match line; then after
+    ; first: lines in [rsi, r8) as context '-', then match ':', then after
+.cx_before_lp:
+    cmp rsi, r8
+    jae .cx_match_body
+    mov rdx, rsi
+.cx_bl_end:
+    cmp rdx, r13
+    jae .cx_bl_have
+    cmp byte [r12 + rdx], 10
+    je .cx_bl_have
+    inc rdx
+    jmp .cx_bl_end
+.cx_bl_have:
+    mov r10, rdx
+    sub r10, rsi
+    ; lineno: if -n, derive from match hit_ln and distance
+    xor ecx, ecx
+    test dword [g_flags], GF_NUMBER
+    jz .cx_bl_em
+    ; approximate: leave 0 if unknown — fixed below via hit_ln for match only
+    mov rcx, [hit_ln + rbx*8]
+    ; count newlines from rsi to r8 to get before lineno = match_ln - nls
+    push rax
+    push rdx
+    xor edx, edx
+    mov rax, rsi
+.cx_bl_cnt:
+    cmp rax, r8
+    jae .cx_bl_cntd
+    cmp byte [r12 + rax], 10
+    jne .cx_bl_ci
+    inc rdx
+.cx_bl_ci:
+    inc rax
+    jmp .cx_bl_cnt
+.cx_bl_cntd:
+    sub rcx, rdx
+    pop rdx
+    pop rax
+.cx_bl_em:
+    push rsi
+    push rdx
+    push r8
+    push r9
+    push r14
+    push rbx
+    push r15
+    push r10
+    push rcx
+    lea rsi, [r12 + rsi]
+    mov rdx, r10
+    mov dil, '-'
+    call emit_grep_line_ex
+    pop rcx
+    pop r10
+    pop r15
+    pop rbx
+    pop r14
+    pop r9
+    pop r8
+    pop rdx
+    pop rsi
+    mov rsi, rdx
+    cmp rsi, r13
+    jae .cx_match_body
+    cmp byte [r12 + rsi], 10
+    jne .cx_binc
+    inc rsi
+.cx_binc:
+    jmp .cx_before_lp
+.cx_match_body:
+    push r8
+    push r9
+    push r14
+    push rbx
+    push r15
+    lea rsi, [r12 + r8]
+    mov rdx, r9
+    sub rdx, r8
+    xor ecx, ecx
+    test dword [g_flags], GF_NUMBER
+    jz .cx_m_em
+    mov rcx, [hit_ln + rbx*8]
+.cx_m_em:
+    mov dil, ':'
+    call emit_grep_line_ex
+    pop r15
+    pop rbx
+    pop r14
+    pop r9
+    pop r8
+    ; last_end = past match line
+    mov r15, r9
+    cmp r15, r13
+    jae .cx_after_prep
+    cmp byte [r12 + r15], 10
+    jne .cx_after_prep
+    inc r15
+.cx_after_prep:
+    mov byte [ctx_have_out], 1
+    mov byte [ctx_file_out], 1
+    ; after-context lines, stop at next hit lo
+    mov rax, [ctx_after]
+    test rax, rax
+    jz .cx_skip
+    ; next hit lo
+    mov r10, r13                    ; sentinel = EOF
+    mov rcx, rbx
+.cx_find_next:
+    inc rcx
+    cmp rcx, [hit_n]
+    jae .cx_have_next
+    mov rax, [hit_lo + rcx*8]
+    cmp rax, r14
+    je .cx_find_next
+    mov r10, rax
+.cx_have_next:
+    mov rsi, r15
+    mov rbp, [ctx_after]
+    ; after lineno starts at match_ln+1 when -n
+    xor r8d, r8d                    ; after line counter (1-based offset)
+.cx_after_lp:
+    test rbp, rbp
+    jz .cx_after_done
+    cmp rsi, r13
+    jae .cx_after_done
+    cmp rsi, r10
+    jae .cx_after_done
+    mov rdx, rsi
+.cx_af_end:
+    cmp rdx, r13
+    jae .cx_af_have
+    cmp byte [r12 + rdx], 10
+    je .cx_af_have
+    inc rdx
+    jmp .cx_af_end
+.cx_af_have:
+    mov r11, rdx
+    sub r11, rsi
+    inc r8                          ; 1st after line → match_ln+1
+    push rsi
+    push rdx
+    push r8
+    push r9
+    push r14
+    push rbx
+    push r15
+    push r10
+    push rbp
+    push r11
+    lea rsi, [r12 + rsi]
+    mov rdx, r11
+    xor ecx, ecx
+    test dword [g_flags], GF_NUMBER
+    jz .cx_af_em
+    mov rcx, [hit_ln + rbx*8]
+    add rcx, r8
+.cx_af_em:
+    mov dil, '-'
+    call emit_grep_line_ex
+    pop r11
+    pop rbp
+    pop r10
+    pop r15
+    pop rbx
+    pop r14
+    pop r9
+    pop r8
+    pop rdx
+    pop rsi
+    mov rsi, rdx
+    cmp rsi, r13
+    jae .cx_after_done
+    cmp byte [r12 + rsi], 10
+    jne .cx_afinc
+    inc rsi
+.cx_afinc:
+    dec rbp
+    jmp .cx_after_lp
+.cx_after_done:
+    mov r15, rsi                    ; last_end
+.cx_skip:
+    inc rbx
+    jmp .cx_e
+.cx_done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; legacy multi (kept for reference path)
+fixed_mmap_multi_collect:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov r12, rdi
+    mov r13, rsi
+    ; first-byte set
+    lea rdi, [skip_tab]
+    xor eax, eax
+    mov rcx, 256
+    rep stosb
+    xor ebx, ebx
+.mc_fb:
+    cmp rbx, [pat_n]
+    jae .mc_scan
+    mov rax, [pat_ptr + rbx*8]
+    movzx eax, byte [rax]
+    lea rdi, [skip_tab]
+    mov byte [rdi + rax], 1
+    inc rbx
+    jmp .mc_fb
+.mc_scan:
+    ; build up to 2 SSE first-byte broadcasts from set (covers common 2-pattern multi)
+    xor r14d, r14d                  ; count of unique firsts in xmm1/xmm2
+    pxor xmm1, xmm1
+    pxor xmm2, xmm2
+    xor ecx, ecx
+.mc_bset:
+    cmp ecx, 256
+    jae .mc_bset_done
+    lea rdi, [skip_tab]
+    cmp byte [rdi + rcx], 0
+    je .mc_bsn
+    movd xmm0, ecx
+    punpcklbw xmm0, xmm0
+    punpcklwd xmm0, xmm0
+    pshufd xmm0, xmm0, 0
+    test r14d, r14d
+    jnz .mc_bs2
+    movdqa xmm1, xmm0
+    inc r14d
+    jmp .mc_bsn
+.mc_bs2:
+    cmp r14d, 1
+    jne .mc_bsn
+    movdqa xmm2, xmm0
+    inc r14d
+.mc_bsn:
+    inc ecx
+    jmp .mc_bset
+.mc_bset_done:
+    xor ebx, ebx
+    xor r10d, r10d
+    xor r11d, r11d
+.mc_block:
+    cmp rbx, r13
+    jae .mc_done
+    mov rcx, r13
+    sub rcx, rbx
+    cmp rcx, 16
+    jb .mc_tail
+    movdqu xmm0, [r12 + rbx]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    cmp r14d, 2
+    jb .mc_have_mask
+    movdqu xmm3, [r12 + rbx]
+    pcmpeqb xmm3, xmm2
+    pmovmskb edx, xmm3
+    or eax, edx
+.mc_have_mask:
+    test eax, eax
+    jz .mc_s16
+.mc_cands:
+    bsf ecx, eax
+    lea rsi, [rbx + rcx]
+    ; try each pattern at rsi
+    xor r14d, r14d
+.mc_try:
+    cmp r14, [pat_n]
+    jae .mc_nc
+    mov r15, [pat_ptr + r14*8]
+    mov rbp, [pat_len + r14*8]
+    lea rdx, [rsi + rbp]
+    cmp rdx, r13
+    ja .mc_tn
+    ; memcmp
+    mov rcx, rbp
+    lea rdi, [r12 + rsi]
+.mc_cmp:
+    test rcx, rcx
+    jz .mc_hit
+    dec rcx
+    mov r8b, [rdi + rcx]
+    cmp r8b, [r15 + rcx]
+    jne .mc_tn
+    jmp .mc_cmp
+.mc_tn:
+    inc r14
+    jmp .mc_try
+.mc_hit:
+    mov rbx, rsi
+    ; line bounds + emit (reuse hit path style)
+    mov r8, rbx
+.mc_back:
+    test r8, r8
+    jz .mc_fwd
+    cmp byte [r12 + r8 - 1], 10
+    je .mc_fwd
+    dec r8
+    jmp .mc_back
+.mc_fwd:
+    mov r9, rbx
+    add r9, rbp
+.mc_fe:
+    cmp r9, r13
+    jae .mc_em
+    cmp byte [r12 + r9], 10
+    je .mc_em
+    inc r9
+    jmp .mc_fe
+.mc_em:
+    ; line no
+.mc_cnt:
+    cmp r11, r8
+    jae .mc_cntd
+    cmp byte [r12 + r11], 10
+    jne .mc_cnti
+    inc r10
+.mc_cnti:
+    inc r11
+    jmp .mc_cnt
+.mc_cntd:
+    lea rax, [r10 + 1]
+    mov [line_no], rax
+    mov rax, [max_count]
+    test rax, rax
+    jz .mc_ok
+    cmp [file_matches], rax
+    jae .mc_done
+.mc_ok:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT
+    jnz .mc_adv
+    push rbx
+    push r10
+    push r11
+    lea rsi, [r12 + r8]
+    mov rdx, r9
+    sub rdx, r8
+    mov rcx, [line_no]
+    mov dil, ':'
+    call emit_grep_line_ex
+    pop r11
+    pop r10
+    pop rbx
+.mc_adv:
+    mov rbx, r9
+    cmp rbx, r13
+    jae .mc_done
+    cmp byte [r12 + rbx], 10
+    jne .mc_reload_fb
+    ; sync NL cursor past NL
+.mc_syn:
+    cmp r11, rbx
+    jae .mc_inc
+    cmp byte [r12 + r11], 10
+    jne .mc_syi
+    inc r10
+.mc_syi:
+    inc r11
+    jmp .mc_syn
+.mc_inc:
+    inc rbx
+    mov r11, rbx
+    jmp .mc_reload_fb
+.mc_nc:
+    bsf ecx, eax
+    mov edx, 1
+    shl edx, cl
+    not edx
+    and eax, edx
+    jnz .mc_cands
+.mc_s16:
+    add rbx, 16
+    jmp .mc_block
+.mc_reload_fb:
+    ; restore first-byte SSE vectors after emit (xmm clobbered)
+    xor r14d, r14d
+    pxor xmm1, xmm1
+    pxor xmm2, xmm2
+    xor ecx, ecx
+.mc_rl:
+    cmp ecx, 256
+    jae .mc_block
+    lea rdi, [skip_tab]
+    cmp byte [rdi + rcx], 0
+    je .mc_rln
+    movd xmm0, ecx
+    punpcklbw xmm0, xmm0
+    punpcklwd xmm0, xmm0
+    pshufd xmm0, xmm0, 0
+    test r14d, r14d
+    jnz .mc_rl2
+    movdqa xmm1, xmm0
+    inc r14d
+    jmp .mc_rln
+.mc_rl2:
+    cmp r14d, 1
+    jne .mc_rln
+    movdqa xmm2, xmm0
+    inc r14d
+.mc_rln:
+    inc ecx
+    jmp .mc_rl
+.mc_tail:
+    cmp rbx, r13
+    jae .mc_done
+    movzx eax, byte [r12 + rbx]
+    lea rdi, [skip_tab]
+    cmp byte [rdi + rax], 0
+    je .mc_tb
+    mov rsi, rbx
+    xor r14d, r14d
+    mov eax, 1                      ; fake mask bit 0
+    jmp .mc_try                     ; try at rbx — careful: uses eax as mask for nc
+.mc_tb:
+    inc rbx
+    jmp .mc_tail
+.mc_done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; fixed_mmap_multi(rdi=base, rsi=len) — single-pass SSE with pre-broadcast first bytes
+fixed_mmap_multi:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov r12, rdi
+    mov r13, rsi
+    ; unique first bytes → hit_lo[0..nfb), nfb<=8
+    xor r14d, r14d
+    xor ebx, ebx
+.mx_u:
+    cmp rbx, [pat_n]
+    jae .mx_ud
+    mov rax, [pat_ptr + rbx*8]
+    movzx eax, byte [rax]
+    xor ecx, ecx
+.mx_uf:
+    cmp rcx, r14
+    jae .mx_ua
+    cmp eax, [hit_lo + rcx*8]
+    je .mx_un
+    inc rcx
+    jmp .mx_uf
+.mx_ua:
+    cmp r14, 8
+    jae .mx_un
+    mov [hit_lo + r14*8], rax
+    inc r14
+.mx_un:
+    inc rbx
+    jmp .mx_u
+.mx_ud:
+    test r14, r14
+    jz .mx_done
+    mov [line_len], r14             ; nfb
+    ; pre-broadcast up to 4 first bytes into xmm1,xmm3,xmm4,xmm5
+    mov eax, [hit_lo]
+    movd xmm1, eax
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    pxor xmm3, xmm3
+    pxor xmm4, xmm4
+    pxor xmm5, xmm5
+    cmp r14, 2
+    jb .mx_ready
+    mov eax, [hit_lo + 8]
+    movd xmm3, eax
+    punpcklbw xmm3, xmm3
+    punpcklwd xmm3, xmm3
+    pshufd xmm3, xmm3, 0
+    cmp r14, 3
+    jb .mx_ready
+    mov eax, [hit_lo + 16]
+    movd xmm4, eax
+    punpcklbw xmm4, xmm4
+    punpcklwd xmm4, xmm4
+    pshufd xmm4, xmm4, 0
+    cmp r14, 4
+    jb .mx_ready
+    mov eax, [hit_lo + 24]
+    movd xmm5, eax
+    punpcklbw xmm5, xmm5
+    punpcklwd xmm5, xmm5
+    pshufd xmm5, xmm5, 0
+.mx_ready:
+    xor ebx, ebx
+.mx_block:
+    mov rax, r13
+    cmp rbx, rax
+    jae .mx_done
+    mov rcx, r13
+    sub rcx, rbx
+    cmp rcx, 16
+    jb .mx_tail
+    movdqu xmm0, [r12 + rbx]
+    movdqa xmm2, xmm0
+    pcmpeqb xmm2, xmm1
+    pmovmskb eax, xmm2
+    cmp qword [line_len], 2
+    jb .mx_mask
+    movdqa xmm2, xmm0
+    pcmpeqb xmm2, xmm3
+    pmovmskb edx, xmm2
+    or eax, edx
+    cmp qword [line_len], 3
+    jb .mx_mask
+    movdqa xmm2, xmm0
+    pcmpeqb xmm2, xmm4
+    pmovmskb edx, xmm2
+    or eax, edx
+    cmp qword [line_len], 4
+    jb .mx_mask
+    movdqa xmm2, xmm0
+    pcmpeqb xmm2, xmm5
+    pmovmskb edx, xmm2
+    or eax, edx
+.mx_mask:
+    test eax, eax
+    jz .mx_s16
+.mx_cands:
+    bsf ecx, eax
+    lea r15, [rbx + rcx]
+    cmp r15, r13
+    jae .mx_done
+    ; try all patterns
+    xor ebp, ebp
+.mx_tp:
+    cmp rbp, [pat_n]
+    jae .mx_nc
+    mov r14, [pat_ptr + rbp*8]
+    mov rdx, [pat_len + rbp*8]
+    lea rcx, [r15 + rdx]
+    cmp rcx, r13
+    ja .mx_tnx
+    mov rcx, rdx
+    lea rdi, [r12 + r15]
+    mov rsi, r14
+.mx_vc:
+    test rcx, rcx
+    jz .mx_hit
+    dec rcx
+    mov r8b, [rdi + rcx]
+    cmp r8b, [rsi + rcx]
+    jne .mx_tnx
+    jmp .mx_vc
+.mx_tnx:
+    inc rbp
+    jmp .mx_tp
+.mx_hit:
+    mov r8, r15
+.mx_lb:
+    test r8, r8
+    jz .mx_lf
+    cmp byte [r12 + r8 - 1], 10
+    je .mx_lf
+    dec r8
+    jmp .mx_lb
+.mx_lf:
+    mov r9, r15
+    add r9, [pat_len + rbp*8]
+.mx_le:
+    cmp r9, r13
+    jae .mx_have
+    cmp byte [r12 + r9], 10
+    je .mx_have
+    inc r9
+    jmp .mx_le
+.mx_have:
+    mov rax, [max_count]
+    test rax, rax
+    jz .mx_sok
+    cmp [file_matches], rax
+    jae .mx_done
+.mx_sok:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT
+    jnz .mx_past
+    push rax
+    push rbx
+    push r8
+    push r9
+    ; re-load broadcast xmm after emit clobber? not needed until next block
+    lea rsi, [r12 + r8]
+    mov rdx, r9
+    sub rdx, r8
+    mov rcx, [line_no]
+    inc qword [line_no]
+    mov dil, ':'
+    call emit_grep_line_ex
+    pop r9
+    pop r8
+    pop rbx
+    pop rax
+    ; restore broadcasts (emit may clobber xmm)
+    mov eax, [hit_lo]
+    movd xmm1, eax
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    cmp qword [line_len], 2
+    jb .mx_past
+    mov eax, [hit_lo + 8]
+    movd xmm3, eax
+    punpcklbw xmm3, xmm3
+    punpcklwd xmm3, xmm3
+    pshufd xmm3, xmm3, 0
+    cmp qword [line_len], 3
+    jb .mx_past
+    mov eax, [hit_lo + 16]
+    movd xmm4, eax
+    punpcklbw xmm4, xmm4
+    punpcklwd xmm4, xmm4
+    pshufd xmm4, xmm4, 0
+    cmp qword [line_len], 4
+    jb .mx_past
+    mov eax, [hit_lo + 24]
+    movd xmm5, eax
+    punpcklbw xmm5, xmm5
+    punpcklwd xmm5, xmm5
+    pshufd xmm5, xmm5, 0
+.mx_past:
+    mov rbx, r9
+    cmp rbx, r13
+    jae .mx_done
+    cmp byte [r12 + rbx], 10
+    jne .mx_block
+    inc rbx
+    jmp .mx_block
+.mx_nc:
+    bsf ecx, eax
+    mov edx, 1
+    shl edx, cl
+    not edx
+    and eax, edx
+    jnz .mx_cands
+.mx_s16:
+    add rbx, 16
+    jmp .mx_block
+.mx_tail:
+    cmp rbx, r13
+    jae .mx_done
+    xor ebp, ebp
+.mx_tt:
+    cmp rbp, [pat_n]
+    jae .mx_tn
+    mov r14, [pat_ptr + rbp*8]
+    movzx eax, byte [r14]
+    cmp al, [r12 + rbx]
+    jne .mx_ttn
+    mov r15, rbx
+    mov rdx, [pat_len + rbp*8]
+    lea rcx, [r15 + rdx]
+    cmp rcx, r13
+    ja .mx_ttn
+    mov rcx, rdx
+    lea rdi, [r12 + r15]
+    mov rsi, r14
+.mx_tvc:
+    test rcx, rcx
+    jz .mx_hit
+    dec rcx
+    mov r8b, [rdi + rcx]
+    cmp r8b, [rsi + rcx]
+    jne .mx_ttn
+    jmp .mx_tvc
+.mx_ttn:
+    inc rbp
+    jmp .mx_tt
+.mx_tn:
+    inc rbx
+    jmp .mx_tail
+.mx_done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; fixed_collect_hits(rdi=base,rsi=len) — like fixed_fast_scan_mem but only records line ranges
+fixed_collect_hits:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [pat_ptr]
+    mov r15, [pat_len]
+    test r15, r15
+    jz .ch_done
+    cmp r15, r13
+    ja .ch_done
+    movzx eax, byte [r14]
+    movd xmm1, eax
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    xor ebx, ebx
+    xor r10d, r10d                  ; NL count before r11
+    xor r11d, r11d                  ; count cursor
+.ch_block:
+    mov rax, r13
+    sub rax, r15
+    cmp rbx, rax
+    ja .ch_done
+    mov rcx, r13
+    sub rcx, rbx
+    cmp rcx, 16
+    jb .ch_tail
+    movdqu xmm0, [r12 + rbx]
+    pcmpeqb xmm0, xmm1
+    pmovmskb eax, xmm0
+    test eax, eax
+    jz .ch_s16
+.ch_cands:
+    bsf ecx, eax
+    lea rsi, [rbx + rcx]
+    mov rdx, r13
+    sub rdx, r15
+    cmp rsi, rdx
+    ja .ch_done
+    lea rdi, [r12 + rsi]
+    mov rcx, r15
+.ch_ver:
+    dec rcx
+    mov r8b, [rdi + rcx]
+    cmp r8b, [r14 + rcx]
+    jne .ch_nc
+    test rcx, rcx
+    jnz .ch_ver
+    ; hit at rsi — find line bounds
+.ch_hit_bounds:
+    mov r8, rsi
+.ch_back:
+    test r8, r8
+    jz .ch_fwd
+    cmp byte [r12 + r8 - 1], 10
+    je .ch_fwd
+    dec r8
+    jmp .ch_back
+.ch_fwd:
+    mov r9, rsi
+    add r9, r15
+.ch_fe:
+    cmp r9, r13
+    jae .ch_rec
+    cmp byte [r12 + r9], 10
+    je .ch_rec
+    inc r9
+    jmp .ch_fe
+.ch_rec:
+    mov rax, [hit_n]
+    cmp rax, HIT_MAX
+    jae .ch_done
+    mov [hit_lo + rax*8], r8
+    mov [hit_hi + rax*8], r9
+    ; advance NL cursor r11→r8
+.ch_cnt:
+    cmp r11, r8
+    jae .ch_cnt_done
+    cmp byte [r12 + r11], 10
+    jne .ch_cnt_i
+    inc r10
+.ch_cnt_i:
+    inc r11
+    jmp .ch_cnt
+.ch_cnt_done:
+    lea rdx, [r10 + 1]
+    mov [hit_ln + rax*8], rdx
+    inc qword [hit_n]
+    ; skip rest of line
+    mov rbx, r9
+    cmp rbx, r13
+    jae .ch_done
+    cmp byte [r12 + rbx], 10
+    jne .ch_block
+    inc rbx
+    jmp .ch_block
+.ch_nc:
+    bsf ecx, eax
+    mov edx, 1
+    shl edx, cl
+    not edx
+    and eax, edx
+    jnz .ch_cands
+.ch_s16:
+    add rbx, 16
+    jmp .ch_block
+.ch_tail:
+    mov rax, r13
+    sub rax, r15
+    cmp rbx, rax
+    ja .ch_done
+    lea rdi, [r12 + rbx]
+    mov rcx, r15
+.ch_tv:
+    dec rcx
+    mov al, [rdi + rcx]
+    cmp al, [r14 + rcx]
+    jne .ch_tb
+    test rcx, rcx
+    jnz .ch_tv
+    mov rsi, rbx
+    jmp .ch_hit_bounds
+.ch_tb:
+    inc rbx
+    jmp .ch_tail
+.ch_done:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; fixed_mmap_line_walk(rdi=base, rsi=len) — split on NL, process_line each
+fixed_mmap_line_walk:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    xor r14, r14                    ; offset
+.ml_lp:
+    cmp r14, r13
+    jae .ml_done
+    lea rdi, [r12 + r14]
+    mov rcx, r13
+    sub rcx, r14
+    mov al, 10
+    mov r15, rdi                    ; line start
+    repne scasb
+    jne .ml_last
+    ; [r15, rdi-1) is line without NL; rdi past NL
+    mov r14, rdi
+    sub r14, r12                     ; next offset (before process_line clobbers)
+    mov rdx, rdi
+    dec rdx
+    sub rdx, r15                     ; line len
+    call .ml_copy_process
+    ; early exit for -q/-l
+    test dword [g_flags], GF_QUIET
+    jz .ml_m2
+    cmp byte [any_match], 0
+    jne .ml_done
+.ml_m2:
+    test dword [g_flags], GF_LIST
+    jz .ml_m3
+    cmp byte [had_match], 0
+    jne .ml_done
+.ml_m3:
+    mov rax, [max_count]
+    test rax, rax
+    jz .ml_lp
+    cmp [file_matches], rax
+    jb .ml_lp
+    cmp qword [ctx_pending], 0
+    jne .ml_lp
+    jmp .ml_done
+.ml_last:
+    ; remaining without trailing NL
+    mov rdx, r13
+    sub rdx, r14
+    test rdx, rdx
+    jz .ml_done
+    lea r15, [r12 + r14]
+    call .ml_copy_process
+.ml_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.ml_copy_process:
+    ; r15=ptr rdx=len → line_buf + process_line
+    push r12
+    push r13
+    push r14
+    mov rax, LINE_CAP - 1
+    cmp rdx, rax
+    cmova rdx, rax
+    mov [line_len], rdx
+    test rdx, rdx
+    jz .ml_cp
+    mov rsi, r15
+    lea rdi, [line_buf]
+    mov rcx, rdx
+    rep movsb
+.ml_cp:
+    call process_line
+    mov qword [line_len], 0
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; fixed_buf_lines_process — r14=bytes in read_buf; assemble lines → process_line
+fixed_buf_lines_process:
+    push rbx
+    push r12
+    push r13
+    push r15
+    xor r15, r15
+.fb_lp:
+    cmp r15, r14
+    jae .fb_done
+    lea rdi, [read_buf + r15]
+    mov rcx, r14
+    sub rcx, r15
+    mov al, 10
+    mov r12, rdi
+    repne scasb
+    jne .fb_tail
+    mov r13, rdi
+    dec r13
+    sub r13, r12                    ; frag len
+    mov rcx, [line_len]
+    mov rax, LINE_CAP - 1
+    sub rax, rcx
+    mov rdx, r13
+    cmp rdx, rax
+    cmova rdx, rax
+    test rdx, rdx
+    jz .fb_ready
+    mov rsi, r12
+    lea rdi, [line_buf]
+    add rdi, rcx
+    mov rcx, rdx
+    rep movsb
+    add [line_len], rdx
+.fb_ready:
+    add r15, r13
+    inc r15
+    call process_line
+    mov qword [line_len], 0
+    test dword [g_flags], GF_QUIET
+    jz .fb_m2
+    cmp byte [any_match], 0
+    jne .fb_done
+.fb_m2:
+    test dword [g_flags], GF_LIST
+    jz .fb_m3
+    cmp byte [had_match], 0
+    jne .fb_done
+.fb_m3:
+    mov rax, [max_count]
+    test rax, rax
+    jz .fb_lp
+    cmp [file_matches], rax
+    jb .fb_lp
+    cmp qword [ctx_pending], 0
+    jne .fb_lp
+    jmp .fb_done
+.fb_tail:
+    mov rdx, r14
+    sub rdx, r15
+    mov rcx, [line_len]
+    mov rax, LINE_CAP - 1
+    sub rax, rcx
+    cmp rdx, rax
+    cmova rdx, rax
+    test rdx, rdx
+    jz .fb_done
+    lea rsi, [read_buf + r15]
+    lea rdi, [line_buf]
+    add rdi, rcx
+    mov rcx, rdx
+    rep movsb
+    add [line_len], rdx
+.fb_done:
+    pop r15
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; fixed_horspool_icase(rdi=base, rsi=len) — ASCII -i Horspool over mmap
+fixed_horspool_icase:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, [pat_ptr]
+    mov r15, [pat_len]
+    test r15, r15
+    jz .hi_done
+    cmp r15, r13
+    ja .hi_done
+    call horspool_build_icase
+    xor ebx, ebx
+.hi_lp:
+    mov rax, r13
+    sub rax, r15
+    cmp rbx, rax
+    ja .hi_done
+    lea rdi, [r12 + rbx]
+    mov rsi, r14
+    mov rdx, r15
+    call mem_eq_case
+    test al, al
+    jnz .hi_hit
+    ; skip using last hay byte folded; always advance ≥1
+    lea rax, [rbx + r15]
+    dec rax
+    movzx eax, byte [r12 + rax]
+    cmp al, 'A'
+    jb .hi_sk
+    cmp al, 'Z'
+    ja .hi_sk
+    add al, 32
+.hi_sk:
+    lea rdx, [skip_tab]
+    movzx eax, byte [rdx + rax]
+    test eax, eax
+    jnz .hi_add
+    mov eax, 1
+.hi_add:
+    add rbx, rax
+    jmp .hi_lp
+.hi_hit:
+    ; line bounds around rbx
+    mov r8, rbx
+.hi_back:
+    test r8, r8
+    jz .hi_fwd
+    cmp byte [r12 + r8 - 1], 10
+    je .hi_fwd
+    dec r8
+    jmp .hi_back
+.hi_fwd:
+    mov r9, rbx
+    add r9, r15
+.hi_fe:
+    cmp r9, r13
+    jae .hi_em
+    cmp byte [r12 + r9], 10
+    je .hi_em
+    inc r9
+    jmp .hi_fe
+.hi_em:
+    inc qword [line_no]
+    mov rax, [max_count]
+    test rax, rax
+    jz .hi_ok
+    cmp [file_matches], rax
+    jae .hi_done
+.hi_ok:
+    mov byte [had_match], 1
+    mov byte [any_match], 1
+    inc qword [file_matches]
+    test dword [g_flags], GF_QUIET | GF_LIST | GF_LIST_INV | GF_COUNT
+    jnz .hi_adv
+    push r8
+    push r9
+    push rbx
+    mov rdx, r9
+    sub rdx, r8
+    lea rsi, [r12 + r8]
+    mov rcx, [line_no]
+    mov dil, ':'
+    call emit_grep_line_ex
+    pop rbx
+    pop r9
+    pop r8
+.hi_adv:
+    test dword [g_flags], GF_QUIET
+    jz .hi_m2
+    cmp byte [any_match], 0
+    jne .hi_done
+.hi_m2:
+    test dword [g_flags], GF_LIST
+    jz .hi_m3
+    cmp byte [had_match], 0
+    jne .hi_done
+.hi_m3:
+    ; advance past line
+    mov rbx, r9
+    cmp rbx, r13
+    jae .hi_done
+    cmp byte [r12 + rbx], 10
+    jne .hi_lp
+    inc rbx
+    jmp .hi_lp
+.hi_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; horspool_build_icase — skip table on lowercased pattern bytes
+horspool_build_icase:
+    push rbx
+    push r12
+    mov rcx, 256
+    lea rdi, [skip_tab]
+    mov rax, [pat_len]
+.hb_i_fill:
+    mov [rdi], al
+    inc rdi
+    dec rcx
+    jnz .hb_i_fill
+    mov r12, [pat_ptr]
+    mov rbx, [pat_len]
+    test rbx, rbx
+    jz .hb_i_ret
+    dec rbx
+    xor ecx, ecx
+    lea r8, [skip_tab]
+.hb_i_lp:
+    cmp rcx, rbx
+    jae .hb_i_ret
+    movzx eax, byte [r12 + rcx]
+    cmp al, 'A'
+    jb .hb_i_st
+    cmp al, 'Z'
+    ja .hb_i_st
+    add al, 32
+.hb_i_st:
+    mov rdx, rbx
+    sub rdx, rcx
+    mov [r8 + rax], dl
+    ; also store under upper if letter
+    cmp al, 'a'
+    jb .hb_i_n
+    cmp al, 'z'
+    ja .hb_i_n
+    push rdx
+    sub al, 32
+    movzx eax, al
+    pop rdx
+    mov [r8 + rax], dl
+.hb_i_n:
+    inc rcx
+    jmp .hb_i_lp
+.hb_i_ret:
+    pop r12
+    pop rbx
+    ret
+
+; fixed_fast_scan_mem(rdi=base, rsi=len) — SSE2 first-byte scan + verify (case-sensitive);
 ; emit each matching line once. Monotonic NL count for -n.
+; -i: dual first-byte broadcast (upper+lower) with single-load 32-byte stride.
 fixed_fast_scan_mem:
     push rbx
     push r12
@@ -1455,15 +3222,43 @@ fixed_fast_scan_mem:
     jz .mm_done
     cmp r15, r13
     ja .mm_done
-    ; xmm1 = pat[0] broadcast (SSE2)
     movzx eax, byte [r14]
+    mov ebp, eax
     movd xmm1, eax
     punpcklbw xmm1, xmm1
     punpcklwd xmm1, xmm1
     pshufd xmm1, xmm1, 0
+    ; optional alternate case for -i first-byte
+    pxor xmm2, xmm2
+    mov r9d, 0
+    test dword [g_flags], GF_IGNCASE
+    jz .mm_ready
+    mov eax, ebp
+    cmp al, 'A'
+    jb .mm_lo
+    cmp al, 'Z'
+    ja .mm_lo
+    add al, 32
+    jmp .mm_alts
+.mm_lo:
+    cmp al, 'a'
+    jb .mm_ready
+    cmp al, 'z'
+    ja .mm_ready
+    sub al, 32
+.mm_alts:
+    movd xmm2, eax
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
+    mov r9d, 1
+.mm_ready:
+    ; r9d = dual first-byte flag (keep in reg; do NOT clobber line_len)
     xor ebx, ebx
     xor r10d, r10d
     xor r11d, r11d
+    test r9d, r9d
+    jnz .mm_block_i
 .mm_block:
     mov rax, r13
     sub rax, r15
@@ -1478,31 +3273,92 @@ fixed_fast_scan_mem:
     pmovmskb eax, xmm0
     test eax, eax
     jz .mm_skip16
+    jmp .mm_cands
+; ── -i specialized: dual first-byte, 32B stride on miss ──
+.mm_block_i:
+    mov rax, r13
+    sub rax, r15
+    cmp rbx, rax
+    ja .mm_done
+    mov rcx, r13
+    sub rcx, rbx
+    cmp rcx, 32
+    jb .mm_i16
+    ; bytes [rbx .. rbx+31]
+    movdqu xmm0, [r12 + rbx]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb eax, xmm0
+    movdqu xmm0, [r12 + rbx + 16]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb edx, xmm0
+    shl edx, 16
+    or eax, edx
+    test eax, eax
+    jz .mm_skip32
+    jmp .mm_cands
+.mm_i16:
+    cmp rcx, 16
+    jb .mm_tail
+    movdqu xmm0, [r12 + rbx]
+    movdqa xmm3, xmm0
+    pcmpeqb xmm0, xmm1
+    pcmpeqb xmm3, xmm2
+    por xmm0, xmm3
+    pmovmskb eax, xmm0
+    test eax, eax
+    jz .mm_skip16_i
+    jmp .mm_cands
+.mm_skip32:
+    add rbx, 32
+    jmp .mm_block_i
+.mm_skip16_i:
+    add rbx, 16
+    jmp .mm_block_i
 .mm_cands:
-    bsf ecx, eax                    ; byte offset 0..15
-    lea rsi, [rbx + rcx]
+    bsf ecx, eax
+    lea rsi, [rbx + rcx]            ; candidate offset
     mov rdx, r13
     sub rdx, r15
     cmp rsi, rdx
     ja .mm_done
-    ; last-byte reject
-    mov rdx, r15
-    dec rdx
-    mov r8b, [r14 + rdx]
+    push rax                        ; save mask
+    push rsi                        ; save cand
     lea rdi, [r12 + rsi]
-    cmp [rdi + rdx], r8b
-    jne .mm_nextcand
+    mov rsi, r14
+    mov rdx, r15
+    test dword [g_flags], GF_IGNCASE
+    jz .mm_vcs
+    call mem_eq_case
+    jmp .mm_vdone
+.mm_vcs:
     mov rcx, r15
 .mm_ver:
     dec rcx
     mov r8b, [rdi + rcx]
     cmp r8b, [r14 + rcx]
-    jne .mm_nextcand
+    jne .mm_vfail
     test rcx, rcx
     jnz .mm_ver
+    mov al, 1
+    jmp .mm_vdone
+.mm_vfail:
+    xor al, al
+.mm_vdone:
+    pop rsi                         ; cand
+    pop rdx                         ; mask
+    test al, al
+    jz .mm_nextcand
     mov rbx, rsi
+    mov eax, edx                    ; keep mask if needed (not)
     jmp .mm_hit
 .mm_nextcand:
+    mov eax, edx                    ; restore mask
     bsf ecx, eax
     mov edx, 1
     shl edx, cl
@@ -1511,17 +3367,28 @@ fixed_fast_scan_mem:
     jnz .mm_cands
 .mm_skip16:
     add rbx, 16
+    jmp .mm_resume
+.mm_resume:
+    ; continue CS vs -i specialized scan
+    test dword [g_flags], GF_IGNCASE
+    jnz .mm_block_i
     jmp .mm_block
 .mm_tail:
     mov rax, r13
     sub rax, r15
     cmp rbx, rax
     ja .mm_done
-    movzx eax, byte [r14]
-    cmp [r12 + rbx], al
-    jne .mm_tb
-    mov rcx, r15
     lea rdi, [r12 + rbx]
+    mov rsi, r14
+    mov rdx, r15
+    test dword [g_flags], GF_IGNCASE
+    jz .mm_tcs
+    call mem_eq_case
+    test al, al
+    jnz .mm_hit
+    jmp .mm_tb
+.mm_tcs:
+    mov rcx, r15
 .mm_tver:
     dec rcx
     mov al, [rdi + rcx]
@@ -1554,7 +3421,7 @@ fixed_fast_scan_mem:
     inc r9
     jmp .mm_fe
 .mm_have:
-    ; line numbers only when -n
+    ; line numbers only when -n (collect records offsets; callers recompute lno if needed)
     test dword [g_flags], GF_NUMBER
     jz .mm_nonum
 .mm_adv:
@@ -1580,9 +3447,24 @@ fixed_fast_scan_mem:
     cmp [file_matches], rax
     jae .mm_done
 .mm_sel_ok:
+    cmp byte [collect_mode], 0
+    je .mm_emit_norm
+    ; collect_mode: record hit line range + line_no
+    mov rax, [hit_n]
+    cmp rax, HIT_MAX
+    jae .mm_after_emit
+    mov [hit_lo + rax*8], r8
+    mov [hit_hi + rax*8], r9
+    mov rcx, [line_no]
+    mov [hit_ln + rax*8], rcx
+    inc qword [hit_n]
+    jmp .mm_after_emit
+.mm_emit_norm:
     mov byte [had_match], 1
     mov byte [any_match], 1
     inc qword [file_matches]
+    cmp byte [binary_silent], 0
+    jne .mm_after_emit              ; match noted; no line dump
     test dword [g_flags], GF_QUIET
     jnz .mm_after_emit
     test dword [g_flags], GF_LIST
@@ -1607,6 +3489,32 @@ fixed_fast_scan_mem:
     pop r10
     pop r9
     pop r8
+    ; emit/syscalls clobber xmm — rebuild first-byte broadcasts
+    movzx eax, byte [r14]
+    movd xmm1, eax
+    punpcklbw xmm1, xmm1
+    punpcklwd xmm1, xmm1
+    pshufd xmm1, xmm1, 0
+    test dword [g_flags], GF_IGNCASE
+    jz .mm_after_emit
+    mov eax, ebp                    ; original first byte saved in ebp
+    cmp al, 'A'
+    jb .mm_rb_lo
+    cmp al, 'Z'
+    ja .mm_rb_lo
+    add al, 32
+    jmp .mm_rb_alt
+.mm_rb_lo:
+    cmp al, 'a'
+    jb .mm_after_emit
+    cmp al, 'z'
+    ja .mm_after_emit
+    sub al, 32
+.mm_rb_alt:
+    movd xmm2, eax
+    punpcklbw xmm2, xmm2
+    punpcklwd xmm2, xmm2
+    pshufd xmm2, xmm2, 0
 .mm_after_emit:
     test dword [g_flags], GF_QUIET
     jz .mm_m2
@@ -1640,23 +3548,23 @@ fixed_fast_scan_mem:
     cmp rbx, r13
     jae .mm_done
     cmp byte [r12 + rbx], 10
-    jne .mm_block
+    jne .mm_resume
     cmp r11, rbx
     ja .mm_incb
     inc r10
     lea r11, [rbx + 1]
 .mm_incb:
     inc rbx
-    jmp .mm_block
+    jmp .mm_resume
 .mm_past_fast:
     ; jump search to end of line; if NL present, step past it
     mov rbx, r9
     cmp rbx, r13
     jae .mm_done
     cmp byte [r12 + rbx], 10
-    jne .mm_block
+    jne .mm_resume
     inc rbx
-    jmp .mm_block
+    jmp .mm_resume
 .mm_done:
     pop rbp
     pop r15
@@ -1946,6 +3854,8 @@ process_line:
     mov byte [had_match], 1
     mov byte [any_match], 1
     inc qword [file_matches]
+    cmp byte [binary_silent], 0
+    jne .done
     test dword [g_flags], GF_QUIET
     jnz .done
     test dword [g_flags], GF_LIST
@@ -2269,28 +4179,29 @@ mem_eq_case:
     pop rdi
     ret
 .ic:
-    push rbx
+    ; ASCII case-fold compare — inline fold, no per-byte call
     xor ecx, ecx
 .lp:
     cmp rcx, rdx
     jae .yes
-    mov al, [rdi + rcx]
-    mov r8b, [rsi + rcx]
-    call tolower_al
-    mov r9b, al
-    mov al, r8b
-    call tolower_al
-    mov r8b, al
-    mov al, r9b
-    cmp al, r8b
+    movzx eax, byte [rdi + rcx]
+    movzx r8d, byte [rsi + rcx]
+    ; fold A–Z → a–z on both
+    lea r9d, [rax - 'A']
+    cmp r9b, 26
+    jae .a1
+    add al, 32
+.a1: lea r9d, [r8 - 'A']
+    cmp r9b, 26
+    jae .a2
+    add r8b, 32
+.a2: cmp al, r8b
     jne .no
     inc rcx
     jmp .lp
 .yes: mov al, 1
-    pop rbx
     ret
 .no: xor al, al
-    pop rbx
     ret
 
 tolower_al:
@@ -2979,6 +4890,8 @@ emit_grep_line:
 ; emit_grep_line_ex(dil=sep, rsi=text, rdx=len, rcx=lineno)
 ; --core: plain GNU. Modern match (':') may highlight; context stays plain.
 emit_grep_line_ex:
+    cmp byte [binary_silent], 0
+    jne .eg_ret0                    ; binary match: no line content
     push rbx
     push r12
     push r13
@@ -2988,6 +4901,48 @@ emit_grep_line_ex:
     mov r13, rsi                    ; text
     mov r14, rdx                    ; len
     mov r15, rcx                    ; lineno
+    ; modern machine I/O (never under --core)
+    test dword [g_flags], GF_CORE
+    jnz .g_normal
+    test dword [g_flags], GF_JSON
+    jnz .g_json
+    test dword [g_flags], GF_CSV
+    jnz .g_csv
+    jmp .g_normal
+.g_json:
+    ; {"path":"...","line":N,"text":"..."}
+    lea rsi, [gj_o]
+    call out_str
+    lea rsi, [path_buf]
+    call out_str
+    lea rsi, [gj_m]
+    call out_str
+    mov rdi, r15
+    call out_u64
+    lea rsi, [gj_t]
+    call out_str
+    mov rsi, r13
+    mov rdx, r14
+    call out_strn
+    lea rsi, [gj_e]
+    call out_str
+    jmp .g_ret
+.g_csv:
+    lea rsi, [path_buf]
+    call out_str
+    mov dil, ','
+    call out_byte
+    mov rdi, r15
+    call out_u64
+    mov dil, ','
+    call out_byte
+    mov rsi, r13
+    mov rdx, r14
+    call out_strn
+    mov dil, 10
+    call out_byte
+    jmp .g_ret
+.g_normal:
     test dword [g_flags], GF_WITH_NAME
     jz .num
     test dword [g_flags], GF_CORE
@@ -3069,12 +5024,40 @@ emit_grep_line_ex:
     call out_strn
 .nl: mov dil, 10
     call out_byte
+.g_ret:
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
+.eg_ret0:
     ret
+
+; mem_has_nul(rdi=buf, rsi=len) → eax 1 if any 0 byte in range
+mem_has_nul:
+    test rsi, rsi
+    jz .no
+    xor ecx, ecx
+.lp:
+    cmp rcx, rsi
+    jae .no
+    cmp byte [rdi + rcx], 0
+    je .yes
+    inc rcx
+    jmp .lp
+.yes:
+    mov eax, 1
+    ret
+.no:
+    xor eax, eax
+    ret
+
+section .rodata
+gj_o: db '{"schema":"f00/v1","path":"', 0
+gj_m: db '","line":', 0
+gj_t: db ',"text":"', 0
+gj_e: db '"}', 10, 0
+section .text
 
 ; ctx_ring_push — store current line into before-context ring (size ctx_before)
 ctx_ring_push:
@@ -3349,6 +5332,21 @@ grep_tree_path:
     cmp byte [rdi+2], 0
     je .skip
 .use:
+    ; modern --ignore-file: skip .git name components (dir or file)
+    test dword [g_flags], GF_IGNFILE
+    jz .use_ok
+    lea rdi, [rbx + 19]             ; d_name
+    cmp byte [rdi], '.'
+    jne .use_ok
+    cmp byte [rdi+1], 'g'
+    jne .use_ok
+    cmp byte [rdi+2], 'i'
+    jne .use_ok
+    cmp byte [rdi+3], 't'
+    jne .use_ok
+    cmp byte [rdi+4], 0
+    je .skip                        ; exact ".git"
+.use_ok:
     ; save path_len
     mov rax, [path_len]
     push rax

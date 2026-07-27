@@ -124,7 +124,7 @@ cat_help:
 cat_help_len equ $-cat_help
 
 cat_version:
-    db "f00-cat (f00) 0.16.4", 10
+    db "f00-cat (f00) 0.16.5", 10
     db "GNU coreutils cat drop-in + modern chrome — pure assembly", 10
     db "License: MIT · https://f00.sh", 10
 cat_version_len equ $-cat_version
@@ -170,7 +170,7 @@ ty_make:  db "make", 0
 stdin_nm: db "stdin", 0
 
 csv_hdr:    db "util,version,files,lines_out,bytes_out", 10, 0
-csv_util:   db "cat,0.16.4,", 0
+csv_util:   db "cat,0.16.5,", 0
 
 section .text
 
@@ -727,6 +727,35 @@ cat_detect_paint:
     push rbx
     push r12
     mov r12, rdi
+    ; shebang peek: open and read first 2 bytes for #!
+    push r12
+    mov rax, SYS_openat
+    mov rdi, AT_FDCWD
+    mov rsi, r12
+    mov rdx, O_RDONLY | O_CLOEXEC
+    xor r10, r10
+    syscall
+    pop r12
+    cmp rax, -4096
+    jae .nosb
+    mov rbx, rax
+    mov rax, SYS_read
+    mov rdi, rbx
+    lea rsi, [name_tmp]
+    mov rdx, 2
+    syscall
+    push rax
+    mov rax, SYS_close
+    mov rdi, rbx
+    syscall
+    pop rax
+    cmp rax, 2
+    jl .nosb
+    cmp word [name_tmp], 0x2123     ; '#!' little-endian
+    jne .nosb
+    mov byte [cat_paint], P_SH
+    jmp .r2
+.nosb:
     ; Makefile?
     mov rdi, r12
     call strlen
