@@ -714,6 +714,11 @@ if [[ -x "$ROOT/f00-diff" && -x "$CORE/diff" ]]; then
   else
     bad "diff multi-MiB battery"
   fi
+  if python3 "$ROOT/benches/diff-recursive-parity.py" "$ROOT" "$CORE"; then
+    ok "diff recursive -r battery (exit+stdout)"
+  else
+    bad "diff recursive -r battery"
+  fi
   # Missing paths: exit 2 + "No such file" on stderr (bulk open path)
   set +e
   fe=$("$ROOT/f00-diff" --core /no/such/f00-a /no/such/f00-b 2>&1 >/dev/null); fr=$?
@@ -806,6 +811,13 @@ if [[ -x "$ROOT/f00-sdiff" ]]; then
 fi
 if [[ -x "$ROOT/f00-find" && -x "$CORE/find" ]]; then
   cmp_out "find -maxdepth 0"     "$ROOT/f00-find" "$WORKDIR" -maxdepth 0 :::     "$CORE/find" "$WORKDIR" -maxdepth 0
+fi
+if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
+  if python3 "$ROOT/benches/grep-P-parity.py" "$ROOT" "$CORE"; then
+    ok "grep -P PCRE battery (exit+stdout)"
+  else
+    bad "grep -P PCRE battery"
+  fi
 fi
 
 # --- summary ---

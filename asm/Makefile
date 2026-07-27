@@ -23,7 +23,14 @@ UTILS := ls cat true false yes nproc tty whoami basename dirname \
 	base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
 grep egrep fgrep find xargs diff cmp diff3 sdiff
 
-.PHONY: all clean install links test smoke parity speed ux-check
+.PHONY: all clean install links test smoke parity speed ux-check aarch64 aarch64-smoke
+
+# Freestanding Linux aarch64 multicall (gas + qemu-user)
+aarch64:
+	$(MAKE) -C port/aarch64
+
+aarch64-smoke: aarch64
+	$(MAKE) -C port/aarch64 smoke
 
 all: $(TARGET) links
 

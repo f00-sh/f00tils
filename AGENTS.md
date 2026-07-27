@@ -10,7 +10,10 @@
 
 ## Declared language
 
-**x86-64 freestanding assembly** (NASM) for all first-party product code under `asm/`.
+**Freestanding assembly** (no libc) for all first-party product code under `asm/`:
+
+- **x86-64** — NASM multicall (full 115-tool product surface).
+- **aarch64** — GNU as freestanding multicall under `asm/port/aarch64` (shipped port path; grows toward full surface).
 
 Shell is allowed only for bootstrap, install, packaging, and benches. Do not add application logic in other languages.
 
@@ -42,11 +45,13 @@ make
 make smoke
 make speed
 bash benches/parity.sh
+# aarch64 freestanding port (needs aarch64-linux-gnu-{as,ld} + qemu-aarch64-static)
+make aarch64 && make aarch64-smoke
 ```
 
 ## Language purity
 
-No Rust, C application code, libc, or polyglot product dependencies. Target is Linux x86-64 freestanding static.
+No Rust, C application code, libc, or polyglot product dependencies. Targets are Linux freestanding static: **x86-64** (primary) and **aarch64** (`asm/port/aarch64`).
 
 ## User-facing text
 

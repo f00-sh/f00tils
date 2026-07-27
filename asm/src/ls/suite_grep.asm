@@ -35,6 +35,7 @@ extern err_str
 %define GF_ONLY      32768
 %define GF_SMART     65536          ; modern smart-case active
 %define GF_CTX       131072         ; -A/-B/-C/-NUM context mode (even if 0)
+%define GF_PERL      262144         ; -P / --perl-regexp freestanding PCRE subset
 
 %define MAX_PATS     64
 %define READ_CAP     262144
@@ -106,7 +107,7 @@ h_grep:
     db "  -x, --line-regexp       match whole lines", 10
     db "  -F, --fixed-strings     fixed strings", 10
     db "  -E, --extended-regexp   ERE subset (. * + ? [] ^ $ | \\)", 10
-    db "  -P, --perl-regexp       PCRE (not supported; errors)", 10
+    db "  -P, --perl-regexp       freestanding PCRE subset (\d\w\s + * ? ^ $ [] ())", 10
     db "  -e PAT                  use PAT as a pattern", 10
     db "  -m N, --max-count=N     stop after N matches per file", 10
     db "  -A N, --after-context=N print N lines of trailing context", 10
@@ -159,7 +160,8 @@ msg_enoent: db ": No such file or directory", 10, 0
 msg_isdir:  db ": Is a directory", 10, 0
 msg_colon_sp: db ": ", 0
 msg_bad_ctx: db ": invalid context length argument", 10, 0
-msg_no_pcre: db ": the -P option is not supported", 10, 0
+msg_bad_re:  db ": invalid regular expression", 10, 0
+msg_bad_cls: db ": missing terminating ] for character class", 10, 0
 
 section .text
 
@@ -286,8 +288,9 @@ grep_main:
     jmp .sn
 .s14: cmp al, 'P'
     jne .s14b
-    ; freestanding: no PCRE — hard error (do not silent-ignore)
-    jmp .no_pcre
+    or dword [g_flags], GF_PERL
+    and dword [g_flags], ~GF_FIXED
+    jmp .sn
 .s14b: cmp al, 'r'
     je .srec
     cmp al, 'R'
@@ -655,7 +658,11 @@ grep_main:
     call strcmp
     pop rdi
     test eax, eax
-    jz .no_pcre
+    jnz .l24b
+    or dword [g_flags], GF_PERL
+    and dword [g_flags], ~GF_FIXED
+    jmp .next_arg
+.l24b:
     lea rsi, [s_color]
     push rdi
     call strcmp
@@ -669,13 +676,6 @@ grep_main:
     pop rdi
     ; accept any --color=… as no-op under core; modern leaves g_color
     jmp .next_arg
-
-.no_pcre:
-    call emit_prog
-    lea rsi, [msg_no_pcre]
-    call err_str
-    mov dword [g_exit], 2
-    jmp .done
 
 .ctx_bad:
     call emit_prog
@@ -711,6 +711,15 @@ grep_main:
     mov dword [g_exit], 2
     jmp .done
 .have_pat:
+    ; -P: never auto-fixed; validate freestanding PCRE subset patterns
+    test dword [g_flags], GF_PERL
+    jz .autofix
+    and dword [g_flags], ~GF_FIXED
+    call patterns_validate_pcre
+    test al, al
+    jnz .smart
+    jmp .done
+.autofix:
     ; auto-fixed when no metas and not forced ERE (egrep leaves FIXED off)
     test dword [g_flags], GF_FIXED
     jnz .smart
@@ -955,6 +964,94 @@ patterns_need_regex:
     pop rbx
     ret
 .no: xor al, al
+    pop r12
+    pop rbx
+    ret
+
+; patterns_validate_pcre → al=1 ok, al=0 fail (sets g_exit=2 + stderr like GNU)
+patterns_validate_pcre:
+    push rbx
+    push r12
+    push r13
+    xor ebx, ebx
+.lp:
+    cmp rbx, [pat_n]
+    jae .ok
+    mov r12, [pat_ptr + rbx*8]
+    xor r13d, r13d                  ; depth of unescaped (
+.pl:
+    mov al, [r12]
+    test al, al
+    jz .endpat
+    cmp al, '\'
+    jne .br
+    cmp byte [r12+1], 0
+    je .bad                         ; trailing backslash
+    add r12, 2
+    jmp .pl
+.br:
+    cmp al, '['
+    jne .paren
+    ; find closing ]
+    inc r12
+    cmp byte [r12], ']'             ; empty class [] is invalid in PCRE often; allow ] first?
+    je .cls
+.cls:
+    mov al, [r12]
+    test al, al
+    jz .bad_cls
+    cmp al, ']'
+    je .cls_ok
+    inc r12
+    jmp .cls
+.cls_ok:
+    inc r12
+    jmp .pl
+.paren:
+    cmp al, '('
+    jne .cparen
+    inc r13
+    inc r12
+    jmp .pl
+.cparen:
+    cmp al, ')'
+    jne .nx
+    test r13, r13
+    jz .bad                         ; unmatched )
+    dec r13
+    inc r12
+    jmp .pl
+.nx:
+    inc r12
+    jmp .pl
+.endpat:
+    test r13, r13
+    jnz .bad
+    inc rbx
+    jmp .lp
+.ok:
+    mov al, 1
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.bad_cls:
+    call emit_prog
+    lea rsi, [msg_bad_cls]
+    call err_str
+    mov dword [g_exit], 2
+    xor al, al
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.bad:
+    call emit_prog
+    lea rsi, [msg_bad_re]
+    call err_str
+    mov dword [g_exit], 2
+    xor al, al
+    pop r13
     pop r12
     pop rbx
     ret
@@ -1539,6 +1636,36 @@ is_word_char:
 .y: mov al, 1
     ret
 
+; is_digit_char(al) → al 1/0  [0-9]
+is_digit_char:
+    cmp al, '0'
+    jb .n
+    cmp al, '9'
+    jbe .y
+.n: xor al, al
+    ret
+.y: mov al, 1
+    ret
+
+; is_space_char(al) → al 1/0  [ \t\n\r\f\v] PCRE \s
+is_space_char:
+    cmp al, ' '
+    je .y
+    cmp al, 9
+    je .y
+    cmp al, 10
+    je .y
+    cmp al, 11
+    je .y
+    cmp al, 12
+    je .y
+    cmp al, 13
+    je .y
+.n: xor al, al
+    ret
+.y: mov al, 1
+    ret
+
 ; mem_eq_case(rdi=a, rsi=b, rdx=n) → al 1 equal
 mem_eq_case:
     test dword [g_flags], GF_IGNCASE
@@ -1729,6 +1856,13 @@ re_match_here_full:
     mov al, [r14]
     test al, al
     jz .endpat
+    test dword [g_flags], GF_PERL
+    jz .nparen
+    cmp al, '('
+    je .skip_paren
+    cmp al, ')'
+    je .skip_paren
+.nparen:
     cmp al, '$'
     jne .n1
     cmp byte [r14+1], 0
@@ -1736,12 +1870,20 @@ re_match_here_full:
     cmp r15, r13
     je .success
     jmp .fail
+.skip_paren:
+    inc r14
+    jmp .top
 .n1:
-    cmp byte [r14+1], '*'
+    ; quantifier after full atom (\d+, [ab]*, …) — not always pat+1
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov al, [r14 + rbx]
+    cmp al, '*'
     je .star
-    cmp byte [r14+1], '+'
+    cmp al, '+'
     je .plus
-    cmp byte [r14+1], '?'
+    cmp al, '?'
     je .ques
     mov rdi, r12
     mov rsi, r13
@@ -1750,18 +1892,11 @@ re_match_here_full:
     call re_match_atom
     test al, al
     jz .fail
-    mov rdi, r14
-    call re_atom_len
-    add r14, rax
+    add r14, rbx
     inc r15
     jmp .top
 .star:
-    mov rdi, r14
-    call re_atom_len
-    mov rbx, rax
-    mov rdi, r14
-    add rdi, rbx
-    add rdi, 1
+    lea rdi, [r14 + rbx + 1]
     push rdi
 .st_lp:
     mov rdi, r12
@@ -1892,6 +2027,14 @@ re_match_here:
     mov al, [r14]
     test al, al
     jz .success
+    ; freestanding PCRE: ( ) are grouping only (match selection), zero-width
+    test dword [g_flags], GF_PERL
+    jz .nparen
+    cmp al, '('
+    je .skip_paren
+    cmp al, ')'
+    je .skip_paren
+.nparen:
     cmp al, '$'
     jne .n1
     cmp byte [r14+1], 0
@@ -1899,12 +2042,20 @@ re_match_here:
     cmp r15, r13
     je .success
     jmp .fail
+.skip_paren:
+    inc r14
+    jmp .top
 .n1:
-    cmp byte [r14+1], '*'
+    ; quantifier after full atom (\d+, [ab]*, …) — not always pat+1
+    mov rdi, r14
+    call re_atom_len
+    mov rbx, rax
+    mov al, [r14 + rbx]
+    cmp al, '*'
     je .star
-    cmp byte [r14+1], '+'
+    cmp al, '+'
     je .plus
-    cmp byte [r14+1], '?'
+    cmp al, '?'
     je .ques
     mov rdi, r12
     mov rsi, r13
@@ -1913,18 +2064,11 @@ re_match_here:
     call re_match_atom
     test al, al
     jz .fail
-    mov rdi, r14
-    call re_atom_len
-    add r14, rax
+    add r14, rbx
     inc r15
     jmp .top
 .star:
-    mov rdi, r14
-    call re_atom_len
-    mov rbx, rax
-    mov rdi, r14
-    add rdi, rbx
-    add rdi, 1
+    lea rdi, [r14 + rbx + 1]
     push rdi
 .st_lp:
     mov rdi, r12
@@ -2096,9 +2240,75 @@ re_match_atom:
     mov al, [rdx+1]
     test al, al
     jz .no
+    test dword [g_flags], GF_PERL
+    jz .esc_lit
+    ; freestanding PCRE subset classes
+    cmp al, 'd'
+    je .p_d
+    cmp al, 'D'
+    je .p_D
+    cmp al, 'w'
+    je .p_w
+    cmp al, 'W'
+    je .p_W
+    cmp al, 's'
+    je .p_s
+    cmp al, 'S'
+    je .p_S
+    ; \n \t \r and other escapes as literal char
+.esc_lit:
     mov bl, [rdi + rcx]
+    cmp al, 'n'
+    jne .el1
+    mov al, 10
+    jmp .elc
+.el1: cmp al, 't'
+    jne .el2
+    mov al, 9
+    jmp .elc
+.el2: cmp al, 'r'
+    jne .elc
+    mov al, 13
+.elc:
     cmp al, bl
     je .yes
+    jmp .no
+.p_d:
+    mov al, [rdi + rcx]
+    call is_digit_char
+    test al, al
+    jnz .yes
+    jmp .no
+.p_D:
+    mov al, [rdi + rcx]
+    call is_digit_char
+    test al, al
+    jnz .no
+    jmp .yes
+.p_w:
+    mov al, [rdi + rcx]
+    call is_word_char
+    test al, al
+    jnz .yes
+    jmp .no
+.p_W:
+    mov al, [rdi + rcx]
+    call is_word_char
+    test al, al
+    jnz .no
+    jmp .yes
+.p_s:
+    mov al, [rdi + rcx]
+    call is_space_char
+    test al, al
+    jnz .yes
+    jmp .no
+.p_S:
+    mov al, [rdi + rcx]
+    call is_space_char
+    test al, al
+    jnz .no
+    jmp .yes
 .no: xor al, al
     pop rbx
     ret

@@ -1,0 +1,9 @@
+# build outputs / links (sources + Makefile are tracked)
+*.o
+f00
+f00-*
+true
+false
+echo
+grep
+version

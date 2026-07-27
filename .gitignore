@@ -29,9 +29,20 @@ Thumbs.db
 !/asm/src/
 !/asm/man/
 !/asm/benches/
+!/asm/port/
 !/asm/src/**
 !/asm/man/**
 !/asm/benches/**
+!/asm/port/**
+# aarch64 port build products (keep sources + Makefile)
+/asm/port/**/*.o
+/asm/port/**/f00
+/asm/port/**/f00-*
+/asm/port/aarch64/true
+/asm/port/aarch64/false
+/asm/port/aarch64/echo
+/asm/port/aarch64/grep
+/asm/port/aarch64/version
 
 # local release staging (publish via gh release assets)
 /dist/

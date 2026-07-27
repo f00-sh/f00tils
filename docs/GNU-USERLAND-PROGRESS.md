@@ -27,7 +27,7 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 1 | `grep` | `f00-grep` | yes | **full** | deep | win* | Common flags byte-identical incl. `-A/-B/-C`/`-NUM` context; `-P`/`--perl-regexp` unsupported → `the -P option is not supported` exit 2 (no silent ignore); modern match highlight uses theme `c_*` via `color_ok`/`color_dim` |
+| 1 | `grep` | `f00-grep` | yes | **full** | deep | win* | Common flags byte-identical incl. `-A/-B/-C`/`-NUM` context; **`-P`/`--perl-regexp` freestanding PCRE subset** (`\d\w\s`/`\D\W\S`, `*+?`, `[]`, `^$`, grouping `()` for match selection); invalid class → exit 2; modern match highlight uses theme `c_*` |
 | 2 | `egrep` | `f00-egrep` | yes | **full** | yes | win* | ≡ `grep -E` |
 | 3 | `fgrep` | `f00-fgrep` | yes | **full** | yes | win* | ≡ `grep -F` |
 
@@ -44,10 +44,10 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 
 | # | GNU | f00 | shipped | `--core` | modern | speed | Notes |
 |--:|:----|:----|:--------|:---------|:-------|:------|:------|
-| 6 | `diff` | `f00-diff` | yes | **full** | deep | todo | Normal (default under `--core`), `-u`/`-U`, `-c`/`-C`, `-q` byte-identical on common/small–medium files (LCS marks, mtime headers via TZif, `\ No newline at end of file`, exits 0/1/2). No `-r`/dirs yet. Modern default remains unified. |
+| 6 | `diff` | `f00-diff` | yes | **full** | deep | win | Normal/`-u`/`-c`/`-q`; multi-MiB + ≥8MiB mmap; multi-line + D&C LCS; **`-r`/`--recursive` directory compare** (Only in / Common subdirectories / `diff -r[u]` headers; type-mix messages). MAX_LINES=32K → `File too large`. Modern default unified + theme. |
 | 7 | `cmp` | `f00-cmp` | yes | **full** | yes | win | mmap + qword; GNU differ message |
-| 8 | `diff3` | `f00-diff3` | yes | **full** | yes | todo | Classic `====`/`====N` multi-line ranges + type grouping; multi-zone via nearest triple sync; `-m` multi-line + `\|\|\|\|\|\|\|` and same-change overlap. Common battery byte-identical. |
-| 9 | `sdiff` | `f00-sdiff` | yes | **full** | deep | todo | `--core` LCS-aligned side-by-side (insert/delete/shift); `-w` tab pad + `-s` match GNU common cases; modern themed columns |
+| 8 | `diff3` | `f00-diff3` | yes | **full** | yes | win | Classic `====`/`====N` multi-line ranges + type grouping; multi-zone via nearest triple sync; `-m` multi-line + `\|\|\|\|\|\|\|` and same-change overlap. Common battery byte-identical. |
+| 9 | `sdiff` | `f00-sdiff` | yes | **full** | deep | win | `--core` LCS-aligned side-by-side (insert/delete/shift); `-w` tab pad + `-s` match GNU common cases; modern themed columns |
 
 ## Totals
 
