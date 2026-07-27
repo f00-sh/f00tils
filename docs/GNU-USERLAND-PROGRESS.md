@@ -31,7 +31,7 @@ Coreutils: [COREUTILS-PROGRESS.md](COREUTILS-PROGRESS.md) (106/106).
 | 2 | `egrep` | `f00-egrep` | yes | **full** | yes | win* | ≡ `grep -E` |
 | 3 | `fgrep` | `f00-fgrep` | yes | **full** | yes | win* | ≡ `grep -F` |
 
-\*Tiny/script + `-q` crush GNU; multi-MB full emit still optimizing.
+\*Tiny/script + `-q` crush GNU; multi-MiB simple `grep -F`/`-n -F` hot path ships (full stdout parity in `make hot`).
 
 ## findutils
 

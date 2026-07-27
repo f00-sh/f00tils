@@ -10,13 +10,16 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ### Added
 - `make check` — boring-solid x86 bar (smoke + parity)
-- `make hot` — real-work wall+CPU battery: sort 200k, ls 500-file tree, **multi-MiB `grep -F`** (full stdout parity before speed)
+- `make hot` — real-work wall+CPU battery: sort 200k, ls 500-file tree, **multi-MiB `grep -F`** (full stdout parity before speed; dense `-n -F` flush trap)
 - freestanding `grep -P` PCRE subset + parity battery
 - `grep -F` multi-MiB hot path: mmap + SSE2 first-byte scan + zero-copy emit (simple `--core` fixed, case-sensitive)
 - aarch64 freestanding multicall (`asm/port/aarch64`, qemu smoke): true/false/echo/pwd/cat/**basename**/grep
 - `diff -r` recursive directory compare
 - Ship truth: README + https://f00.sh (long docs essays stubbed)
 - Primary install story: tarball + `install.sh` (`make sync-install`); packages secondary
+
+### Fixed
+- `grep -n -F` mmap/SSE2 path: preserve line-number cursor (r8–r11) across `out_flush` so dense multi-MiB matches stay GNU-identical after emit flushes
 
 ### Changed
 - Per-package bench totals (wall · CPU separate; never 115-tool blend)
