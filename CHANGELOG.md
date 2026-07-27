@@ -6,6 +6,9 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+### Changed
+- Site feature tour + regenerated color-PTY screenshots (ls/grep/diff/cat/find/suite) on every ship path
+
 ## [0.16.6] - 2026-07-27
 
 ### Fixed

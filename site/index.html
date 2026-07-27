@@ -29,6 +29,7 @@
       </a>
       <nav class="site-nav nav" id="site-nav" aria-label="Primary">
         <a href="#why">Why</a>
+        <a href="#tour">Tour</a>
         <a href="#benchmarks">Bench</a>
         <a href="#scoreboard">Scoreboard</a>
         <a href="#install">Install</a>
@@ -95,8 +96,8 @@
               class="shot"
               src="assets/screenshots/hero.png"
               width="1040"
-              height="420"
-              alt="f00-ls modern listing in a color terminal"
+              height="440"
+              alt="f00tils 0.16.6 version and modern f00-ls with glyph icons in a color terminal"
               loading="eager"
             />
           </figure>
@@ -129,12 +130,89 @@
           <img
             src="assets/screenshots/f00-core-vs-modern.png"
             alt="Modern default vs --core side by side"
-            width="920"
-            height="592"
+            width="960"
+            height="684"
             loading="lazy"
           />
-          <figcaption class="muted small">Modern default vs <code class="mono">--core</code></figcaption>
+          <figcaption class="muted small">Modern default (icons + theme) vs <code class="mono">--core</code> GNU-plain for scripts</figcaption>
         </figure>
+      </div>
+    </section>
+
+    <section class="section" id="tour">
+      <div class="wrap">
+        <h2>Feature tour</h2>
+        <p class="muted">
+          Real color-terminal captures (forced PTY) of the shipped multicall — not one-liners for decoration.
+          Regenerated every release.
+        </p>
+        <div class="shot-grid feature-shots">
+          <figure class="shot-card">
+            <img
+              src="assets/screenshots/f00-ls-la.png"
+              alt="f00-ls long listing with glyph icons and theme colors"
+              width="1040"
+              height="460"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong><code class="mono">ls -la</code></strong> —
+              modern long listing: glyph icons, type colors, owners, timestamps (not a pale GNU).
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="assets/screenshots/f00-grep.png"
+              alt="f00-grep match highlight and JSON output"
+              width="1000"
+              height="400"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong><code class="mono">grep</code></strong> —
+              match chrome with line numbers, plus machine <code class="mono">--json</code> (<code class="mono">schema: f00/v1</code>).
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="assets/screenshots/f00-diff.png"
+              alt="f00-diff unified color and word-diff"
+              width="1000"
+              height="540"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong><code class="mono">diff</code></strong> —
+              themed unified hunks and delta-class <code class="mono">--word-diff</code> markers.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="assets/screenshots/f00-cat-find.png"
+              alt="f00-cat shebang syntax paint and f00-find modern skip plus json"
+              width="1000"
+              height="660"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong><code class="mono">cat</code> + <code class="mono">find</code></strong> —
+              shebang paint for shell scripts; modern find skips <code class="mono">.git</code> (shown vs <code class="mono">--core</code>) and emits <code class="mono">--json</code>.
+            </figcaption>
+          </figure>
+          <figure class="shot-card">
+            <img
+              src="assets/screenshots/f00-suite.png"
+              alt="Multicall tour across id sort hash grep wc"
+              width="1000"
+              height="708"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>One binary</strong> —
+              <code class="mono">argv0</code> dispatch across the suite: id, nproc, uname, sort, sha256sum, wc, grep.
+            </figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 

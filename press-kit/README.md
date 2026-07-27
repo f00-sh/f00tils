@@ -15,22 +15,27 @@ Brand assets for **f00tils** (coreutils → f00tils). Binary name: `f00`.
 | `favicon-16.png` / `favicon-32.png` | PNG favicons |
 | `og.svg` / `og.png` | Open Graph / social card (1200×630) |
 
-## Screenshots (color)
+## Screenshots (color PTY)
 
-| File | Content |
-|------|---------|
-| `screenshots/hero.png` | Version + color `f00-ls` |
-| `screenshots/f00-ls-la.png` | Long listing with ANSI colors |
-| `screenshots/f00-ls.png` | Short color listing |
-| `screenshots/f00-core-vs-modern.png` | Modern vs `--core` |
-| `screenshots/f00-suite.png` | Multicall tools collage |
-
-Regenerate everything from a built binary:
+Regenerate **every release** from a built binary (real PTY + forced color env):
 
 ```bash
 cd asm && make
 python3 ../scripts/render-brand-assets.py
 ```
+
+| File | Story |
+|------|--------|
+| `screenshots/hero.png` | Version + modern `ls` icons |
+| `screenshots/f00-ls-la.png` | Long listing: types, links, glyph icons, theme |
+| `screenshots/f00-ls.png` | Compact modern grid |
+| `screenshots/f00-core-vs-modern.png` | Modern chrome vs `--core` GNU-plain |
+| `screenshots/f00-grep.png` | Match highlight + `--json` |
+| `screenshots/f00-diff.png` | Unified color + `--word-diff` |
+| `screenshots/f00-cat-find.png` | `cat` shebang paint + modern `find` (.git skip) / `--json` |
+| `screenshots/f00-suite.png` | Multicall tour (id · sort · hash · grep · wc) |
+
+Copies also land in `site/assets/screenshots/` and `docs/images/`.
 
 ## Colors
 

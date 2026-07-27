@@ -1652,9 +1652,15 @@ table.matrix.compact code.cmd {
   gap: 1.25rem;
   margin-top: 1.25rem;
 }
-@media (min-width: 800px) {
-  .shot-grid {
-    grid-template-columns: 1fr;
+.shot-grid.feature-shots {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .shot-grid.feature-shots {
+    grid-template-columns: 1fr 1fr;
+  }
+  .shot-grid.feature-shots .shot-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 }
 .shot-card {
@@ -1664,9 +1670,26 @@ table.matrix.compact code.cmd {
   overflow: hidden;
   background: var(--bg-elevated);
 }
+.shot-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .shot-card figcaption {
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.85rem 1.1rem 1.05rem;
   color: var(--text-dim);
   font-size: 0.92rem;
+  line-height: 1.45;
+  border-top: 1px solid var(--border);
+}
+.shot-card figcaption strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.why-shot {
+  margin-top: 1.5rem;
+}
+.why-shot figcaption {
+  padding: 0.65rem 1rem 0.85rem;
   border-top: 1px solid var(--border);
 }

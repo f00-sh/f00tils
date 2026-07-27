@@ -11,10 +11,13 @@ Requires: pillow, local ./asm/f00
 from __future__ import annotations
 
 import os
+import pty
 import re
+import select
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -173,73 +176,213 @@ def draw_mixed_text(
     return x - xy[0]
 
 
-def run_f00(argv: list[str], env: dict | None = None) -> str:
+def resolve_bin(argv0: str) -> str:
+    if argv0.startswith("/"):
+        return argv0
+    link = ASM / argv0
+    if link.exists():
+        return str(link)
+    if argv0.startswith("f00-") and F00.exists():
+        return str(F00)
+    return argv0
+
+
+def color_env(extra: dict | None = None) -> dict[str, str]:
+    """Force a color-capable terminal environment (never NO_COLOR)."""
     e = os.environ.copy()
+    e.pop("NO_COLOR", None)
     e["TERM"] = "xterm-256color"
-    e["FORCE_COLOR"] = "1"
+    e["COLORTERM"] = "truecolor"
+    e["FORCE_COLOR"] = "3"
+    e["CLICOLOR"] = "1"
     e["CLICOLOR_FORCE"] = "1"
-    e["NO_COLOR"] = ""
-    if env:
-        e.update(env)
-    # prefer multicall symlink
-    cmd0 = argv[0]
-    if not cmd0.startswith("/") and (ASM / cmd0).exists():
-        bin_path = str(ASM / cmd0)
-    else:
-        bin_path = str(F00)
-        # if invoked as f00-ls etc without path
-        if cmd0.startswith("f00-"):
-            link = ASM / cmd0
-            if link.exists():
-                bin_path = str(link)
-    real = [bin_path] + argv[1:]
-    r = subprocess.run(
-        real,
-        cwd=str(ASM),
-        env=e,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
-    return r.stdout.decode("utf-8", "replace")
+    e["F00_NERD"] = e.get("F00_NERD", "1")
+    # Prefer site-matching theme when available
+    theme = ROOT / "site" / "themes" / "tokyo-night.theme"
+    if theme.is_file():
+        e.setdefault("F00_THEME", "tokyo-night")
+    if extra:
+        e.update({k: str(v) for k, v in extra.items()})
+    return e
+
+
+def tool_argv(argv: list[str]) -> list[str]:
+    """Resolve multicall symlink so argv0 basename selects the tool."""
+    a0 = argv[0]
+    if a0.startswith("f00-") and not a0.startswith("/"):
+        link = ASM / a0
+        if link.exists():
+            return [str(link)] + argv[1:]
+    return [resolve_bin(a0)] + argv[1:]
+
+
+def run_f00(argv: list[str], env: dict | None = None, *, use_pty: bool = True) -> str:
+    """Run f00 tool. Default: real PTY (no shell) so is_tty chrome/color engages."""
+    e = color_env(env)
+    real = tool_argv(argv)
+
+    if not use_pty:
+        r = subprocess.run(
+            real,
+            cwd=str(ASM),
+            env=e,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        return r.stdout.decode("utf-8", "replace")
+
+    # Direct PTY — no shell (avoids zsh nomatch on globs like *.sh)
+    master, slave = pty.openpty()
+    try:
+        # Make slave look like a reasonably wide terminal
+        try:
+            import fcntl
+            import struct
+            import termios
+
+            winsz = struct.pack("HHHH", 40, 120, 0, 0)
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, winsz)
+        except Exception:
+            pass
+        proc = subprocess.Popen(
+            real,
+            cwd=str(ASM),
+            env=e,
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            close_fds=True,
+            start_new_session=True,
+        )
+        os.close(slave)
+        slave = -1
+        chunks: list[bytes] = []
+        deadline = time.time() + 12.0
+        while True:
+            if time.time() > deadline:
+                proc.kill()
+                break
+            ready, _, _ = select.select([master], [], [], 0.15)
+            if ready:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:
+                    break
+                if not data:
+                    break
+                chunks.append(data)
+            elif proc.poll() is not None:
+                # drain remaining
+                while True:
+                    ready, _, _ = select.select([master], [], [], 0.05)
+                    if not ready:
+                        break
+                    try:
+                        data = os.read(master, 65536)
+                    except OSError:
+                        data = b""
+                    if not data:
+                        break
+                    chunks.append(data)
+                break
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+        if slave >= 0:
+            try:
+                os.close(slave)
+            except OSError:
+                pass
+
+    out = b"".join(chunks).decode("utf-8", "replace")
+    out = out.replace("\r\n", "\n").replace("\r", "\n")
+    # drop stray C0 controls except \n \t ESC
+    out = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f]", "", out)
+    return out
 
 
 def parse_ansi_line(line: str) -> list[tuple[str, tuple[int, int, int], bool]]:
-    """Return list of (text, fg_rgb, bold)."""
+    """Return list of (text, fg_rgb, bold). Supports classic + truecolor + dim."""
     parts: list[tuple[str, tuple[int, int, int], bool]] = []
     fg = TEXT
     bold = False
+    dim = False
     pos = 0
+
+    def apply_dim(c: tuple[int, int, int]) -> tuple[int, int, int]:
+        if not dim:
+            return c
+        return (max(0, c[0] * 2 // 3), max(0, c[1] * 2 // 3), max(0, c[2] * 2 // 3))
+
     for m in SGR_RE.finditer(line):
         if m.start() > pos:
-            parts.append((line[pos : m.start()], fg, bold))
-        codes = [c for c in m.group(1).split(";") if c != ""]
-        if not codes:
-            codes = ["0"]
-        for raw in codes:
+            parts.append((line[pos : m.start()], apply_dim(fg), bold))
+        codes_raw = m.group(1)
+        codes = [c for c in codes_raw.split(";") if c != ""] if codes_raw else ["0"]
+        i = 0
+        while i < len(codes):
             try:
-                code = int(raw)
+                code = int(codes[i])
             except ValueError:
+                i += 1
                 continue
             if code == 0:
-                fg, bold = TEXT, False
+                fg, bold, dim = TEXT, False, False
             elif code == 1:
                 bold = True
+            elif code == 2:
+                dim = True
             elif code == 22:
                 bold = False
+                dim = False
+            elif code == 39:
+                fg = TEXT
             elif code in ANSI_FG:
                 fg = ANSI_FG[code]
-            elif code == 38:
-                # skip extended for simplicity
-                pass
+            elif code == 38 and i + 1 < len(codes):
+                mode = codes[i + 1]
+                if mode == "2" and i + 4 < len(codes):
+                    try:
+                        fg = (int(codes[i + 2]), int(codes[i + 3]), int(codes[i + 4]))
+                    except ValueError:
+                        pass
+                    i += 4
+                elif mode == "5" and i + 2 < len(codes):
+                    # 256-color: approximate a few common ranges
+                    try:
+                        n = int(codes[i + 2])
+                    except ValueError:
+                        n = 7
+                    if 16 <= n <= 231:
+                        n0 = n - 16
+                        r = (n0 // 36) * 51
+                        g = ((n0 // 6) % 6) * 51
+                        b = (n0 % 6) * 51
+                        fg = (r, g, b)
+                    elif n >= 232:
+                        v = 8 + (n - 232) * 10
+                        fg = (v, v, v)
+                    else:
+                        fg = ANSI_FG.get(30 + (n % 8), TEXT)
+                    i += 2
+                else:
+                    i += 1
+            i += 1
         pos = m.end()
     if pos < len(line):
-        parts.append((line[pos:], fg, bold))
-    # strip residual CSI/osc
+        parts.append((line[pos:], apply_dim(fg), bold))
     cleaned: list[tuple[str, tuple[int, int, int], bool]] = []
     for text, c, b in parts:
-        text = re.sub(r"\x1b\].*?\x07", "", text)
+        text = re.sub(r"\x1b\].*?(?:\x07|\x1b\\)", "", text)
         text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+        text = text.replace("\x00", "")
         if text:
             cleaned.append((text, c, b))
     if not cleaned:
@@ -551,23 +694,53 @@ def write_favicon_svg(path: Path) -> None:
 
 
 def prepare_demo_tree(root: Path) -> None:
+    """Rich fixture tree that shows icons, types, links, and modern extras."""
     if root.exists():
         shutil.rmtree(root)
     (root / "src").mkdir(parents=True)
     (root / "docs").mkdir()
     (root / "bin").mkdir()
-    (root / "src" / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+    # no .git: incomplete repo makes `ls` print git discovery noise
+    (root / "src" / "main.c").write_text(
+        "/* sample */\nint main(void) { return 0; }\n", encoding="utf-8"
+    )
     (root / "src" / "util.asm").write_text("; f00tils util\n", encoding="utf-8")
-    (root / "docs" / "GUIDE.md").write_text("# Guide\n\nUse f00tils.\n", encoding="utf-8")
-    (root / "README.md").write_text("# f00tils\n\ncoreutils → freestanding assembly\n", encoding="utf-8")
+    (root / "src" / "config.json").write_text('{"theme":"tokyo-night"}\n', encoding="utf-8")
+    (root / "docs" / "GUIDE.md").write_text(
+        "# Guide\n\nUse f00tils with --core for scripts.\n", encoding="utf-8"
+    )
+    (root / "README.md").write_text(
+        "# f00tils\n\ncoreutils → freestanding assembly\nhello from the fixture\n",
+        encoding="utf-8",
+    )
     (root / "Makefile").write_text("all:\n\t@echo f00tils\n", encoding="utf-8")
     script = root / "install.sh"
-    script.write_text("#!/bin/sh\necho f00tils\n", encoding="utf-8")
+    script.write_text("#!/usr/bin/env bash\necho f00tils\n", encoding="utf-8")
     script.chmod(0o755)
-    (root / "bin" / "tool").write_bytes(b"\x7fELF")
+    (root / "bin" / "tool").write_bytes(b"\x7fELF" + b"\0" * 12)
     (root / "bin" / "tool").chmod(0o755)
+    (root / "notes.txt").write_text(
+        "alpha line\nhello world\nhello there\nend of file\n", encoding="utf-8"
+    )
     os.symlink("src", root / "lib")
     os.symlink("README.md", root / "README")
+
+
+def write_shot(name: str, title: str, prompts: list[str], body: str, dests: list[Path], **kw) -> None:
+    for dest in dests:
+        render_terminal(title, prompts, body, dest, **kw)
+
+
+def session_body(blocks: list[tuple[str, str]]) -> str:
+    """Interleave $ prompts with captured tool output for multi-command shots."""
+    parts: list[str] = []
+    for prompt, out in blocks:
+        parts.append(prompt if prompt.startswith("$") else f"$ {prompt}")
+        text = out.rstrip("\n")
+        if text:
+            parts.append(text)
+        parts.append("")
+    return "\n".join(parts).rstrip() + "\n"
 
 
 def main() -> int:
@@ -582,95 +755,234 @@ def main() -> int:
     for d in (press, site, shots, press / "screenshots", site / "screenshots"):
         d.mkdir(parents=True, exist_ok=True)
 
-    # SVGs
+    # SVGs / icons (brand)
     for dest_root in (press, site):
         write_favicon_svg(dest_root / "favicon.svg")
         write_svg_mark(dest_root / "logo.svg", light=False)
         write_svg_mark(dest_root / "logo-light.svg", light=True)
         write_svg_lockup(dest_root / "logo-lockup.svg")
         write_svg_og(dest_root / "og.svg")
-
-    # PNG icons
-    for dest_root in (press, site):
         render_logo_png(dest_root / "icon-512.png", 512)
         render_logo_png(dest_root / "icon-192.png", 192)
         render_logo_png(dest_root / "apple-touch-icon.png", 180)
-        # favicon png 32
         render_logo_png(dest_root / "favicon-32.png", 32)
         render_logo_png(dest_root / "favicon-16.png", 16)
 
-    demo = Path(tempfile.mkdtemp(prefix="f00tils-demo."))
+    # Fixed path so screenshot prompts stay readable across regenerations
+    demo = Path("/tmp/f00-demo")
     try:
         prepare_demo_tree(demo)
+        rel = "f00-demo"  # short path for prompts (basename)
+        triple = lambda n: [shots / n, press / "screenshots" / n, site / "screenshots" / n]
 
-        # 1) ls -la color
-        # Capture is a pipe (non-TTY): force glyph icons (default style).
-        out_ls = run_f00(
+        # glyph icons render cleanly without Nerd font private-use blanks
+        icon = "--icons=glyph"
+        ls_common = ["--no-git", icon]
+
+        # ── 1) Hero: version + modern ls tour ─────────────────────────
+        ver = run_f00(["f00-ls", "--version"], use_pty=False).splitlines()[0]
+        out_ls_short = run_f00(["f00-ls", *ls_common, str(demo)])
+        out_ls_la = run_f00(["f00-ls", "-la", *ls_common, str(demo)])
+        hero_body = session_body(
             [
-                "f00-ls",
-                "-la",
-                "--color=always",
-                "--icons=glyph",
-                str(demo),
+                ("$ f00-ls --version", f"\x1b[1;32m{ver}\x1b[0m\n\x1b[2mLicense: MIT · https://f00.sh\x1b[0m"),
+                (f"$ f00-ls --no-git {icon} {rel}/", out_ls_short),
             ]
         )
-        for dest in (
-            shots / "f00-ls-la.png",
-            press / "screenshots" / "f00-ls-la.png",
-            site / "screenshots" / "f00-ls-la.png",
-        ):
-            render_terminal(
-                "f00tils · f00-ls",
-                [f"$ f00-ls -la --color=always --icons=glyph {demo.name}/"],
-                out_ls,
-                dest,
-                width=1000,
-                min_height=420,
-            )
+        write_shot(
+            "hero.png",
+            "f00tils · https://f00.sh",
+            [],
+            hero_body,
+            triple("hero.png"),
+            width=1040,
+            min_height=440,
+        )
 
-        # 2) short modern ls
-        out_ls2 = run_f00(
-            ["f00-ls", "--color=always", "--icons=glyph", str(demo)]
+        # ── 2) Modern long listing (icons, types, links) ───────────────
+        write_shot(
+            "f00-ls-la.png",
+            "f00-ls · modern long listing",
+            [f"$ f00-ls -la --no-git {icon} {rel}/"],
+            out_ls_la,
+            triple("f00-ls-la.png"),
+            width=1040,
+            min_height=460,
         )
-        for dest in (
-            shots / "f00-ls.png",
-            press / "screenshots" / "f00-ls.png",
-            site / "screenshots" / "f00-ls.png",
-        ):
-            render_terminal(
-                "f00tils · f00-ls",
-                [f"$ f00-ls --color=always --icons=glyph {demo.name}/"],
-                out_ls2,
-                dest,
-                width=880,
-                min_height=300,
-            )
+        write_shot(
+            "f00-ls.png",
+            "f00-ls · modern grid",
+            [f"$ f00-ls --no-git {icon} {rel}/"],
+            out_ls_short,
+            triple("f00-ls.png"),
+            width=920,
+            min_height=320,
+        )
 
-        # 3) suite collage of multiple tools
-        blocks = []
-        blocks.append(("$ f00-id", run_f00(["f00-id"])))
-        blocks.append(("$ f00-nproc", run_f00(["f00-nproc"])))
-        blocks.append(("$ f00-uname -srm", run_f00(["f00-uname", "-srm"])))
-        blocks.append(
-            (
-                f"$ f00-sha256sum {demo.name}/README.md",
-                run_f00(["f00-sha256sum", str(demo / "README.md")]),
-            )
+        # ── 3) Modern vs --core (law 1/3 story) ────────────────────────
+        modern = run_f00(["f00-ls", *ls_common, "-1", str(demo)])
+        core = run_f00(["f00-ls", "--core", "-1", str(demo)])
+        compare = session_body(
+            [
+                (
+                    f"$ f00-ls --no-git {icon} -1 {rel}/",
+                    "\x1b[1;36m# modern — icons, theme chrome\x1b[0m\n" + modern.rstrip(),
+                ),
+                (
+                    f"$ f00-ls --core -1 {rel}/",
+                    "\x1b[1;33m# --core — GNU-plain for scripts / CI\x1b[0m\n" + core.rstrip(),
+                ),
+            ]
         )
-        blocks.append(
-            (
-                f"$ f00-wc -l {demo.name}/README.md",
-                run_f00(["f00-wc", "-l", str(demo / "README.md")]),
-            )
+        write_shot(
+            "f00-core-vs-modern.png",
+            "f00tils · modern vs --core",
+            [],
+            compare,
+            triple("f00-core-vs-modern.png"),
+            width=960,
+            min_height=480,
         )
-        # colorize digests manually if plain
+
+        # ── 4) grep: highlight + json machine I/O ─────────────────────
+        notes = demo / "notes.txt"
+        # denser fixture so -n + highlight + context tell a story
+        notes.write_text(
+            "# sample log\n"
+            "alpha line stays plain\n"
+            "hello world\n"
+            "middle noise\n"
+            "hello there from f00-grep\n"
+            "end of file\n",
+            encoding="utf-8",
+        )
+        g_hi = run_f00(["f00-grep", "-n", "hello", str(notes)])
+        g_json = run_f00(["f00-grep", "--json", "hello", str(notes)], use_pty=False)
+        # shorten absolute paths in json for readability
+        g_json = g_json.replace(str(demo), rel)
+        grep_body = session_body(
+            [
+                (f"$ f00-grep -n hello {rel}/notes.txt", g_hi),
+                (
+                    f"$ f00-grep --json hello {rel}/notes.txt",
+                    g_json if g_json.strip() else '{"schema":"f00/v1",...}',
+                ),
+            ]
+        )
+        write_shot(
+            "f00-grep.png",
+            "f00-grep · match chrome + --json",
+            [],
+            grep_body,
+            triple("f00-grep.png"),
+            width=1000,
+            min_height=400,
+        )
+
+        # ── 5) diff: unified color + word-diff ─────────────────────────
+        a = demo / "a.txt"
+        b = demo / "b.txt"
+        a.write_text("alpha\nhello world\nshared tail\n", encoding="utf-8")
+        b.write_text("alpha\nhello there\nshared tail\n", encoding="utf-8")
+        d_u = run_f00(["f00-diff", "-u", str(a), str(b)])
+        d_w = run_f00(["f00-diff", "--word-diff", str(a), str(b)])
+        # Collapse absolute paths in headers for readable prompts
+        d_u = d_u.replace(str(demo), rel)
+        d_w = d_w.replace(str(demo), rel)
+        diff_body = session_body(
+            [
+                (f"$ f00-diff -u {rel}/a.txt {rel}/b.txt", d_u),
+                (f"$ f00-diff --word-diff {rel}/a.txt {rel}/b.txt", d_w),
+            ]
+        )
+        write_shot(
+            "f00-diff.png",
+            "f00-diff · unified + --word-diff",
+            [],
+            diff_body,
+            triple("f00-diff.png"),
+            width=1000,
+            min_height=480,
+        )
+
+        # ── 6) cat shebang paint + find modern (.git skip) ─────────────
+        sh = demo / "demo.sh"
+        sh.write_text(
+            "#!/usr/bin/env bash\n# install helper\necho hello\nfor i in 1 2 3; do echo \"$i\"; done\n",
+            encoding="utf-8",
+        )
+        sh.chmod(0o755)
+        cat_out = run_f00(["f00-cat", str(sh)])
+        # put a decoy .git so modern skip is meaningful vs --core
+        (demo / ".git").mkdir(exist_ok=True)
+        (demo / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+        (demo / ".git" / "secret.sh").write_text("#!/bin/sh\necho secret\n", encoding="utf-8")
+        find_mod = run_f00(
+            ["f00-find", str(demo), "-maxdepth", "2", "-name", "*.sh"]
+        )
+        find_core = run_f00(
+            ["f00-find", "--core", str(demo), "-maxdepth", "2", "-name", "*.sh"],
+            use_pty=False,
+        )
+        find_json = run_f00(
+            ["f00-find", "--json", str(demo), "-maxdepth", "1", "-type", "d"],
+            use_pty=False,
+        )
+        cat_find_body = session_body(
+            [
+                (f"$ f00-cat {rel}/demo.sh", cat_out.replace(str(demo), rel)),
+                (
+                    f"$ f00-find {rel} -maxdepth 2 -name '*.sh'",
+                    "\x1b[2m# modern: skips .git (no secret.sh)\x1b[0m\n"
+                    + find_mod.replace(str(demo), rel).rstrip()
+                    + "\n\x1b[2m# --core would include .git/secret.sh\x1b[0m\n"
+                    + find_core.replace(str(demo), rel).rstrip(),
+                ),
+                (
+                    f"$ f00-find --json {rel} -maxdepth 1 -type d",
+                    find_json.replace(str(demo), rel),
+                ),
+            ]
+        )
+        write_shot(
+            "f00-cat-find.png",
+            "f00-cat · shebang paint  ·  f00-find · modern + --json",
+            [],
+            cat_find_body,
+            triple("f00-cat-find.png"),
+            width=1000,
+            min_height=560,
+        )
+
+        # ── 7) Multicall power tour (not one-liners only) ──────────────
+        sort_in = demo / "names.txt"
+        sort_in.write_text("zeta\nalpha\nmiddle\nbeta\n", encoding="utf-8")
+        blocks = [
+            ("$ f00-id", run_f00(["f00-id"], use_pty=False)),
+            ("$ f00-nproc", run_f00(["f00-nproc"], use_pty=False)),
+            ("$ f00-uname -srm", run_f00(["f00-uname", "-srm"], use_pty=False)),
+            (
+                f"$ f00-sort {rel}/names.txt",
+                run_f00(["f00-sort", str(sort_in)], use_pty=False),
+            ),
+            (
+                f"$ f00-sha256sum {rel}/README.md",
+                run_f00(["f00-sha256sum", str(demo / "README.md")], use_pty=False),
+            ),
+            (
+                f"$ f00-wc -l {rel}/notes.txt",
+                run_f00(["f00-wc", "-l", str(notes)], use_pty=False),
+            ),
+            (
+                f"$ f00-grep -c hello {rel}/notes.txt",
+                run_f00(["f00-grep", "-c", "hello", str(notes)], use_pty=False),
+            ),
+        ]
         body_parts: list[str] = []
         for prompt, out in blocks:
             body_parts.append(prompt)
-            # inject mild color for numbers / hashes when no ANSI
-            for line in out.splitlines() or [""]:
+            for line in (out.splitlines() or [""]):
                 if re.fullmatch(r"[0-9a-f]{32,}.*", line.strip()):
-                    # hash line
                     body_parts.append(f"\x1b[32m{line}\x1b[0m")
                 elif re.fullmatch(r"\d+", line.strip()):
                     body_parts.append(f"\x1b[36m{line}\x1b[0m")
@@ -684,81 +996,44 @@ def main() -> int:
                     body_parts.append(line)
             body_parts.append("")
         suite_body = "\n".join(body_parts).rstrip() + "\n"
-        for dest in (
-            shots / "f00-suite.png",
-            press / "screenshots" / "f00-suite.png",
-            site / "screenshots" / "f00-suite.png",
-        ):
-            render_terminal(
-                "f00tils · multicall suite",
-                ["# binary f00 · tools f00-*"],
-                suite_body,
-                dest,
-                width=960,
-                min_height=480,
-            )
-
-        # 4) core vs modern comparison style
-        modern = run_f00(
-            ["f00-ls", "--color=always", "--icons=glyph", "-1", str(demo)]
+        write_shot(
+            "f00-suite.png",
+            "f00tils · multicall tour (id · sort · hash · grep · wc)",
+            ["# one binary · argv0 dispatch · 115 tools"],
+            suite_body,
+            triple("f00-suite.png"),
+            width=1000,
+            min_height=520,
         )
-        core = run_f00(["f00-ls", "--core", "-1", str(demo)])
-        compare = (
-            "\x1b[1m# modern (glyph icons + color)\x1b[0m\n"
-            + modern.rstrip()
-            + "\n\n"
-            + "\x1b[1m# --core (scripts)\x1b[0m\n"
-            + core.rstrip()
-            + "\n"
-        )
-        for dest in (
-            shots / "f00-core-vs-modern.png",
-            press / "screenshots" / "f00-core-vs-modern.png",
-            site / "screenshots" / "f00-core-vs-modern.png",
-        ):
-            render_terminal(
-                "f00tils · modern vs --core",
-                [
-                    f"$ f00-ls --color=always --icons=glyph -1 {demo.name}/",
-                    f"$ f00-ls --core -1 {demo.name}/",
-                ],
-                compare,
-                dest,
-                width=920,
-                min_height=400,
-            )
-
-        # 5) hero banner-ish terminal with version + ls
-        hero = (
-            f"\x1b[1;32m{run_f00(['f00-ls', '--version']).splitlines()[0]}\x1b[0m\n"
-            f"\x1b[2mLicense: MIT · https://f00.sh\x1b[0m\n\n"
-            f"{out_ls2}"
-        )
-        for dest in (
-            shots / "hero.png",
-            press / "screenshots" / "hero.png",
-            site / "screenshots" / "hero.png",
-        ):
-            render_terminal(
-                "f00tils · https://f00.sh",
-                [
-                    "$ f00-ls --version",
-                    f"$ f00-ls --color=always --icons=glyph {demo.name}/",
-                ],
-                hero,
-                dest,
-                width=1040,
-                min_height=420,
-            )
 
     finally:
         shutil.rmtree(demo, ignore_errors=True)
 
-    # tiny README for assets
-    (press / "screenshots" / "README.md").write_text(
-        "# f00tils screenshots\n\nColor terminal captures of the multicall suite (`f00` / `f00-*`).\n\nRegenerate: `python3 scripts/render-brand-assets.py`\n",
-        encoding="utf-8",
-    )
+    readme = """# f00tils screenshots
+
+Color **PTY** captures of the multicall (`f00` / `f00-*`). Regenerated every ship.
+
+| File | Story |
+|------|--------|
+| `hero.png` | Version + modern `ls` icons |
+| `f00-ls-la.png` | Long listing: types, links, glyph icons, theme |
+| `f00-ls.png` | Compact modern grid |
+| `f00-core-vs-modern.png` | Modern chrome vs `--core` GNU-plain |
+| `f00-grep.png` | Match highlight + `--json` |
+| `f00-diff.png` | Unified color + `--word-diff` |
+| `f00-cat-find.png` | `cat` shebang paint + modern `find` (.git skip) / `--json` |
+| `f00-suite.png` | Multicall tour across tools |
+
+```bash
+cd asm && make
+# forced color terminal: real PTY + TERM/COLORTERM/FORCE_COLOR (no shell)
+python3 scripts/render-brand-assets.py
+```
+
+Copies to `press-kit/screenshots/`, `site/assets/screenshots/`, `docs/images/`.
+"""
+    (press / "screenshots" / "README.md").write_text(readme, encoding="utf-8")
+    (site / "screenshots" / "README.md").write_text(readme, encoding="utf-8")
     print("done")
     return 0
 
