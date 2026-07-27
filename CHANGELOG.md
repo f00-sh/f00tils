@@ -6,6 +6,9 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+### Fixed
+- Arch/AUR upgrade path: unowned userland links (pre-0.16.4 coreutils-only package + root `install.sh` into `/usr`) blocked `paru` with “exists in filesystem”; `scripts/arch-clean-unowned-f00.sh` + install.sh refuses `/usr` when pacman owns `f00`
+
 ## [0.16.4] - 2026-07-27
 
 ### Added

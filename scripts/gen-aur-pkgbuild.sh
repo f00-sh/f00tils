@@ -35,17 +35,21 @@ SHA="$(need "${ASSET}")"
 mkdir -p "$(dirname "${OUT}")"
 cat > "${OUT}" <<EOF
 # Maintainer: theesfeld
-# f00tils — pure assembly coreutils replacement (binary package)
+# f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)
+#
+# If upgrade fails with "exists in filesystem" on f00-grep / /usr/lib/f00/bin/*:
+#   sudo scripts/arch-clean-unowned-f00.sh
+#   # or: pacman -S f00 --overwrite '/*'
+# Those orphans come from pre-0.16.4 packages (coreutils-only links) mixed with
+# a root install.sh into /usr. Never mix install.sh → /usr with the AUR package.
 pkgname=f00
 pkgver=${VERSION}
 pkgrel=1
-pkgdesc="f00tils — pure assembly coreutils replacement (multicall, freestanding)"
+pkgdesc="f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)"
 arch=('x86_64')
 url="https://f00.sh"
 license=('MIT')
 depends=()
-provides=('f00')
-conflicts=('f00')
 options=('!strip')
 source=("https://github.com/theesfeld/f00/releases/download/v\${pkgver}/${ASSET}")
 sha256sums=('${SHA}')

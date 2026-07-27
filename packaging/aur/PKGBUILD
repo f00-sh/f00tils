@@ -1,18 +1,22 @@
 # Maintainer: theesfeld
-# f00tils — pure assembly coreutils replacement (binary package)
+# f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)
+#
+# If upgrade fails with "exists in filesystem" on f00-grep / /usr/lib/f00/bin/*:
+#   sudo scripts/arch-clean-unowned-f00.sh
+#   # or: pacman -S f00 --overwrite '/*'
+# Those orphans come from pre-0.16.4 packages (coreutils-only links) mixed with
+# a root install.sh into /usr. Never mix install.sh → /usr with the AUR package.
 pkgname=f00
-pkgver=0.15.1
+pkgver=0.16.4
 pkgrel=1
-pkgdesc="f00tils — pure assembly coreutils replacement (multicall, freestanding)"
+pkgdesc="f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)"
 arch=('x86_64')
 url="https://f00.sh"
 license=('MIT')
 depends=()
-provides=('f00')
-conflicts=('f00')
 options=('!strip')
-source=("https://github.com/theesfeld/f00/releases/download/v${pkgver}/f00-0.15.1-linux-x86_64.tar.gz")
-sha256sums=('94f38b9467a83d925127e071fe618125c00e590a8df181dfc805425ae47f698e')
+source=("https://github.com/theesfeld/f00/releases/download/v${pkgver}/f00-0.16.4-linux-x86_64.tar.gz")
+sha256sums=('9325ddfaa5356cb38f55a68e643c1b7ae37ff0d7e012948114268be8c099fb31')
 
 package() {
   local root
@@ -25,6 +29,36 @@ package() {
     root="$(dirname "$(find "${srcdir}" -type f -name f00 | head -n1)")"
   fi
   install -Dm755 "${root}/f00" "${pkgdir}/usr/bin/f00"
+  # shell integration: bare names in /usr/lib/f00/bin, PATH via profile.d (default ON)
+  mkdir -p "${pkgdir}/usr/lib/f00/bin"
+  # profile snippets ship from release packaging tree when present; embed fallbacks
+  if [[ -f "${root}/share/f00/f00.sh" ]]; then
+    install -Dm644 "${root}/share/f00/f00.sh" "${pkgdir}/etc/profile.d/f00.sh"
+  else
+    install -Dm644 /dev/stdin "${pkgdir}/etc/profile.d/f00.sh" <<'EOS'
+# f00tils — default coreutils replacement via PATH (see f00-config replace)
+_f00_libbin="/usr/lib/f00/bin"
+_f00_replace_enabled() {
+  local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}/f00/config"
+  [ -n "${HOME:-}" ] || return 0
+  [ -f "$cfg" ] || return 0
+  if grep -Eiq '^[[:space:]]*replace[[:space:]]*=[[:space:]]*(false|no|0|none)([[:space:]]|#|$)' "$cfg" 2>/dev/null; then
+    return 1
+  fi
+  return 0
+}
+if [ -d "$_f00_libbin" ] && _f00_replace_enabled; then
+  case ":${PATH:-}:" in
+    *":${_f00_libbin}:"*) ;;
+    *) PATH="${_f00_libbin}${PATH:+:}${PATH:-}"; export PATH ;;
+  esac
+fi
+unset _f00_libbin
+unset -f _f00_replace_enabled 2>/dev/null || true
+EOS
+  fi
+  # Full multicall surface: coreutils + grep + findutils + diffutils (+ hub)
+  # Keep in sync with scripts/tools-all.txt and asm/Makefile UTILS.
   local u
   for u in ls cat true false yes nproc tty whoami basename dirname \
            head tail wc tee seq echo pwd sleep \
@@ -36,9 +70,13 @@ package() {
            id groups uname arch date users who pinky uptime hostname \
            nice nohup timeout kill test printf \
            md5sum sha1sum sha256sum sha224sum sha384sum sha512sum b2sum cksum sum \
-           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon; do
+           base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
+           grep egrep fgrep find xargs diff cmp diff3 sdiff; do
     ln -s f00 "${pkgdir}/usr/bin/f00-${u}"
+    ln -s ../../../bin/f00 "${pkgdir}/usr/lib/f00/bin/${u}"
   done
+  ln -s f00 "${pkgdir}/usr/bin/f00-["
+  ln -s ../../../bin/f00 "${pkgdir}/usr/lib/f00/bin/["
   if [[ -f "${root}/LICENSE" ]]; then
     install -Dm644 "${root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   fi
