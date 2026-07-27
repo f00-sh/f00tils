@@ -1594,12 +1594,21 @@ fixed_fast_scan_mem:
     test dword [g_flags], GF_COUNT
     jnz .mm_after_emit
     ; zero-copy emit from map: [r8,r9)
+    ; SYS_write via out_flush clobbers caller-saved regs — save NL state + line ends
+    push r8
+    push r9
+    push r10
+    push r11
     mov rdx, r9
     sub rdx, r8
     lea rsi, [r12 + r8]
     mov rcx, [line_no]
     mov dil, ':'
     call emit_grep_line_ex
+    pop r11
+    pop r10
+    pop r9
+    pop r8
 .mm_after_emit:
     test dword [g_flags], GF_QUIET
     jz .mm_m2

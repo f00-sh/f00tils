@@ -171,6 +171,43 @@ def main() -> int:
             return 1
         print("ok ls wall+CPU win")
 
+        # --- grep -n -F dense: force >256KiB matching stdout (out_flush clobber trap) ---
+        # mmap -F path must keep correct line numbers across SYS_write flushes.
+        dlines: list[str] = []
+        for i in range(25_000):
+            dlines.append(f"HIT padpadpadpadpadpad {i:05d} xxxxxxxxxx\n")
+            dlines.append(f"noise zzzzzzzzzzzzzzzz {i:05d} yyyyyyyyyy\n")
+        # bulk noise so total multi-MiB and hits are not only at EOF
+        for i in range(80_000):
+            dlines.append(f"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz fill {i:06d}\n")
+        gdense = os.path.join(wd, "grep-F-dense-n.txt")
+        open(gdense, "w").writelines(dlines)
+        grc, gout, gerr = run_capture([gnu_grep, "-n", "-F", "HIT pad", gdense])
+        frc, fout, ferr = run_capture([f00_grep, "--core", "-n", "-F", "HIT pad", gdense])
+        if grc != frc or fout != gout:
+            print(
+                f"FAIL grep -n -F dense stdout/exit: gnu rc={grc} {len(gout)}B "
+                f"f00 rc={frc} {len(fout)}B stderr={ferr[:120]!r}",
+                file=sys.stderr,
+            )
+            # pinpoint first line-number drift
+            gl, fl = gout.splitlines(), fout.splitlines()
+            for i, (a, b) in enumerate(zip(gl, fl)):
+                if a != b:
+                    print(f"  first line diff @hit {i}: gnu={a[:60]!r} f00={b[:60]!r}", file=sys.stderr)
+                    break
+            else:
+                if len(gl) != len(fl):
+                    print(f"  hit count gnu={len(gl)} f00={len(fl)}", file=sys.stderr)
+            return 1
+        if len(gout) < 300_000:
+            print(f"FAIL dense -n -F oracle too small ({len(gout)}B < 300KiB)", file=sys.stderr)
+            return 1
+        print(
+            f"ok grep -n -F dense stdout parity ({len(fout)}B, {fout.count(NL)} hits, "
+            f"file ~{os.path.getsize(gdense)//1024}KiB)"
+        )
+
         # --- grep -F multi-MiB: semi-random text + planted needles (~16MiB) ---
         # Needles at end (full-file scan for all hits). Full stdout parity first.
         rng = random.Random(0)
@@ -207,7 +244,6 @@ def main() -> int:
             print("FAIL grep -F loses wall or CPU on multi-MiB work", file=sys.stderr)
             return 1
         print("ok grep -F wall+CPU win")
-
     print("ok hot-path wall+CPU battery")
     return 0
 
