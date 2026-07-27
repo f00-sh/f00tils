@@ -7,7 +7,7 @@ LD      := aarch64-linux-gnu-ld
 ASFLAGS := -g
 LDFLAGS := -nostdlib -static
 
-SRCS := start.S sys.S util.S main.S cat.S grep.S
+SRCS := start.S sys.S util.S main.S cat.S basename.S grep.S
 OBJS := $(SRCS:.S=.o)
 TARGET := f00
 
@@ -23,11 +23,11 @@ $(TARGET): $(OBJS)
 	@echo "built aarch64 $$(file $@ | sed 's/.*: //')"
 
 links: $(TARGET)
-	@for u in true false echo pwd cat grep version; do ln -sf f00 f00-$$u; ln -sf f00 $$u; done
-	@echo "links: f00-{true,false,echo,pwd,cat,grep}"
+	@for u in true false echo pwd cat basename grep version; do ln -sf f00 f00-$$u; ln -sf f00 $$u; done
+	@echo "links: f00-{true,false,echo,pwd,cat,basename,grep}"
 
 clean:
-	rm -f $(OBJS) $(TARGET) f00-* true false echo pwd cat grep version
+	rm -f $(OBJS) $(TARGET) f00-* true false echo pwd cat basename grep version
 
 # smoke under qemu-user (includes no-trailing-newline last-line -P case)
 smoke: $(TARGET) links
@@ -43,6 +43,10 @@ smoke: $(TARGET) links
 	out=$$($$QEMU ./f00-cat --core "$$SCR/c-a64"); \
 	test "$$out" = "cat-a64"; \
 	printf 'pipe-cat' | $$QEMU ./f00-cat | grep -qx 'pipe-cat'; \
+	out=$$($$QEMU ./f00-basename --core /usr/bin/f00); \
+	test "$$out" = "f00"; \
+	out=$$($$QEMU ./f00-basename path/to/thing); \
+	test "$$out" = "thing"; \
 	printf 'a1\n' > "$$SCR/g-a64-nl"; \
 	$$QEMU ./f00-grep --core -P '\\d' "$$SCR/g-a64-nl" | grep -q a1; \
 	printf 'a9' > "$$SCR/g-a64-nonl"; \

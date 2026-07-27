@@ -604,22 +604,22 @@ msg_usage_vdir:
     db "      --csv      CSV result",10
     db 10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_cp: db "f00-cp (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_mv: db "f00-mv (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_rm: db "f00-rm (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_ln: db "f00-ln (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_chown: db "f00-chown (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_chgrp: db "f00-chgrp (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_stat: db "f00-stat (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_df: db "f00-df (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_du: db "f00-du (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_install: db "f00-install (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_mkfifo: db "f00-mkfifo (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_mknod: db "f00-mknod (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_shred: db "f00-shred (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_dd: db "f00-dd (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_dir: db "f00-dir (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
-v_vdir: db "f00-vdir (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_cp: db "f00-cp (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_mv: db "f00-mv (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_rm: db "f00-rm (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_ln: db "f00-ln (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_chown: db "f00-chown (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_chgrp: db "f00-chgrp (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_stat: db "f00-stat (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_df: db "f00-df (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_du: db "f00-du (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_install: db "f00-install (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_mkfifo: db "f00-mkfifo (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_mknod: db "f00-mknod (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_shred: db "f00-shred (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_dd: db "f00-dd (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_dir: db "f00-dir (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
+v_vdir: db "f00-vdir (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 arrow: db " -> ",0
 copied: db "'",0
 moved: db "renamed '",0

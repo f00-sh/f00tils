@@ -178,7 +178,7 @@ jk_matched: db "matched",0
 jk_expected: db "expected",0
 jk_actual: db "actual",0
 jk_ok: db "ok",0
-v_common: db "f00-hash (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_common: db "f00-hash (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_md5sum:
     db "Usage: f00-md5sum [OPTION]... [FILE]...",10
     db "Print or check MD5 (128-bit) checksums.",10,10
@@ -201,7 +201,7 @@ h_md5sum:
     db "  f00-md5sum -c checksums.md5",10
     db "  f00-md5sum --json file.txt",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_md5sum: db "f00-md5sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_md5sum: db "f00-md5sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sha1sum:
     db "Usage: f00-sha1sum [OPTION]... [FILE]...",10
     db "Print or check SHA1 (160-bit) checksums.",10,10
@@ -216,7 +216,7 @@ h_sha1sum:
     db "Examples:",10
     db "  f00-sha1sum file.txt",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sha1sum: db "f00-sha1sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sha1sum: db "f00-sha1sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sha256sum:
     db "Usage: f00-sha256sum [OPTION]... [FILE]...",10
     db "Print or check SHA256 (256-bit) checksums.",10,10
@@ -231,7 +231,7 @@ h_sha256sum:
     db "Examples:",10
     db "  f00-sha256sum file.txt",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sha256sum: db "f00-sha256sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sha256sum: db "f00-sha256sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sha224sum:
     db "Usage: f00-sha224sum [OPTION]... [FILE]...",10
     db "Print or check SHA224 (224-bit) checksums.",10,10
@@ -244,7 +244,7 @@ h_sha224sum:
     db "      --json     detailed JSON (schema f00/v1 + hash metadata)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sha224sum: db "f00-sha224sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sha224sum: db "f00-sha224sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sha384sum:
     db "Usage: f00-sha384sum [OPTION]... [FILE]...",10
     db "Print or check SHA384 (384-bit) checksums.",10,10
@@ -257,7 +257,7 @@ h_sha384sum:
     db "      --json     detailed JSON (schema f00/v1 + hash metadata)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sha384sum: db "f00-sha384sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sha384sum: db "f00-sha384sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sha512sum:
     db "Usage: f00-sha512sum [OPTION]... [FILE]...",10
     db "Print or check SHA512 (512-bit) checksums.",10,10
@@ -270,7 +270,7 @@ h_sha512sum:
     db "      --json     detailed JSON (schema f00/v1 + hash metadata)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sha512sum: db "f00-sha512sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sha512sum: db "f00-sha512sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_b2sum:
     db "Usage: f00-b2sum [OPTION]... [FILE]...",10
     db "Print or check BLAKE2b-512 checksums.",10,10
@@ -283,7 +283,7 @@ h_b2sum:
     db "      --json     detailed JSON (schema f00/v1 + hash metadata)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_b2sum: db "f00-b2sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_b2sum: db "f00-b2sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_cksum:
     db "Usage: f00-cksum [OPTION]... [FILE]...",10
     db "Print CRC checksum and byte counts of each FILE.",10,10
@@ -297,7 +297,7 @@ h_cksum:
     db "Examples:",10
     db "  f00-cksum file.txt",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_cksum: db "f00-cksum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_cksum: db "f00-cksum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_sum:
     db "Usage: f00-sum [OPTION]... [FILE]...",10
     db "Print checksum and block counts for each FILE.",10,10
@@ -311,7 +311,7 @@ h_sum:
     db "      --json     detailed JSON (schema f00/v1)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_sum: db "f00-sum (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_sum: db "f00-sum (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_base64:
     db "Usage: f00-base64 [OPTION]... [FILE]",10
     db "Base64 encode or decode FILE, or standard input, to standard output.",10,10
@@ -330,7 +330,7 @@ h_base64:
     db "  f00-base64 file.bin",10
     db "  f00-base64 -d encoded.txt",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_base64: db "f00-base64 (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_base64: db "f00-base64 (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_basenc:
     db "Usage: f00-basenc [OPTION]... [FILE]",10
     db "basenc encode or decode FILE, or standard input, to standard output.",10,10
@@ -348,7 +348,7 @@ h_basenc:
     db "      --json     detailed JSON (schema f00/v1)",10
     db "      --csv      CSV result",10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_basenc: db "f00-basenc (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_basenc: db "f00-basenc (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_dircolors:
     db "Usage: f00-dircolors [OPTION]... [FILE]",10
     db "Output commands to set the LS_COLORS environment variable.",10,10
@@ -365,7 +365,7 @@ h_dircolors:
     db "Examples:",10
     db '  eval "$(f00-dircolors)"',10,10
     db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_dircolors: db "f00-dircolors (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_dircolors: db "f00-dircolors (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 align 4
 md5_T:
     dd 0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee
@@ -4652,7 +4652,7 @@ base32_main:
 
 section .rodata
 u_base32: db "base32",0
-v_base32: db "f00-base32 (f00) 0.16.3",10,"License: MIT · https://f00.sh",10,0
+v_base32: db "f00-base32 (f00) 0.16.4",10,"License: MIT · https://f00.sh",10,0
 h_base32:
     db "Usage: f00-base32 [OPTION]... [FILE]",10
     db "Base32 encode or decode FILE, or standard input, to standard output.",10,10

@@ -48,6 +48,27 @@ def main() -> int:
             open(b, "wb").write(bb)
             g = subprocess.run([bin_g, *args, a, b], capture_output=True)
             f = subprocess.run([bin_f, "--core", *args, a, b], capture_output=True)
+            # GNU sdiff 3.12 often emits header-only / empty side-by-side on large
+            # multi-line inputs while still exiting 1 — not a useful byte oracle.
+            # For sdiff: require exit match, no false-equal, and non-empty f00 when differ.
+            if tool == "sdiff":
+                if g.returncode != f.returncode:
+                    print(
+                        f"FAIL {label} exit g={g.returncode} f={f.returncode}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                if ab != bb and f.returncode == 0:
+                    print(f"FAIL {label} f00 false-equal", file=sys.stderr)
+                    sys.exit(1)
+                if ab != bb and len(f.stdout) == 0:
+                    print(f"FAIL {label} f00 empty differ output", file=sys.stderr)
+                    sys.exit(1)
+                if ab == bb and f.returncode != 0:
+                    print(f"FAIL {label} f00 unequal on equal inputs", file=sys.stderr)
+                    sys.exit(1)
+                print(f"ok {label}")
+                return
             if g.returncode != f.returncode or g.stdout != f.stdout:
                 print(
                     f"FAIL {label} exit g={g.returncode} f={f.returncode} "
@@ -62,7 +83,6 @@ def main() -> int:
                     print("F00 head:", f.stdout[:200], file=sys.stderr)
                 sys.exit(1)
             print(f"ok {label}")
-
     # ── single-line multi-MiB blobs (POOL_CAP / mmap content path) ──
     sizes = [
         (3 * 1024 * 1024, "3MiB", int(2.5 * 1024 * 1024)),

@@ -6,11 +6,14 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-07-27
+
 ### Added
 - `make check` — boring-solid x86 bar (smoke + parity)
-- `make hot` — real-work wall+CPU battery (`sort` 200k lines, `ls` 500-file tree) with **full stdout parity** vs GNU before any speed claim
+- `make hot` — real-work wall+CPU battery: sort 200k, ls 500-file tree, **multi-MiB `grep -F`** (full stdout parity before speed)
 - freestanding `grep -P` PCRE subset + parity battery
-- aarch64 freestanding multicall (`asm/port/aarch64`, qemu smoke; EOF no-NL fix; **cat** with smoke)
+- `grep -F` multi-MiB hot path: mmap + SSE2 first-byte scan + zero-copy emit (simple `--core` fixed, case-sensitive)
+- aarch64 freestanding multicall (`asm/port/aarch64`, qemu smoke): true/false/echo/pwd/cat/**basename**/grep
 - `diff -r` recursive directory compare
 - Ship truth: README + https://f00.sh (long docs essays stubbed)
 - Primary install story: tarball + `install.sh` (`make sync-install`); packages secondary
@@ -18,8 +21,8 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 ### Changed
 - Per-package bench totals (wall · CPU separate; never 115-tool blend)
 - Site hero: package average tiles; thinner install narrative
-- `sort` in-memory ceiling: 16MiB / 262144 lines (was 1MiB / 64K); hard fail on overflow (no silent truncate)
-- `sort` engine: introsort (true median-of-3 quicksort + heapsort fallback + insertion) and plain-lexicographic fast path; safe on sorted / all-equal / high-dup; wins wall+CPU on 200k-line real work
+- `sort` in-memory ceiling: 16MiB / 262144 lines; hard fail on overflow (no silent truncate)
+- `sort` engine: introsort (true median-of-3 + heapsort fallback + insertion); plain-lexicographic fast path
 
 ## [0.16.3] - 2026-07-24
 

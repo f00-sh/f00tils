@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Real-work wall+CPU: f00 --core must beat GNU on both limbs.
 
-Not spawn theater: multi-hundred-k line sort and non-trivial directory ls.
-Drives shipped ./f00-sort and ./f00-ls from argv0 start state.
+Not spawn theater: multi-hundred-k line sort, multi-MiB grep -F, non-trivial ls.
+Drives shipped ./f00-sort, ./f00-grep, ./f00-ls from argv0 start state.
 
 Correctness is mandatory: full stdout (+ exit) must match GNU before any
 speed claim. Truncated or wrong output is a hard FAIL (never a fake win).
@@ -90,9 +90,11 @@ def main() -> int:
     core = sys.argv[2] if len(sys.argv) > 2 else "/usr/bin"
     f00_sort = os.path.join(root, "f00-sort")
     f00_ls = os.path.join(root, "f00-ls")
+    f00_grep = os.path.join(root, "f00-grep")
     gnu_sort = os.path.join(core, "sort")
     gnu_ls = os.path.join(core, "ls")
-    for p in (f00_sort, f00_ls, gnu_sort, gnu_ls):
+    gnu_grep = os.path.join(core, "grep")
+    for p in (f00_sort, f00_ls, f00_grep, gnu_sort, gnu_ls, gnu_grep):
         if not os.path.isfile(p) or not os.access(p, os.X_OK):
             print(f"skip missing {p}", file=sys.stderr)
             return 0
@@ -168,6 +170,43 @@ def main() -> int:
             print("FAIL ls loses wall or CPU on real work", file=sys.stderr)
             return 1
         print("ok ls wall+CPU win")
+
+        # --- grep -F multi-MiB: semi-random text + planted needles (~16MiB) ---
+        # Needles at end (full-file scan for all hits). Full stdout parity first.
+        rng = random.Random(0)
+        alphabet = "abcdefghij"
+        glines: list[str] = []
+        for _ in range(400_000):
+            glines.append("".join(rng.choice(alphabet) for _ in range(40)) + "\n")
+        for i in range(50):
+            glines.append(f"UNIQUE_NEEDLE_{i:04d}_END\n")
+        gbig = os.path.join(wd, "grep-F-16m.txt")
+        open(gbig, "w").writelines(glines)
+        needle = "UNIQUE_NEEDLE_"
+        grc, gout, gerr = run_capture([gnu_grep, "-F", needle, gbig])
+        frc, fout, ferr = run_capture([f00_grep, "--core", "-F", needle, gbig])
+        if grc != frc or fout != gout:
+            print(
+                f"FAIL grep -F stdout/exit: gnu rc={grc} {len(gout)}B "
+                f"f00 rc={frc} {len(fout)}B stderr={ferr[:120]!r}",
+                file=sys.stderr,
+            )
+            return 1
+        if gout.count(NL) < 50:
+            print(f"FAIL grep -F expected ≥50 hits got {gout.count(NL)}", file=sys.stderr)
+            return 1
+        print(f"ok grep -F stdout parity ({len(fout)}B, {fout.count(NL)} hits, ~{os.path.getsize(gbig)//(1024*1024)}MiB)")
+        gw, gc = median_wall_cpu([gnu_grep, "-F", needle, gbig])
+        fw, fc = median_wall_cpu([f00_grep, "--core", "-F", needle, gbig])
+        print(
+            f"grep -F multi-MiB: wall gnu={gw*1000:.2f}ms f00={fw*1000:.2f}ms "
+            f"({gw/fw if fw else 0:.2f}×)  cpu gnu={gc*1000:.2f}ms f00={fc*1000:.2f}ms "
+            f"({gc/fc if fc else 0:.2f}×)"
+        )
+        if fw * eps >= gw or fc * eps >= gc:
+            print("FAIL grep -F loses wall or CPU on multi-MiB work", file=sys.stderr)
+            return 1
+        print("ok grep -F wall+CPU win")
 
     print("ok hot-path wall+CPU battery")
     return 0

@@ -7,5 +7,6 @@ false
 echo
 pwd
 cat
+basename
 grep
 version

@@ -1,4 +1,4 @@
-/* f00tils aarch64 multicall dispatcher + true/false/echo/pwd/cat/grep -P */
+/* f00tils aarch64 multicall dispatcher + true/false/echo/pwd/cat/basename/grep -P */
 	.global f00_main
 	.text
 
@@ -42,6 +42,10 @@ f00_main:
 	adr	x1, n_cat
 	bl	streq
 	cbnz	w0, do_cat
+	mov	x0, x21
+	adr	x1, n_basename
+	bl	streq
+	cbnz	w0, do_basename
 	mov	x0, x21
 	adr	x1, n_grep
 	bl	streq
@@ -119,6 +123,12 @@ do_cat:
 	bl	cat_main
 	b	out
 
+do_basename:
+	mov	x0, x19
+	mov	x1, x20
+	bl	basename_main
+	b	out
+
 do_grep:
 	mov	x0, x19
 	mov	x1, x20
@@ -151,6 +161,7 @@ n_false:	.asciz "false"
 n_echo:		.asciz "echo"
 n_pwd:		.asciz "pwd"
 n_cat:		.asciz "cat"
+n_basename:	.asciz "basename"
 n_grep:		.asciz "grep"
 n_f00:		.asciz "f00"
 n_version:	.asciz "version"
