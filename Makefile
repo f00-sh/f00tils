@@ -13,7 +13,9 @@ install:
 	$(MAKE) -C asm install
 aarch64:
 	$(MAKE) -C asm aarch64
-# Keep site/install.sh byte-identical to root install.sh
+# Keep site/ + scripts/ install.sh byte-identical to root install.sh
 sync-install:
 	cmp -s install.sh site/install.sh || cp -f install.sh site/install.sh
-	cmp -s install.sh site/install.sh && echo "install.sh ↔ site/install.sh identical"
+	cmp -s install.sh scripts/install.sh || cp -f install.sh scripts/install.sh
+	cmp -s install.sh site/install.sh && cmp -s install.sh scripts/install.sh \
+		&& echo "install.sh ↔ site/install.sh ↔ scripts/install.sh identical"
