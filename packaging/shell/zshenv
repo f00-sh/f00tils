@@ -1,12 +1,7 @@
-# f00tils — EVERY zsh (interactive, scripts, non-login terminals)
-# Arch zsh only loads /etc/profile via zprofile for *login* shells.
-# Terminals are usually non-login → without this, find/grep/diff stay GNU.
-#
-# Owned by package f00. Do not remove if you want bare-name replace.
-# Toggle: replace = false in ~/.config/f00/config
+# f00tils — zsh helper for user installs (~/.local/bin on PATH).
+# Distro package puts bare names in /usr/bin (conflicts with GNU) — no PATH needed.
+# Toggle user PATH helper: replace = false in ~/.config/f00/config
 
 if [[ -r /usr/lib/f00/shell/path.sh ]]; then
   emulate sh -c 'source /usr/lib/f00/shell/path.sh'
-elif [[ -r /usr/share/f00/path.sh ]]; then
-  emulate sh -c 'source /usr/share/f00/path.sh'
 fi

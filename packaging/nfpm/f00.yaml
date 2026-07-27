@@ -1,6 +1,6 @@
 # nfpm template for f00 ASM suite.
 # Placeholders: VERSION, ARCH (amd64), BIN_PATH, MAN_DIR, LINKS_DIR,
-#               SUPERSEDE_DIR, PATH_SH, PROFILE_SH, ZSHENV, PROFILE_FISH
+#               PATH_SH, PROFILE_SH, ZSHENV, PROFILE_FISH
 name: f00
 arch: ${ARCH}
 platform: linux
@@ -9,30 +9,43 @@ section: utils
 priority: optional
 maintainer: William Theesfeld <william@theesfeld.net>
 description: |
-  f00tils (f00) replaces GNU coreutils + grep + findutils + diffutils (115 tools).
-  One freestanding x86-64 assembly multicall binary (no libc).
-  Default: bare names (ls/cat/grep/find/diff/…) via /usr/lib/f00/bin on PATH.
-  PATH is enabled for every zsh (/etc/zsh/zshenv) and login shells (profile.d).
-  Toggle: replace = false in ~/.config/f00/config, or f00-config replace off.
+  f00tils (f00) — freestanding ASM multicall replacing GNU coreutils + grep +
+  findutils + diffutils (115 tools) in /usr/bin. One binary, bare names
+  (ls/find/grep/diff/…) are real /usr/bin symlinks — works in every session
+  (TTY, SSH, non-login, scripts) with no PATH tricks.
+  Conflicts with GNU packages (provides the same names).
   --core / F00_CORE=1 for script-safe GNU-identical presentation.
+  Side-by-side only: use f00-* names or curl install with F00_SUPERSEDE=0.
 homepage: https://f00.sh
 license: MIT
+# Own /usr/bin/ls find grep diff … like a real userland replacement.
+replaces:
+  - coreutils
+  - findutils
+  - grep
+  - diffutils
+conflicts:
+  - coreutils
+  - findutils
+  - grep
+  - diffutils
+provides:
+  - coreutils
+  - findutils
+  - grep
+  - diffutils
 contents:
   - src: ${BIN_PATH}
     dst: /usr/bin/f00
     file_info:
       mode: 0755
+  # f00-* AND bare names (ls, find, grep, diff, …) all under /usr/bin
   - src: ${LINKS_DIR}/
     dst: /usr/bin/
     type: tree
     file_info:
       mode: 0755
-  # Bare names — not in /usr/bin (avoids package file conflicts with GNU).
-  - src: ${SUPERSEDE_DIR}/
-    dst: /usr/lib/f00/bin/
-    type: tree
-    file_info:
-      mode: 0755
+  # Optional PATH helpers for userland curl installs (~/.local/bin) still present
   - src: ${PATH_SH}
     dst: /usr/lib/f00/shell/path.sh
     file_info:
@@ -41,7 +54,6 @@ contents:
     dst: /etc/profile.d/f00.sh
     file_info:
       mode: 0644
-  # Critical on Arch: non-login zsh (default terminal) never loads profile.d
   - src: ${ZSHENV}
     dst: /etc/zsh/zshenv
     file_info:

@@ -133,10 +133,10 @@ diff_pstore:    resb DIFF_PSTORE
 diff_pstore_n:  resq 1
 
 section .rodata
-v_diff:  db "f00-diff (f00) 0.16.9", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.9", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff3: db "f00-diff3 (f00) 0.16.9", 10, "License: MIT · https://f00.sh", 10, 0
-v_sdiff: db "f00-sdiff (f00) 0.16.9", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff3: db "f00-diff3 (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10, 0
+v_sdiff: db "f00-sdiff (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_diff:
     db "Usage: f00-diff [OPTION]... FILE1 FILE2", 10

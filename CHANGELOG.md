@@ -6,6 +6,12 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.10] - 2026-07-27
+
+### Changed
+- **Distro package bare names in `/usr/bin`** (ls/find/grep/diff/… → f00). Package **conflicts with and provides** `coreutils`, `findutils`, `grep`, `diffutils` — every session (TTY, SSH, non-login) with zero PATH setup, like replacing coreutils.
+- Drop PATH-supersede as the primary replace model for pacman/deb/rpm (still ship shell helpers for curl `~/.local` installs).
+
 ## [0.16.9] - 2026-07-27
 
 ### Fixed

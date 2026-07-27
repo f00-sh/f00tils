@@ -8,14 +8,14 @@ Replaces **coreutils · grep · findutils · diffutils** — **115** tools. Bina
 curl -fsSL https://f00.sh/install.sh | bash
 ```
 
-[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.9`
+[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.10`
 
 ### Documents
 
 | Doc | Path |
 |-----|------|
 | Operator SOP (NASA) | [`docs/sop-f00tils-ops.pdf`](docs/sop-f00tils-ops.pdf) · [JSON source](docs/sop-f00tils-ops.json) |
-| Release memo 0.16.9 | [`docs/memo-release-0.16.9.pdf`](docs/memo-release-0.16.9.pdf) · [JSON source](docs/memo-release-0.16.9.json) |
+| Release memo 0.16.10 | [`docs/memo-release-0.16.10.pdf`](docs/memo-release-0.16.10.pdf) · [JSON source](docs/memo-release-0.16.10.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Site | [https://f00.sh](https://f00.sh) |
 
@@ -58,9 +58,9 @@ export F00_CORE=1
 # core = true
 ```
 
-`F00_CORE=1` and config `core=true` are equivalent to passing `--core` on every tool. Installer / package `replace=true` puts bare names on PATH (`/usr/lib/f00/bin` first — find, grep, diff, ls, …). It does **not** set `F00_CORE` for you.
+`F00_CORE=1` and config `core=true` are equivalent to passing `--core` on every tool. Package install does **not** set `F00_CORE` for you.
 
-**After `paru -S f00` / package install:** bare names work in a **new** shell with no extra config (zsh gets `/etc/zsh/zshenv`; login shells get `profile.d`). GNU stays in `/usr/bin/*`; f00 wins via PATH, not by overwriting packages.
+**After `paru -S f00` / distro package:** bare names are real **`/usr/bin/find`**, `/usr/bin/grep`, `/usr/bin/diff`, `/usr/bin/ls`, … (symlinks to `f00`). The package **conflicts with and provides** `coreutils`, `findutils`, `grep`, and `diffutils` — same model as replacing coreutils. Every session (TTY, SSH, non-login, scripts) works with **no PATH setup**. Side-by-side with GNU: curl install + `F00_SUPERSEDE=0` (f00-* only).
 
 ### `--core` vs GNU (suite geos)
 
@@ -93,7 +93,7 @@ diff --core a b         # normal format, script-safe
 
 ```bash
 curl -fsSL https://f00.sh/install.sh | bash
-# pin: F00_VERSION=v0.16.9
+# pin: F00_VERSION=v0.16.10
 # side-by-side only: F00_SUPERSEDE=0
 ```
 

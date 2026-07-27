@@ -1,0 +1,53 @@
+{
+  "org": "f00tils",
+  "org_sub": "Freestanding assembly GNU userland \u00b7 https://f00.sh",
+  "reply_to": "REL/F00",
+  "to": "Maintainers and Users",
+  "from": "Project Engineering",
+  "subject": "Release memo \u2014 f00tils 0.16.10",
+  "ref": "PATH supersede failure on TTY/non-login; /usr/bin bare names + conflicts",
+  "date": "2026-07-27",
+  "opening": "Bottom line: 0.16.10 installs bare names as real /usr/bin symlinks and conflicts with GNU coreutils/findutils/grep/diffutils. Replace works in every session (TTY included) with no profile.d/zshenv dependency. PATH helpers remain only for curl ~/.local installs.",
+  "sections": [
+    {
+      "heading": "1. Why",
+      "body": "PATH-based replace could not cover every session (non-login bash, clean env, TTY edge cases). Coreutils works because it owns /usr/bin."
+    },
+    {
+      "heading": "2. Change",
+      "items": [
+        "pacman/deb/rpm: provides+conflicts+replaces coreutils findutils grep diffutils",
+        "Bare names: /usr/bin/find \u2192 f00 (and full tool list)",
+        "After install: which find \u2192 /usr/bin/find and that file is f00"
+      ]
+    },
+    {
+      "heading": "3. Upgrade note",
+      "body": "paru will remove GNU coreutils/findutils/grep/diffutils when installing f00. That is intentional. Side-by-side: F00_SUPERSEDE=0 curl install."
+    },
+    {
+      "heading": "4. Verify",
+      "steps": [
+        {
+          "n": "4.1",
+          "text": "paru -S f00 (accept removal of GNU packages)"
+        },
+        {
+          "n": "4.2",
+          "text": "On TTY: which find; find --version \u2192 f00"
+        },
+        {
+          "n": "4.3",
+          "text": "env -i PATH=/usr/bin find --version \u2192 f00"
+        }
+      ]
+    }
+  ],
+  "signature": {
+    "name": "Project Engineering",
+    "title": "f00tils release"
+  },
+  "cc": [
+    "https://f00.sh"
+  ]
+}

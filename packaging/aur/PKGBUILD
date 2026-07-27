@@ -1,21 +1,28 @@
 # Maintainer: theesfeld
 # f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)
 #
-# Bare names (ls/find/grep/diff/…) live in /usr/lib/f00/bin → f00.
-# PATH is set for *every* zsh via /etc/zsh/zshenv and login shells via profile.d.
-# No overwriting /usr/bin/* (no conflicts with GNU packages).
+# Bare names install to /usr/bin (ls, find, grep, diff, … → f00).
+# This package CONFLICTS with GNU packages and PROVIDES them — same model as
+# replacing coreutils: every session (TTY, SSH, non-login) just works.
+# No PATH tricks required for the distro package.
 #
-# If upgrade fails with "exists in filesystem" on f00-grep / /usr/lib/f00/bin/*:
+# Side-by-side with GNU: do not install this package; use curl install
+# F00_SUPERSEDE=0 or only invoke f00-*.
+#
+# If upgrade fails with "exists in filesystem":
 #   sudo scripts/arch-clean-unowned-f00.sh
-# Never mix install.sh → /usr with the AUR package.
 pkgname=f00
-pkgver=0.16.9
+pkgver=0.16.10
 pkgrel=1
-pkgdesc="f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)"
+pkgdesc="f00tils — freestanding ASM multicall (replaces coreutils+grep+findutils+diffutils)"
 arch=('x86_64')
 url="https://f00.sh"
 license=('MIT')
 depends=()
+# Own /usr/bin/find ls grep diff … — every session, zero PATH games
+provides=('coreutils' 'findutils' 'grep' 'diffutils')
+conflicts=('coreutils' 'findutils' 'grep' 'diffutils')
+replaces=('coreutils' 'findutils' 'grep' 'diffutils')
 options=('!strip')
 source=("https://github.com/theesfeld/f00/releases/download/v${pkgver}/f00-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
@@ -31,62 +38,17 @@ package() {
   fi
   install -Dm755 "${root}/f00" "${pkgdir}/usr/bin/f00"
 
-  mkdir -p "${pkgdir}/usr/lib/f00/bin" "${pkgdir}/usr/lib/f00/shell"
-
-  # Shared PATH logic (profile.d + zshenv source this)
+  # Shell helpers still useful for curl/~/.local side installs on the same machine
+  mkdir -p "${pkgdir}/usr/lib/f00/shell"
   if [[ -f "${root}/share/f00/path.sh" ]]; then
     install -Dm644 "${root}/share/f00/path.sh" "${pkgdir}/usr/lib/f00/shell/path.sh"
-  else
-    install -Dm644 /dev/stdin "${pkgdir}/usr/lib/f00/shell/path.sh" <<'EOS'
-# f00tils bare-name PATH (fallback embedded in PKGBUILD)
-_f00_replace_enabled() {
-  local cfg="${XDG_CONFIG_HOME:-${HOME}/.config}/f00/config"
-  [ -n "${HOME:-}" ] || return 0
-  [ -f "$cfg" ] || return 0
-  if grep -Eiq '^[[:space:]]*replace[[:space:]]*=[[:space:]]*(false|no|0|none)([[:space:]]|#|$)' "$cfg" 2>/dev/null; then
-    return 1
   fi
-  return 0
-}
-_f00_path_prepend() {
-  local d="$1"
-  [ -n "$d" ] && [ -d "$d" ] || return 0
-  case ":${PATH:-}:" in
-    *":${d}:"*) ;;
-    *) PATH="${d}${PATH:+:}${PATH:-}"; export PATH ;;
-  esac
-}
-if _f00_replace_enabled; then
-  if [ -n "${HOME:-}" ] && [ -x "${HOME}/.local/bin/f00" ]; then
-    _f00_path_prepend "${HOME}/.local/bin"
-  fi
-  _f00_path_prepend "/usr/lib/f00/bin"
-fi
-unset -f _f00_replace_enabled _f00_path_prepend 2>/dev/null || true
-EOS
-  fi
-
-  # bash/sh login
   if [[ -f "${root}/share/f00/f00.sh" ]]; then
     install -Dm644 "${root}/share/f00/f00.sh" "${pkgdir}/etc/profile.d/f00.sh"
-  else
-    install -Dm644 /dev/stdin "${pkgdir}/etc/profile.d/f00.sh" <<'EOS'
-# f00tils
-[ -r /usr/lib/f00/shell/path.sh ] && . /usr/lib/f00/shell/path.sh
-EOS
   fi
-
-  # EVERY zsh (non-login terminals included) — required on Arch
   if [[ -f "${root}/share/f00/zshenv" ]]; then
     install -Dm644 "${root}/share/f00/zshenv" "${pkgdir}/etc/zsh/zshenv"
-  else
-    install -Dm644 /dev/stdin "${pkgdir}/etc/zsh/zshenv" <<'EOS'
-# f00tils — every zsh
-[[ -r /usr/lib/f00/shell/path.sh ]] && emulate sh -c 'source /usr/lib/f00/shell/path.sh'
-EOS
   fi
-
-  # fish
   if [[ -f "${root}/share/f00/f00.fish" ]]; then
     install -Dm644 "${root}/share/f00/f00.fish" "${pkgdir}/etc/fish/conf.d/f00.fish"
   fi
@@ -105,10 +67,10 @@ EOS
            base64 basenc base32 dircolors chroot stty stdbuf runcon chcon config \
            grep egrep fgrep find xargs diff cmp diff3 sdiff; do
     ln -s f00 "${pkgdir}/usr/bin/f00-${u}"
-    ln -s ../../../bin/f00 "${pkgdir}/usr/lib/f00/bin/${u}"
+    ln -s f00 "${pkgdir}/usr/bin/${u}"
   done
   ln -s f00 "${pkgdir}/usr/bin/f00-["
-  ln -s ../../../bin/f00 "${pkgdir}/usr/lib/f00/bin/["
+  ln -s f00 "${pkgdir}/usr/bin/["
 
   if [[ -f "${root}/LICENSE" ]]; then
     install -Dm644 "${root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

@@ -19,7 +19,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>
 endobj
 7 0 obj
-<< /Length 3551 >>
+<< /Length 3519 >>
 stream
 0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
 0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
@@ -31,7 +31,7 @@ stream
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 625.65 Tm (Date:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 625.65 Tm (2026-07-27) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 608.65 Tm (Version:) Tj ET
-0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.9) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.10) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 591.65 Tm (Standard:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 591.65 Tm (NASA NAII 1450.3 memorandum layout) Tj ET
 72.00 578.00 m 540.00 578.00 l S
@@ -44,10 +44,10 @@ stream
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 489.80 Tm (SUBJECT:) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 144.00 489.80 Tm (f00tils operator standard operating procedure \(clone, build, gates, install, release\)) Tj ET
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 469.80 Tm (REF:) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 144.00 469.80 Tm (packaging/shell, PKGBUILD, /etc/zsh/zshenv, v0.16.9) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 431.80 Tm (Bottom line: After package install \(paru -S f00\), bare names \(find/grep/diff/ls\) must resolve to) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 417.80 Tm (f00 in a new shell with zero manual PATH steps. Arch non-login zsh uses /etc/zsh/zshenv. GNU) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 403.80 Tm (remains in /usr/bin; replace is PATH-first /usr/lib/f00/bin. --core is never auto for scripts.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 469.80 Tm (packaging conflicts/provides /usr/bin bare names, v0.16.10) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 431.80 Tm (Bottom line: Distro packages install bare names into /usr/bin and conflict with) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 417.80 Tm (coreutils/findutils/grep/diffutils. After paru -S f00, find/grep/diff/ls are f00 in every session) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 403.80 Tm (including TTY - no PATH setup. --core is still never auto for scripts.) Tj ET
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 382.80 Tm (1. Purpose) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 362.80 Tm (This memorandum is the living operator handbook for f00tils \(binary f00 / tools f00-*\). It states) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 72.00 348.80 Tm (how to clone the repository, build the freestanding multicall, run quality gates, install, and ship a) Tj ET
@@ -1599,34 +1599,34 @@ xref
 0000000301 00000 n 
 0000000376 00000 n 
 0000000444 00000 n 
-0000004047 00000 n 
-0000004224 00000 n 
-0000008967 00000 n 
-0000009145 00000 n 
-0000016915 00000 n 
-0000017094 00000 n 
-0000018865 00000 n 
-0000019044 00000 n 
-0000023896 00000 n 
-0000024075 00000 n 
-0000031114 00000 n 
-0000031293 00000 n 
-0000034583 00000 n 
-0000034762 00000 n 
-0000039845 00000 n 
-0000040024 00000 n 
-0000040968 00000 n 
-0000041147 00000 n 
-0000046448 00000 n 
-0000046627 00000 n 
-0000052123 00000 n 
-0000052302 00000 n 
-0000054376 00000 n 
-0000054555 00000 n 
-0000054691 00000 n 
-0000054742 00000 n 
+0000004015 00000 n 
+0000004192 00000 n 
+0000008935 00000 n 
+0000009113 00000 n 
+0000016883 00000 n 
+0000017062 00000 n 
+0000018833 00000 n 
+0000019012 00000 n 
+0000023864 00000 n 
+0000024043 00000 n 
+0000031082 00000 n 
+0000031261 00000 n 
+0000034551 00000 n 
+0000034730 00000 n 
+0000039813 00000 n 
+0000039992 00000 n 
+0000040936 00000 n 
+0000041115 00000 n 
+0000046416 00000 n 
+0000046595 00000 n 
+0000052091 00000 n 
+0000052270 00000 n 
+0000054344 00000 n 
+0000054523 00000 n 
+0000054659 00000 n 
+0000054710 00000 n 
 trailer
 << /Size 34 /Root 32 0 R /Info 33 0 R >>
 startxref
-54922
+54890
 %%EOF

@@ -40,7 +40,7 @@ cat > "${OUT}" <<EOF
 # If upgrade fails with "exists in filesystem" on f00-grep / /usr/lib/f00/bin/*:
 #   sudo scripts/arch-clean-unowned-f00.sh
 #   # or: pacman -S f00 --overwrite '/*'
-# Those orphans come from pre-0.16.9 packages (coreutils-only links) mixed with
+# Those orphans come from pre-0.16.10 packages (coreutils-only links) mixed with
 # a root install.sh into /usr. Never mix install.sh → /usr with the AUR package.
 pkgname=f00
 pkgver=${VERSION}

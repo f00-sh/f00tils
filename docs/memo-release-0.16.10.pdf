@@ -1,0 +1,93 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+7 0 obj
+<< /Length 3119 >>
+stream
+0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
+0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
+0.000 G 1.00 w
+72.00 682.00 m 540.00 682.00 l S
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 659.80 Tm (Reply to Attn of:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 180.00 659.80 Tm (REL/F00) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 635.80 Tm (TO:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 635.80 Tm (Maintainers and Users) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 615.80 Tm (FROM:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 615.80 Tm (Project Engineering) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 595.80 Tm (SUBJECT:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 595.80 Tm (Release memo - f00tils 0.16.10) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 575.80 Tm (REF:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 575.80 Tm (PATH supersede failure on TTY/non-login; /usr/bin bare names + conflicts) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 537.80 Tm (Bottom line: 0.16.10 installs bare names as real /usr/bin symlinks and conflicts with GNU) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 523.80 Tm (coreutils/findutils/grep/diffutils. Replace works in every session \(TTY included\) with no) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 509.80 Tm (profile.d/zshenv dependency. PATH helpers remain only for curl ~/.local installs.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 488.80 Tm (1. Why) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 468.80 Tm (PATH-based replace could not cover every session \(non-login bash, clean env, TTY edge cases\).) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 454.80 Tm (Coreutils works because it owns /usr/bin.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 427.80 Tm (2. Change) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 407.80 Tm (- pacman/deb/rpm: provides+conflicts+replaces coreutils findutils grep diffutils) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 389.80 Tm (- Bare names: /usr/bin/find ? f00 \(and full tool list\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 371.80 Tm (- After install: which find ? /usr/bin/find and that file is f00) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 347.80 Tm (3. Upgrade note) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 327.80 Tm (paru will remove GNU coreutils/findutils/grep/diffutils when installing f00. That is intentional.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 313.80 Tm (Side-by-side: F00_SUPERSEDE=0 curl install.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 286.80 Tm (4. Verify) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 266.80 Tm (4.1 paru -S f00 \(accept removal of GNU packages\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 245.80 Tm (4.2 On TTY: which find; find --version ? f00) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 224.80 Tm (4.3 env -i PATH=/usr/bin find --version ? f00) Tj ET
+72.00 190.00 m 252.00 190.00 l S
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 165.00 Tm (Project Engineering) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 151.00 Tm (f00tils release) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 127.00 Tm (Date: 2026-07-27) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 111.00 Tm (cc: ['https://f00.sh']) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (1) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 9 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+9 0 obj
+<< /Type /Pages /Kids [8 0 R] /Count 1 >>
+endobj
+10 0 obj
+<< /Type /Catalog /Pages 9 0 R >>
+endobj
+11 0 obj
+<< /Title (Release memo - f00tils 0.16.10) /Author (Project Engineering) /Subject (NASA NAII 1450.3 formal memorandum) /Producer (memo-pdf skill) /Creator (memo-pdf) >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000087 00000 n 
+0000000158 00000 n 
+0000000231 00000 n 
+0000000301 00000 n 
+0000000376 00000 n 
+0000000444 00000 n 
+0000003615 00000 n 
+0000003791 00000 n 
+0000003848 00000 n 
+0000003898 00000 n 
+trailer
+<< /Size 12 /Root 10 0 R /Info 11 0 R >>
+startxref
+4083
+%%EOF

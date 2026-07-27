@@ -1,10 +1,12 @@
-# f00tils — bare-name PATH replace (sourced; not executed)
-# Prepends supersede dirs so ls/find/grep/diff resolve to f00, not GNU.
-# Never overwrites /usr/bin/* (no pacman file conflicts with coreutils/findutils/…).
+# f00tils — bare-name PATH helper for *user* installs (~/.local/bin).
+# Distro package (pacman/deb/rpm) installs bare names in /usr/bin and conflicts
+# with GNU packages — no PATH needed for TTY/SSH/every session.
+#
+# This script only prepends ~/.local/bin (and legacy /usr/lib/f00/bin if present)
+# when replace is enabled — for curl | bash side-by-side installs.
 #
 # Toggle off:  replace = false  in ~/.config/f00/config
-#           or f00-config replace off
-# GNU clone bytes: export F00_CORE=1  or  --core  (separate from PATH replace)
+# GNU clone bytes: export F00_CORE=1  or  --core
 
 _f00_replace_enabled() {
   # default ON when config missing / no explicit false

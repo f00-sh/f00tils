@@ -5,12 +5,12 @@
   "to": "Maintainers and Release Operators",
   "from": "Project Engineering",
   "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
-  "ref": "packaging/shell, PKGBUILD, /etc/zsh/zshenv, v0.16.9",
+  "ref": "packaging conflicts/provides /usr/bin bare names, v0.16.10",
   "date": "2026-07-27",
   "doc_id": "SOP-F00-OPS-001",
   "doc_title": "STANDARD OPERATING PROCEDURE",
-  "version": "v0.16.9",
-  "opening": "Bottom line: After package install (paru -S f00), bare names (find/grep/diff/ls) must resolve to f00 in a new shell with zero manual PATH steps. Arch non-login zsh uses /etc/zsh/zshenv. GNU remains in /usr/bin; replace is PATH-first /usr/lib/f00/bin. --core is never auto for scripts.",
+  "version": "v0.16.10",
+  "opening": "Bottom line: Distro packages install bare names into /usr/bin and conflict with coreutils/findutils/grep/diffutils. After paru -S f00, find/grep/diff/ls are f00 in every session including TTY \u2014 no PATH setup. --core is still never auto for scripts.",
   "sections": [
     {
       "heading": "1. Purpose",
