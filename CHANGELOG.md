@@ -6,6 +6,14 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-07-27
+
+### Fixed
+- `cmp`/`diff -c` locale classify: exact `C`/`POSIX` only — **not** `C.UTF-8` (matches GNU: `byte` + ISO headers under `C.UTF-8`; CI quality gates)
+
+### Documents
+- Operator NASA SOP + release memo tracked under `docs/` and linked from README / site
+
 ## [0.16.5] - 2026-07-27
 
 ### Added
@@ -15,8 +23,8 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 - `split`: bulk multi-line write path + GNU-compatible suffixes (`aa`…`yz`, then `zaaa`…)
 - Modern grep power: `--json`/`--csv`, `--type EXT`, `--ignore-file` (skip `.git`), `--binary` (NUL policy)
 - Modern find/diff/cat extras: find `.git` skip + JSON/CSV; diff `--word-diff` + JSON/CSV; cat shebang paint
-- `diff -c` under `LC_ALL=C`: GNU ctime headers (`Www Mmm dd HH:MM:SS YYYY`); `-u` keeps ISO+tz
-- `cmp` locale-aware differ word: `char` (C/POSIX) vs `byte` (multibyte locales)
+- `diff -c` under exact `LC_ALL=C`/`POSIX`: GNU ctime headers; `-u` keeps ISO+tz
+- `cmp` locale-aware differ word: `char` (exact C/POSIX) vs `byte` (else, including `C.UTF-8`)
 
 ### Fixed
 - Hot `find`/`diff` oracles no longer resolve to installed f00 via `PATH` (`/usr/bin/*` only)
@@ -24,15 +32,13 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 - Sort blank-field `-k` without `-t`: include separator blanks (GNU without `-b`); multi-blank fixtures parity
 - Grep `-i -F` dual first-byte 32B SSE path; page-safe word `strlen`/`strcmp`
 - Diff multi-MiB `-q` word-wise `memcmp_n`; multi-hunk `-u` unique-hash LCS path
+- Arch/AUR upgrade path: unowned userland links (pre-0.16.4 coreutils-only package + root `install.sh` into `/usr`) blocked `paru` with “exists in filesystem”; `scripts/arch-clean-unowned-f00.sh` + install.sh refuses `/usr` when pacman owns `f00`
 
 ### Changed
 - `docs/MODERN-FEATURES.md`: grep row documents `--type EXT`
 - `site/bench/suite.json`: `split` remeasured WIN (~1.21× wall); honesty notes for spawn-scale + known debt
 - full-speed-gate: freeze `PATH`/`LC_ALL=C`; suite-shaped split fixture; `tsort`/`shuf` explicit `skip-known-debt-*`
 - `docs/COREUTILS-PROGRESS.md`: notes for split win + tsort/shuf debt
-
-### Fixed
-- Arch/AUR upgrade path: unowned userland links (pre-0.16.4 coreutils-only package + root `install.sh` into `/usr`) blocked `paru` with “exists in filesystem”; `scripts/arch-clean-unowned-f00.sh` + install.sh refuses `/usr` when pacman owns `f00`
 
 ## [0.16.4] - 2026-07-27
 

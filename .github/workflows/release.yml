@@ -100,7 +100,21 @@ jobs:
             echo "missing root file_id.diz (required scene card)" >&2
             exit 1
           fi
-          (cd dist && sha256sum "f00-${VER}-linux-x86_64.tar.gz" "f00-${VER}-x86_64-linux.tar.gz" file_id.diz > SHA256SUMS)
+          # NASA operator SOP + release memo (prime directive release assets)
+          if [[ -f docs/sop-f00tils-ops.pdf ]]; then
+            cp docs/sop-f00tils-ops.pdf dist/sop-f00tils-ops.pdf
+          else
+            echo "missing docs/sop-f00tils-ops.pdf (required SOP)" >&2
+            exit 1
+          fi
+          MEMO="docs/memo-release-${VER}.pdf"
+          if [[ -f "$MEMO" ]]; then
+            cp "$MEMO" "dist/memo-release-${VER}.pdf"
+          else
+            echo "missing $MEMO (required release memo)" >&2
+            exit 1
+          fi
+          (cd dist && sha256sum "f00-${VER}-linux-x86_64.tar.gz" "f00-${VER}-x86_64-linux.tar.gz" file_id.diz sop-f00tils-ops.pdf "memo-release-${VER}.pdf" > SHA256SUMS)
           cat dist/SHA256SUMS
           echo "primary=dist/f00-${VER}-linux-x86_64.tar.gz" >> "$GITHUB_OUTPUT"
 
@@ -127,6 +141,8 @@ jobs:
             dist/f00-*.rpm
             dist/f00-*.pkg.tar.zst
             dist/file_id.diz
+            dist/sop-f00tils-ops.pdf
+            dist/memo-release-*.pdf
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -170,6 +186,8 @@ jobs:
           test -f "release-assets/f00-${VER}-1.x86_64.rpm"
           test -f "release-assets/f00-${VER}-1-x86_64.pkg.tar.zst"
           test -f "release-assets/file_id.diz"
+          test -f "release-assets/sop-f00tils-ops.pdf"
+          test -f "release-assets/memo-release-${VER}.pdf"
 
       - name: Regenerate Homebrew + AUR manifests from release checksums
         run: |
@@ -219,9 +237,11 @@ jobs:
             - `f00-${{ steps.meta.outputs.version }}-1.x86_64.rpm`
             - `f00-${{ steps.meta.outputs.version }}-1-x86_64.pkg.tar.zst`
             - `file_id.diz` (ACiD / 16colo.rs-style release scene card)
+            - `sop-f00tils-ops.pdf` (operator NASA SOP)
+            - `memo-release-${{ steps.meta.outputs.version }}.pdf` (NASA release memo)
             - `SHA256SUMS`
 
-            See [README](https://github.com/theesfeld/f00#readme) · https://f00.sh
+            See [README](https://github.com/theesfeld/f00#readme) · https://f00.sh · [Documents](https://f00.sh/#documents)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

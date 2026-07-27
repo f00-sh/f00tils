@@ -1,0 +1,758 @@
+{
+  "org": "f00tils",
+  "org_sub": "Freestanding assembly GNU userland \u00b7 https://f00.sh",
+  "reply_to": "OPS/F00",
+  "to": "Maintainers and Release Operators",
+  "from": "Project Engineering",
+  "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
+  "ref": "AGENTS.md, README.md, asm/Makefile, install.sh, .github/workflows/release.yml, v0.16.6",
+  "date": "2026-07-27",
+  "doc_id": "SOP-F00-OPS-001",
+  "doc_title": "STANDARD OPERATING PROCEDURE",
+  "version": "v0.16.6",
+  "opening": "Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before you merge. Run make hot / make speed before you claim a speed win. Ship with tarball + install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and CPU. Script-safe GNU clone: pass --core, or set F00_CORE=1 / config core=true. Non-TTY turns chrome off; it does not auto-enable full --core semantics.",
+  "sections": [
+    {
+      "heading": "1. Purpose",
+      "body": "This memorandum is the living operator handbook for f00tils (binary f00 / tools f00-*). It states how to clone the repository, build the freestanding multicall, run quality gates, install, and ship a release."
+    },
+    {
+      "heading": "2. Scope",
+      "body": "This SOP covers full project operations. It does not replace man pages, README narrative, or the scoreboard on https://f00.sh. Those remain the public ship surfaces.",
+      "items": [
+        "repository layout and product laws",
+        "host prerequisites",
+        "x86-64 build and boring-solid gates",
+        "hot-path and speed law",
+        "aarch64 freestanding port",
+        "local and end-user install",
+        "release, packaging, and site install sync",
+        "user-facing documentation rules"
+      ]
+    },
+    {
+      "heading": "3. Product identity",
+      "table": {
+        "headers": [
+          "Item",
+          "Value"
+        ],
+        "rows": [
+          [
+            "Product name",
+            "f00tils"
+          ],
+          [
+            "Binary / multicall",
+            "f00"
+          ],
+          [
+            "Tool names",
+            "f00-* (bare names when replace is on)"
+          ],
+          [
+            "Site",
+            "https://f00.sh"
+          ],
+          [
+            "Repository",
+            "github.com/theesfeld/f00"
+          ],
+          [
+            "License",
+            "MIT only"
+          ],
+          [
+            "Primary target",
+            "Linux x86-64 freestanding (NASM, no libc)"
+          ],
+          [
+            "Port path",
+            "Linux aarch64 freestanding (GNU as, asm/port/aarch64)"
+          ],
+          [
+            "Surface",
+            "115 tools (coreutils + grep + findutils + diffutils)"
+          ]
+        ]
+      }
+    },
+    {
+      "heading": "4. Product laws (non-negotiable)",
+      "steps": [
+        {
+          "n": "4.1",
+          "text": "Clone first (--core). Every covered GNU tool has a f00-* counterpart. Under --core, match the GNU tool for scripts: flags, exit codes, and byte-identical stdout/stderr for the same inputs."
+        },
+        {
+          "n": "4.2",
+          "text": "--core must win on resources. On the core path, f00 must beat the GNU tool on wall time and CPU (user+sys). Correct-but-slower is not done."
+        },
+        {
+          "n": "4.3",
+          "text": "Modern is amazing (default). Non--core is never a pale GNU subset: themed chrome, better layout, icons where relevant, --json/--csv, and extra power."
+        },
+        {
+          "n": "4.4",
+          "text": "One binary. Multicall by argv0 (f00-grep, grep, \u2026)."
+        }
+      ],
+      "body": "Language purity: no Rust, C application code, libc, or polyglot product dependencies in first-party product code under asm/. Shell is allowed only for bootstrap, install, packaging, and benches.",
+      "flowchart": {
+        "title": "Script vs interactive path",
+        "nodes": [
+          {
+            "id": "inv",
+            "label": "Tool invoked",
+            "shape": "terminator"
+          },
+          {
+            "id": "flag",
+            "label": "--core / F00_CORE / core=true?",
+            "shape": "decision"
+          },
+          {
+            "id": "core",
+            "label": "GNU-clone path (core)",
+            "shape": "process"
+          },
+          {
+            "id": "tty",
+            "label": "stdout is TTY?",
+            "shape": "decision"
+          },
+          {
+            "id": "mod",
+            "label": "Modern chrome + extras",
+            "shape": "process"
+          },
+          {
+            "id": "plain",
+            "label": "Modern semantics, chrome off",
+            "shape": "process"
+          },
+          {
+            "id": "out",
+            "label": "Emit result",
+            "shape": "terminator"
+          }
+        ],
+        "edges": [
+          {
+            "from": "inv",
+            "to": "flag"
+          },
+          {
+            "from": "flag",
+            "to": "core",
+            "label": "yes"
+          },
+          {
+            "from": "flag",
+            "to": "tty",
+            "label": "no"
+          },
+          {
+            "from": "tty",
+            "to": "mod",
+            "label": "yes"
+          },
+          {
+            "from": "tty",
+            "to": "plain",
+            "label": "no"
+          },
+          {
+            "from": "core",
+            "to": "out"
+          },
+          {
+            "from": "mod",
+            "to": "out"
+          },
+          {
+            "from": "plain",
+            "to": "out"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "5. Repository layout",
+      "table": {
+        "headers": [
+          "Path",
+          "Role"
+        ],
+        "rows": [
+          [
+            "asm/",
+            "Product source, Makefile, man pages, benches"
+          ],
+          [
+            "asm/port/aarch64/",
+            "aarch64 freestanding multicall"
+          ],
+          [
+            "site/",
+            "https://f00.sh (GitHub Pages) and site install.sh"
+          ],
+          [
+            "install.sh",
+            "Root installer (must match site/ and scripts/)"
+          ],
+          [
+            "packaging/",
+            "AUR, nfpm (deb/rpm/arch)"
+          ],
+          [
+            "Formula/",
+            "Homebrew formula"
+          ],
+          [
+            "docs/",
+            "Compliance, UX, progress, this SOP"
+          ],
+          [
+            "file_id.diz",
+            "Release scene card (GitHub Release asset only)"
+          ],
+          [
+            "scripts/",
+            "Release, package, and bench generators"
+          ]
+        ]
+      }
+    },
+    {
+      "heading": "6. Prerequisites",
+      "body": "6.1 x86-64 host (primary): Linux x86-64; nasm; ld (binutils); make; python3; GNU coreutils/grep/findutils/diffutils on PATH for parity and speed comparison.\n\n6.2 aarch64 port (optional): aarch64-linux-gnu-as and aarch64-linux-gnu-ld; qemu-aarch64-static (or equivalent) for smoke on x86-64 hosts."
+    },
+    {
+      "heading": "7. Procedure \u2014 clone and build (x86-64)",
+      "body": "Do this on every new worktree before you edit product code. Root convenience targets: make (asm), make check, make aarch64, make install.",
+      "steps": [
+        {
+          "n": "7.1",
+          "text": "Clone or update the repository.",
+          "code": "git clone git@github.com:theesfeld/f00.git\ncd f00\ngit checkout main\ngit pull --ff-only"
+        },
+        {
+          "n": "7.2",
+          "text": "Enter the product tree and build the multicall.",
+          "code": "cd asm\nmake"
+        },
+        {
+          "n": "7.3",
+          "text": "Confirm the binary runs.",
+          "code": "./f00 --version\n./f00-ls --version"
+        }
+      ],
+      "flowchart": {
+        "title": "Build and gate flow",
+        "nodes": [
+          {
+            "id": "start",
+            "label": "Clone repo",
+            "shape": "terminator"
+          },
+          {
+            "id": "build",
+            "label": "cd asm && make",
+            "shape": "process"
+          },
+          {
+            "id": "check",
+            "label": "make check",
+            "shape": "process"
+          },
+          {
+            "id": "ok",
+            "label": "Gates green?",
+            "shape": "decision"
+          },
+          {
+            "id": "hot",
+            "label": "make hot / make abc",
+            "shape": "process"
+          },
+          {
+            "id": "merge",
+            "label": "Merge / ship prep",
+            "shape": "terminator"
+          },
+          {
+            "id": "fix",
+            "label": "Fix failures",
+            "shape": "process"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "to": "build"
+          },
+          {
+            "from": "build",
+            "to": "check"
+          },
+          {
+            "from": "check",
+            "to": "ok"
+          },
+          {
+            "from": "ok",
+            "to": "hot",
+            "label": "yes"
+          },
+          {
+            "from": "ok",
+            "to": "fix",
+            "label": "no"
+          },
+          {
+            "from": "fix",
+            "to": "build"
+          },
+          {
+            "from": "hot",
+            "to": "merge"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "8. Procedure \u2014 quality gates",
+      "steps": [
+        {
+          "n": "8.1",
+          "text": "Boring-solid (required before merge).",
+          "code": "cd asm\nmake check"
+        },
+        {
+          "n": "8.2",
+          "text": "Hot path (real-work wall + CPU). Use when you change sort, ls, or other hot tools.",
+          "code": "cd asm\nmake hot"
+        },
+        {
+          "n": "8.3",
+          "text": "Speed law (wall + CPU). Optional each commit; required for law-2 claims. Includes hot.",
+          "code": "cd asm\nmake speed"
+        },
+        {
+          "n": "8.4",
+          "text": "Structural speed proof (stress).",
+          "code": "cd asm\nmake speed-stress"
+        }
+      ],
+      "table": {
+        "headers": [
+          "Target",
+          "Meaning"
+        ],
+        "rows": [
+          [
+            "make / make all",
+            "Build f00 + tool links"
+          ],
+          [
+            "make smoke",
+            "Minimal runtime smoke"
+          ],
+          [
+            "make parity",
+            "GNU --core parity battery"
+          ],
+          [
+            "make check",
+            "smoke + parity (default bar)"
+          ],
+          [
+            "make hot",
+            "Real-work wall+CPU + stdout assert"
+          ],
+          [
+            "make speed",
+            "wall+CPU law (includes hot)"
+          ],
+          [
+            "make speed-stress",
+            "Repeated full-speed-gate proof"
+          ],
+          [
+            "make aarch64",
+            "Build aarch64 multicall"
+          ],
+          [
+            "make aarch64-smoke",
+            "qemu smoke of aarch64 binary"
+          ]
+        ]
+      },
+      "flowcharts": [],
+      "flowchart": {
+        "title": "Build and gate flow",
+        "nodes": [
+          {
+            "id": "start",
+            "label": "Clone repo",
+            "shape": "terminator"
+          },
+          {
+            "id": "build",
+            "label": "cd asm && make",
+            "shape": "process"
+          },
+          {
+            "id": "check",
+            "label": "make check",
+            "shape": "process"
+          },
+          {
+            "id": "ok",
+            "label": "Gates green?",
+            "shape": "decision"
+          },
+          {
+            "id": "hot",
+            "label": "make hot / make abc",
+            "shape": "process"
+          },
+          {
+            "id": "merge",
+            "label": "Merge / ship prep",
+            "shape": "terminator"
+          },
+          {
+            "id": "fix",
+            "label": "Fix failures",
+            "shape": "process"
+          }
+        ],
+        "edges": [
+          {
+            "from": "start",
+            "to": "build"
+          },
+          {
+            "from": "build",
+            "to": "check"
+          },
+          {
+            "from": "check",
+            "to": "ok"
+          },
+          {
+            "from": "ok",
+            "to": "hot",
+            "label": "yes"
+          },
+          {
+            "from": "ok",
+            "to": "fix",
+            "label": "no"
+          },
+          {
+            "from": "fix",
+            "to": "build"
+          },
+          {
+            "from": "hot",
+            "to": "merge"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "9. Procedure \u2014 aarch64 port",
+      "body": "The aarch64 path is shipped and grows toward full surface. It is not the default CI/release install path today.",
+      "steps": [
+        {
+          "n": "9.1",
+          "text": "Install the cross assembler and linker, and qemu-user if you build on x86-64."
+        },
+        {
+          "n": "9.2",
+          "text": "Build and smoke.",
+          "code": "cd asm\nmake aarch64\nmake aarch64-smoke"
+        },
+        {
+          "n": "9.3",
+          "text": "On failure, fix the port under asm/port/aarch64. Do not weaken x86-64 gates to paper over port gaps."
+        }
+      ]
+    },
+    {
+      "heading": "10. Procedure \u2014 local and end-user install",
+      "steps": [
+        {
+          "n": "10.1",
+          "text": "Install from a local build.",
+          "code": "cd asm\nmake install\n# or\nF00_LOCAL=/path/to/f00/asm bash /path/to/f00/install.sh"
+        },
+        {
+          "n": "10.2",
+          "text": "End-user install (primary ship story).",
+          "code": "curl -fsSL https://f00.sh/install.sh | bash"
+        },
+        {
+          "n": "10.3",
+          "text": "Knobs: F00_VERSION=vX.Y.Z (pin tag); F00_SUPERSEDE=0 (f00-* only); INSTALL_DIR=~/.local/bin; F00_LOCAL=...; F00_MAN=1 (man pages, default on)."
+        },
+        {
+          "n": "10.4",
+          "text": "Config.",
+          "code": "f00\nf00-config\nf00-config replace off"
+        }
+      ],
+      "body": "Default installer places multicall f00, all f00-* names, and bare tool names in INSTALL_DIR so replace wins on PATH."
+    },
+    {
+      "heading": "11. Procedure \u2014 keep installers identical",
+      "body": "Root install.sh is the source of truth. Site and scripts copies must match byte-for-byte. Run after any edit to install.sh and before release.",
+      "steps": [
+        {
+          "n": "11.1",
+          "text": "Sync from repository root.",
+          "code": "make sync-install"
+        }
+      ]
+    },
+    {
+      "heading": "12. Procedure \u2014 release and ship",
+      "body": "Primary release story: GitHub Release tarball + install.sh. deb/rpm/AUR/brew are secondary.",
+      "steps": [
+        {
+          "n": "12.1",
+          "text": "Ensure main is green: build, make check, and speed gates as required for the change set."
+        },
+        {
+          "n": "12.2",
+          "text": "Update version metadata so the binary, man pages, README pin examples, and CHANGELOG agree on vMAJOR.MINOR.PATCH."
+        },
+        {
+          "n": "12.3",
+          "text": "Move Unreleased notes in CHANGELOG.md into a dated version section."
+        },
+        {
+          "n": "12.4",
+          "text": "Refresh root file_id.diz for this version. Commit it. Attach it as a GitHub Release asset. Do not spotlight it on the website."
+        },
+        {
+          "n": "12.5",
+          "text": "Sync installers (make sync-install)."
+        },
+        {
+          "n": "12.6",
+          "text": "Confirm man page(s), README.md, and site match behavior."
+        },
+        {
+          "n": "12.7",
+          "text": "Create an annotated tag and push it.",
+          "code": "git tag -a vX.Y.Z -m \"vX.Y.Z\"\ngit push origin vX.Y.Z"
+        },
+        {
+          "n": "12.8",
+          "text": "Release workflow (tag v*) builds Linux x86-64 ASM, runs smoke/parity/speed-gate, verifies binary version, packages tarball, publishes GitHub Release."
+        },
+        {
+          "n": "12.9",
+          "text": "Smoke-test the public install path. Do not move or reuse a published tag for different bits.",
+          "code": "curl -fsSL https://f00.sh/install.sh | F00_VERSION=vX.Y.Z bash\nf00 --version"
+        }
+      ],
+      "flowchart": {
+        "title": "Release and deploy flow",
+        "nodes": [
+          {
+            "id": "pre",
+            "label": "Preflight: check/hot/docs",
+            "shape": "process"
+          },
+          {
+            "id": "ver",
+            "label": "Bump SemVer + CHANGELOG",
+            "shape": "process"
+          },
+          {
+            "id": "docs",
+            "label": "SOP + release memo PDFs",
+            "shape": "process"
+          },
+          {
+            "id": "link",
+            "label": "README/site Documents links",
+            "shape": "process"
+          },
+          {
+            "id": "tag",
+            "label": "Commit, tag vX.Y.Z, push",
+            "shape": "process"
+          },
+          {
+            "id": "ci",
+            "label": "GitHub Release + Pages CI",
+            "shape": "process"
+          },
+          {
+            "id": "ciok",
+            "label": "CI green?",
+            "shape": "decision"
+          },
+          {
+            "id": "done",
+            "label": "Ship complete",
+            "shape": "terminator"
+          },
+          {
+            "id": "fix",
+            "label": "Fix and retag next patch",
+            "shape": "process"
+          }
+        ],
+        "edges": [
+          {
+            "from": "pre",
+            "to": "ver"
+          },
+          {
+            "from": "ver",
+            "to": "docs"
+          },
+          {
+            "from": "docs",
+            "to": "link"
+          },
+          {
+            "from": "link",
+            "to": "tag"
+          },
+          {
+            "from": "tag",
+            "to": "ci"
+          },
+          {
+            "from": "ci",
+            "to": "ciok"
+          },
+          {
+            "from": "ciok",
+            "to": "done",
+            "label": "yes"
+          },
+          {
+            "from": "ciok",
+            "to": "fix",
+            "label": "no"
+          },
+          {
+            "from": "fix",
+            "to": "ver"
+          }
+        ]
+      }
+    },
+    {
+      "heading": "13. Procedure \u2014 secondary packaging",
+      "body": "Use packaging scripts under scripts/ and configs under packaging/ and Formula/ when you intentionally ship secondary channels. They must not replace tarball + install.sh as the default install story.",
+      "items": [
+        "scripts/build-linux-packages.sh",
+        "scripts/gen-aur-pkgbuild.sh / scripts/publish-aur.sh",
+        "scripts/gen-homebrew-formula.sh / scripts/publish-homebrew-tap.sh",
+        "scripts/sync-package-manifests.sh"
+      ]
+    },
+    {
+      "heading": "14. Procedure \u2014 GitHub Actions constraints",
+      "items": [
+        "Use only Node 24 JS action majors (checkout@v6+, upload-artifact@v6+, download-artifact@v7+, softprops/action-gh-release@v3+, Pages @v5/@v6 as house rules specify).",
+        "Do not reintroduce Node 20-era pins (checkout@v4, upload-artifact@v4, action-gh-release@v2). Deprecation annotations are a defect."
+      ]
+    },
+    {
+      "heading": "15. Procedure \u2014 user-facing text",
+      "items": [
+        "Name the project f00tils in narrative. Keep command names f00 / f00-*.",
+        "Procedures, man pages, and install how-to: ASD-STE100 (Simplified Technical English).",
+        "Public story (README lead, website): NASA Stylebook + AP habits.",
+        "Ship narrative surfaces: README + https://f00.sh. Docs under docs/ are optional depth."
+      ]
+    },
+    {
+      "heading": "16. Daily operator checklist",
+      "items": [
+        "Branch from main; keep PRs small and Conventional Commits-friendly.",
+        "Edit only assembly under asm/ for product logic.",
+        "cd asm && make && make check before you open or update a PR.",
+        "Run make hot / make speed when the change touches core-path performance or hot tools.",
+        "Update man pages and site/README when user-visible behavior changes.",
+        "Never claim --core parity without parity evidence.",
+        "Never claim a speed win without gate evidence."
+      ]
+    },
+    {
+      "heading": "17. Failure responses",
+      "table": {
+        "headers": [
+          "Symptom",
+          "Action"
+        ],
+        "rows": [
+          [
+            "make fails",
+            "Fix asm build. Confirm nasm/ld. Clean with make clean."
+          ],
+          [
+            "make check fails",
+            "Read smoke/parity logs. Restore --core GNU match."
+          ],
+          [
+            "make hot/speed fails",
+            "Profile the tool. Do not ship a slower core path."
+          ],
+          [
+            "install.sh mismatch",
+            "Run make sync-install. Re-diff site and scripts."
+          ],
+          [
+            "Release CI red",
+            "Match tag to binary version. Re-run gates locally."
+          ],
+          [
+            "aarch64 smoke fail",
+            "Fix port. Keep x86-64 gates independent."
+          ],
+          [
+            "Wrong action majors",
+            "Upgrade to Node 24-era pins per house rules."
+          ]
+        ]
+      }
+    },
+    {
+      "heading": "18. References",
+      "items": [
+        "AGENTS.md \u2014 product laws and layout",
+        "README.md \u2014 public install and modes",
+        "CONTRIBUTING.md \u2014 contributor build bar",
+        "asm/Makefile \u2014 build and gate targets",
+        "install.sh \u2014 primary installer",
+        ".github/workflows/release.yml \u2014 tag release pipeline",
+        "https://f00.sh \u2014 site, scoreboard, install entry",
+        "site/bench/suite.json \u2014 suite bench data",
+        "~/.grok/skills/memo-pdf \u2014 house memo PDF renderer used for this document"
+      ]
+    },
+    {
+      "heading": "19. Approval and control",
+      "body": "This SOP is controlled under docs/. Update it when gates, install paths, or release mechanics change. Prefer short procedural edits over narrative expansion. Regenerate the PDF with the memo-pdf skill (nasa-sop type); do not freestyle layout."
+    }
+  ],
+  "signature": {
+    "name": "Project Engineering",
+    "title": "f00tils / OPS",
+    "office": "Document: SOP-F00-OPS-001"
+  },
+  "cc": "Maintainers, Release Operators",
+  "enclosure": "None. Companion sources are in-repository paths listed in section 18."
+}

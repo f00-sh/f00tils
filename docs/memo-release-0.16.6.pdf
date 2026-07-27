@@ -1,0 +1,110 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+7 0 obj
+<< /Length 3490 >>
+stream
+0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
+0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
+0.000 G 1.00 w
+72.00 682.00 m 540.00 682.00 l S
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 659.80 Tm (Reply to Attn of:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 180.00 659.80 Tm (REL/F00) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 635.80 Tm (TO:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 635.80 Tm (Maintainers and Users) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 615.80 Tm (FROM:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 615.80 Tm (Project Engineering) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 595.80 Tm (SUBJECT:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 595.80 Tm (Release memo - f00tils 0.16.6) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 575.80 Tm (REF:) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 575.80 Tm (CHANGELOG.md, v0.16.5 A/B/C surface, CI quality gates) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 537.80 Tm (Bottom line: Ship 0.16.6 as a patch over 0.16.5. Primary change is locale-exact C/POSIX) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 523.80 Tm (classification for cmp and diff -c so GitHub Actions \(C.UTF-8\) matches GNU. 0.16.5 product) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 509.80 Tm (surface \(A/B/C gates, modern power, split win\) remains; release CI for v0.16.5 failed quality) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 495.80 Tm (gates and is superseded by this tag.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 474.80 Tm (1. Purpose) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 454.80 Tm (Record what 0.16.6 ships, why the retag policy chose a new patch, and how operators verify.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 427.80 Tm (2. Why 0.16.6 \(not force-retag 0.16.5\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 407.80 Tm (House SemVer rules forbid retagging a published version with different artifacts. v0.16.5 was) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 393.80 Tm (pushed; Release workflow quality gates failed on cmp char/byte and diff -c timestamp format) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 379.80 Tm (under C.UTF-8. The fix is a behavioral correction; ship as 0.16.6.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 352.80 Tm (3. Changes in this release) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 332.80 Tm (- locale_is_c / cmp differ wording: exact C or POSIX only \(not C.UTF-8 prefix match\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 314.80 Tm (- diff -c headers: ctime only under exact C/POSIX; ISO+tz under C.UTF-8 and other locales) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 296.80 Tm (- Operator SOP + this release memo tracked under docs/ and linked from README) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 278.80 Tm (- Carries full 0.16.5 A/B/C work: make abc, modern grep/find/diff/cat power, split bulk) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 86.00 264.80 Tm (suffixes, suite split WIN) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 240.80 Tm (4. Verification) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 220.80 Tm (4.1 cd asm && make && make check) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 199.80 Tm (4.2 Under LC_ALL=C.UTF-8: cmp differ says byte; under LC_ALL=C: char) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 178.80 Tm (4.3 Under LC_ALL=C.UTF-8: diff -c headers are ISO; under LC_ALL=C: ctime) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 157.80 Tm (4.4 GitHub Release workflow green for tag v0.16.6; Pages deploys site/) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 130.80 Tm (5. Install) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (1) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+9 0 obj
+<< /Length 527 >>
+stream
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (curl -fsSL https://f00.sh/install.sh | bash \(pin with F00_VERSION=v0.16.6\).) Tj ET
+72.00 675.00 m 252.00 675.00 l S
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 650.00 Tm (Project Engineering) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 636.00 Tm (f00tils release) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 612.00 Tm (Date: 2026-07-27) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 72.00 596.00 Tm (cc: ['https://f00.sh * github.com/theesfeld/f00']) Tj ET
+0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (2) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [8 0 R 10 0 R] /Count 2 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+13 0 obj
+<< /Title (Release memo - f00tils 0.16.6) /Author (Project Engineering) /Subject (NASA NAII 1450.3 formal memorandum) /Producer (memo-pdf skill) /Creator (memo-pdf) >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000087 00000 n 
+0000000158 00000 n 
+0000000231 00000 n 
+0000000301 00000 n 
+0000000376 00000 n 
+0000000444 00000 n 
+0000003986 00000 n 
+0000004163 00000 n 
+0000004741 00000 n 
+0000004919 00000 n 
+0000004984 00000 n 
+0000005035 00000 n 
+trailer
+<< /Size 14 /Root 12 0 R /Info 13 0 R >>
+startxref
+5219
+%%EOF

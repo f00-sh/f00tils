@@ -1,0 +1,62 @@
+{
+  "org": "f00tils",
+  "org_sub": "Freestanding assembly GNU userland \u00b7 https://f00.sh",
+  "reply_to": "REL/F00",
+  "to": "Maintainers and Users",
+  "from": "Project Engineering",
+  "subject": "Release memo \u2014 f00tils 0.16.6",
+  "ref": "CHANGELOG.md, v0.16.5 A/B/C surface, CI quality gates",
+  "date": "2026-07-27",
+  "opening": "Bottom line: Ship 0.16.6 as a patch over 0.16.5. Primary change is locale-exact C/POSIX classification for cmp and diff -c so GitHub Actions (C.UTF-8) matches GNU. 0.16.5 product surface (A/B/C gates, modern power, split win) remains; release CI for v0.16.5 failed quality gates and is superseded by this tag.",
+  "sections": [
+    {
+      "heading": "1. Purpose",
+      "body": "Record what 0.16.6 ships, why the retag policy chose a new patch, and how operators verify."
+    },
+    {
+      "heading": "2. Why 0.16.6 (not force-retag 0.16.5)",
+      "body": "House SemVer rules forbid retagging a published version with different artifacts. v0.16.5 was pushed; Release workflow quality gates failed on cmp char/byte and diff -c timestamp format under C.UTF-8. The fix is a behavioral correction; ship as 0.16.6."
+    },
+    {
+      "heading": "3. Changes in this release",
+      "items": [
+        "locale_is_c / cmp differ wording: exact C or POSIX only (not C.UTF-8 prefix match)",
+        "diff -c headers: ctime only under exact C/POSIX; ISO+tz under C.UTF-8 and other locales",
+        "Operator SOP + this release memo tracked under docs/ and linked from README",
+        "Carries full 0.16.5 A/B/C work: make abc, modern grep/find/diff/cat power, split bulk suffixes, suite split WIN"
+      ]
+    },
+    {
+      "heading": "4. Verification",
+      "steps": [
+        {
+          "n": "4.1",
+          "text": "cd asm && make && make check"
+        },
+        {
+          "n": "4.2",
+          "text": "Under LC_ALL=C.UTF-8: cmp differ says byte; under LC_ALL=C: char"
+        },
+        {
+          "n": "4.3",
+          "text": "Under LC_ALL=C.UTF-8: diff -c headers are ISO; under LC_ALL=C: ctime"
+        },
+        {
+          "n": "4.4",
+          "text": "GitHub Release workflow green for tag v0.16.6; Pages deploys site/"
+        }
+      ]
+    },
+    {
+      "heading": "5. Install",
+      "body": "curl -fsSL https://f00.sh/install.sh | bash  (pin with F00_VERSION=v0.16.6)."
+    }
+  ],
+  "signature": {
+    "name": "Project Engineering",
+    "title": "f00tils release"
+  },
+  "cc": [
+    "https://f00.sh \u00b7 github.com/theesfeld/f00"
+  ]
+}

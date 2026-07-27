@@ -133,10 +133,10 @@ diff_pstore:    resb DIFF_PSTORE
 diff_pstore_n:  resq 1
 
 section .rodata
-v_diff:  db "f00-diff (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff3: db "f00-diff3 (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
-v_sdiff: db "f00-sdiff (f00) 0.16.5", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff3: db "f00-diff3 (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
+v_sdiff: db "f00-sdiff (f00) 0.16.6", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_diff:
     db "Usage: f00-diff [OPTION]... FILE1 FILE2", 10
@@ -4314,11 +4314,10 @@ locale_is_c:
 .cls:
     cmp byte [rax], 0
     je .yes
+    ; exact "C" or "POSIX" only (C.UTF-8 → ISO/-c like GNU)
     cmp byte [rax], 'C'
     jne .pos
     cmp byte [rax+1], 0
-    je .yes
-    cmp byte [rax+1], '.'
     je .yes
     jmp .no
 .pos:
@@ -4583,12 +4582,10 @@ cmp_differ_msg:
     ; empty value → char
     cmp byte [rax], 0
     je .use_char
-    ; "C" or "POSIX" or "C.*" → char; else byte
+    ; exact "C" or "POSIX" only (NOT C.UTF-8 — GNU uses byte/ISO there)
     cmp byte [rax], 'C'
     jne .pos
     cmp byte [rax+1], 0
-    je .use_char
-    cmp byte [rax+1], '.'
     je .use_char
     jmp .use_byte
 .pos:
