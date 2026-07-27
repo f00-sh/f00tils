@@ -40,7 +40,6 @@ extern err_str
 %define MAX_PATS     64
 %define READ_CAP     262144
 %define LINE_CAP     65536
-%define DENT_CAP     65536
 %define PATH_CAP     4096
 ; before-context ring: last N lines (N capped)
 %define CTX_RING_MAX 256
@@ -83,8 +82,7 @@ line_len:       resq 1
 ctx_r_text:     resb CTX_RING_MAX * LINE_CAP
 ; Horspool skip table (case-sensitive -F hot path)
 skip_tab:       resb 256
-; recursive
-dents:          resb DENT_CAP
+; recursive walk: path shared; getdents buffer is per-frame on stack
 path_buf:       resb PATH_CAP
 path_len:       resq 1
 stat_buf:       resb 256
@@ -3283,6 +3281,12 @@ emit_line_highlight:
 ; ═══════════════════════════════════════════════════════════
 ; grep_tree(rdi=root path) — recursive, path_buf + path_len
 ; ═══════════════════════════════════════════════════════════
+; Per-frame getdents buffer (stack). A single global dents[] is
+; wrong: recursing into a child overwrites the parent's remaining
+; entries, so sibling files after a subdirectory are skipped when
+; readdir returns the dir first (common on CI).
+%define DENT_FRAME   4096
+
 grep_tree:
     push rbx
     push r12
@@ -3304,6 +3308,10 @@ grep_tree_path:
     push r13
     push r14
     push r15
+    push rbp
+    mov rbp, rsp
+    sub rsp, DENT_FRAME
+    and rsp, -16                    ; local dent frame at rsp
     ; open directory at path_buf
     mov rax, SYS_openat
     mov rdi, AT_FDCWD
@@ -3317,8 +3325,8 @@ grep_tree_path:
 .dent:
     mov rax, SYS_getdents64
     mov rdi, r12
-    lea rsi, [dents]
-    mov rdx, DENT_CAP
+    mov rsi, rsp                    ; frame-local buffer
+    mov rdx, DENT_FRAME
     syscall
     test rax, rax
     jle .close
@@ -3327,7 +3335,8 @@ grep_tree_path:
 .dlp:
     cmp r14, r13
     jae .dent
-    lea rbx, [dents + r14]
+    mov rbx, rsp
+    add rbx, r14                    ; &dent
     movzx r15d, word [rbx + 16]     ; d_reclen
     lea rdi, [rbx + 19]             ; d_name
     ; skip . and ..
@@ -3419,6 +3428,8 @@ grep_tree_path:
     lea rsi, [msg_enoent]
     call emit_err_path
 .out:
+    mov rsp, rbp
+    pop rbp
     pop r15
     pop r14
     pop r13

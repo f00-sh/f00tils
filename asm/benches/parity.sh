@@ -545,11 +545,12 @@ if [[ -x "$ROOT/f00-grep" && -x "$CORE/grep" ]]; then
       "$ROOT/f00-egrep" --core 'a.b' "$WORKDIR/ge.txt" ::: \
       "$CORE/grep" -E 'a.b' "$WORKDIR/ge.txt"
   fi
-  # recursive
+  # recursive — create subdirectory before sibling file so readdir may
+  # visit the dir first (exposes shared-getdents clobber if regresses)
   mkdir -p "$WORKDIR/gr/sub"
-  printf 'hello\n' > "$WORKDIR/gr/a.txt"
   printf 'no\n' > "$WORKDIR/gr/sub/b.txt"
   printf 'hello\n' > "$WORKDIR/gr/sub/c.txt"
+  printf 'hello\n' > "$WORKDIR/gr/a.txt"
   cmp_out "grep -r -F" \
     bash -c "\"$ROOT/f00-grep\" --core -r -F hello \"$WORKDIR/gr\" | sort" ::: \
     bash -c "\"$CORE/grep\" -r -F hello \"$WORKDIR/gr\" | sort"

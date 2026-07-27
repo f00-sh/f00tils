@@ -20,6 +20,7 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ### Fixed
 - `grep -n -F` mmap/SSE2 path: preserve line-number cursor (r8–r11) across `out_flush` so dense multi-MiB matches stay GNU-identical after emit flushes
+- `grep -r`: per-frame getdents buffer (shared buffer skipped sibling files when a subdirectory was readdir-first)
 
 ### Changed
 - Per-package bench totals (wall · CPU separate; never 115-tool blend)
