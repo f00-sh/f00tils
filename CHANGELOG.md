@@ -6,6 +6,15 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ## [Unreleased]
 
+## [0.16.8] - 2026-07-27
+
+### Fixed
+- `F00_CORE=1` / config `core=true` now seeds GNU-clone mode for find/grep/diff/cmp/sdiff/diff3 (same as `--core`; was only partial before)
+
+### Changed
+- Documented clearly: **scripts do not auto-enable `--core`** (README, site `#drop-in`, MODERN-FEATURES, install seed comments)
+- Site callout for PATH drop-in: `export F00_CORE=1` / `core=true` / `--core`
+
 ## [0.16.7] - 2026-07-27
 
 ### Added

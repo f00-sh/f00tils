@@ -11,7 +11,7 @@ global find_main, xargs_main
 
 extern out_init, out_flush, out_str, out_byte, out_strn, out_u64
 extern is_tty, strlen, strcmp, memcpy, memset
-extern g_exit, g_tty, g_color, g_envp
+extern g_exit, g_tty, g_color, g_envp, g_json_core
 extern color_path, color_ok, color_reset
 extern icon_for_path
 extern err_str
@@ -193,8 +193,8 @@ x_status:       resd 1
 x_had_args:     resb 1
 
 section .rodata
-v_find:  db "f00-find (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
-v_xargs: db "f00-xargs (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
+v_find:  db "f00-find (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
+v_xargs: db "f00-xargs (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_find:
     db "Usage: f00-find [-H] [-L] [-P] [PATH...] [EXPRESSION]", 10
@@ -381,6 +381,13 @@ find_main:
     mov byte [f_pruned], 0
     mov byte [f_quit], 0
     mov dword [g_exit], 0
+
+    ; F00_CORE=1 / config core=true → same as --core (drop-in; not auto on non-TTY)
+    cmp dword [g_json_core], 0
+    je .f_no_env_core
+    or dword [f_flags], FF_CORE
+    mov byte [g_color], 0
+.f_no_env_core:
 
     ; wall-clock once (mtime/mmin)
     mov rax, SYS_clock_gettime

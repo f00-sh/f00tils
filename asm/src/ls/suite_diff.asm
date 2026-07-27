@@ -133,10 +133,10 @@ diff_pstore:    resb DIFF_PSTORE
 diff_pstore_n:  resq 1
 
 section .rodata
-v_diff:  db "f00-diff (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
-v_cmp:   db "f00-cmp (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
-v_diff3: db "f00-diff3 (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
-v_sdiff: db "f00-sdiff (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff:  db "f00-diff (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
+v_cmp:   db "f00-cmp (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
+v_diff3: db "f00-diff3 (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
+v_sdiff: db "f00-sdiff (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_diff:
     db "Usage: f00-diff [OPTION]... FILE1 FILE2", 10
@@ -1204,6 +1204,12 @@ diff_main:
     mov r13, rsi
     mov dword [g_flags], 0
     mov dword [ctx_lines], CTX_DEFAULT
+    ; F00_CORE=1 / config core=true → same as --core (not auto on non-TTY)
+    cmp dword [g_json_core], 0
+    je .d_no_env_core
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+.d_no_env_core:
     mov r14, 1
     xor r15, r15
     mov qword [diff_a], 0
@@ -4686,6 +4692,11 @@ cmp_main:
     mov r12, rdi
     mov r13, rsi
     mov dword [g_flags], 0
+    cmp dword [g_json_core], 0
+    je .c_no_env_core
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+.c_no_env_core:
     mov r14, 1
     xor r15, r15
     mov qword [diff_a], 0
@@ -5188,6 +5199,11 @@ diff3_main:
     mov r12, rdi
     mov r13, rsi
     mov dword [g_flags], 0
+    cmp dword [g_json_core], 0
+    je .d3_no_env_core
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+.d3_no_env_core:
     mov byte [d3_merge], 0
     mov qword [diff_a], 0
     mov qword [diff_b], 0
@@ -6260,6 +6276,11 @@ sdiff_main:
     mov r12, rdi
     mov r13, rsi
     mov dword [g_flags], 0
+    cmp dword [g_json_core], 0
+    je .s_no_env_core
+    or dword [g_flags], DF_CORE
+    mov byte [g_color], 0
+.s_no_env_core:
     mov dword [sdiff_width], 130    ; GNU default total width
     mov byte [sdiff_suppress], 0
     mov qword [diff_a], 0

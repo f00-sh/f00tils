@@ -5,12 +5,12 @@
   "to": "Maintainers and Release Operators",
   "from": "Project Engineering",
   "subject": "f00tils operator standard operating procedure (clone, build, gates, install, release)",
-  "ref": "AGENTS.md, README.md, asm/Makefile, install.sh, scripts/render-brand-assets.py, .github/workflows/release.yml, v0.16.7",
+  "ref": "AGENTS.md, README.md, install.sh, docs/MODERN-FEATURES.md, v0.16.8",
   "date": "2026-07-27",
   "doc_id": "SOP-F00-OPS-001",
   "doc_title": "STANDARD OPERATING PROCEDURE",
-  "version": "v0.16.7",
-  "opening": "Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before you merge. Run make hot / make speed before you claim a speed win. Ship with tarball + install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and CPU. Every release regenerates color-PTY screenshots (scripts/render-brand-assets.py) and ships NASA SOP + release memo on the GitHub Release.",
+  "version": "v0.16.8",
+  "opening": "Bottom line: --core is never auto-detected from scripts or non-TTY. Pipes only suppress chrome. For GNU-identical PATH drop-in use export F00_CORE=1, config core=true, or pass --core. Build with cd asm && make && make check. Regenerate screenshots every release with scripts/render-brand-assets.py.",
   "sections": [
     {
       "heading": "1. Purpose",

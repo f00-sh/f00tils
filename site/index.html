@@ -29,6 +29,7 @@
       </a>
       <nav class="site-nav nav" id="site-nav" aria-label="Primary">
         <a href="#why">Why</a>
+        <a href="#drop-in">Drop-in</a>
         <a href="#tour">Tour</a>
         <a href="#benchmarks">Bench</a>
         <a href="#scoreboard">Scoreboard</a>
@@ -43,7 +44,7 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">f00tils · pure ASM · multicall · MIT · <span data-version>v0.16.7</span></p>
+          <p class="eyebrow">f00tils · pure ASM · multicall · MIT · <span data-version>v0.16.8</span></p>
           <h1>GNU userland, rebuilt</h1>
           <p class="lead">
             One freestanding multicall for <strong>coreutils</strong>, <strong>grep</strong>,
@@ -97,7 +98,7 @@
               src="assets/screenshots/hero.png"
               width="1040"
               height="440"
-              alt="f00tils 0.16.7 version and modern f00-ls with glyph icons in a color terminal"
+              alt="f00tils 0.16.8 version and modern f00-ls with glyph icons in a color terminal"
               loading="eager"
             />
           </figure>
@@ -110,22 +111,41 @@
         <h2>Why it wins</h2>
         <div class="why-grid">
           <article class="why-card">
-            <h3><code class="mono">--core</code> — scripts</h3>
+            <h3><code class="mono">--core</code> — GNU clone</h3>
             <ul class="why-list">
               <li><strong>Byte-identical</strong> to GNU (stdout, stderr, exit).</li>
               <li>Beats GNU on <strong>wall</strong> and <strong>CPU</strong> — separate metrics, per package.</li>
-              <li>Drop-in on PATH. CI and shell scripts don’t care which binary ran.</li>
+              <li>Use for CI, scripts, and true PATH drop-in (see below).</li>
             </ul>
           </article>
           <article class="why-card why-card-accent">
-            <h3>Modern — default TTY</h3>
+            <h3>Modern — default</h3>
             <ul class="why-list">
               <li>Theme, truecolor, icons, chrome — not a pale GNU subset.</li>
               <li>Rich <code class="mono">--json</code> / <code class="mono">--csv</code>, fd/rg/delta-class power where it fits.</li>
-              <li>Humans get the good path. Scripts stay on <code class="mono">--core</code>.</li>
+              <li>Default for humans. Not auto-switched off just because a script ran.</li>
             </ul>
           </article>
         </div>
+
+        <div class="callout core-callout" id="drop-in">
+          <h3>Drop-in: <code class="mono">--core</code> is <strong>not</strong> auto-detected</h3>
+          <p>
+            A script, cron job, CI job, or pipe does <strong>not</strong> turn on <code class="mono">--core</code>.
+            Non-TTY only turns <strong>color/chrome</strong> off. Modern <em>behavior</em> can still differ
+            from GNU (example: modern <code class="mono">find</code> skips <code class="mono">.git</code>).
+          </p>
+          <p><strong>For GNU-identical drop-in, opt in explicitly:</strong></p>
+          <ul class="why-list">
+            <li>Per call: <code class="mono">tool --core …</code></li>
+            <li>Process tree: <code class="mono">export F00_CORE=1</code> (same as <code class="mono">--core</code> on every tool)</li>
+            <li>Config: <code class="mono">core = true</code> via <code class="mono">f00-config</code></li>
+          </ul>
+          <p class="muted small">
+            Installer <code class="mono">replace=true</code> puts bare names on PATH — it does <strong>not</strong> set <code class="mono">F00_CORE</code> for you.
+          </p>
+        </div>
+
         <figure class="shot-frame why-shot">
           <img
             src="assets/screenshots/f00-core-vs-modern.png"
@@ -134,7 +154,7 @@
             height="684"
             loading="lazy"
           />
-          <figcaption class="muted small">Modern default (icons + theme) vs <code class="mono">--core</code> GNU-plain for scripts</figcaption>
+          <figcaption class="muted small">Modern default (icons + theme) vs <code class="mono">--core</code> GNU-plain — explicit opt-in for scripts</figcaption>
         </figure>
       </div>
     </section>
@@ -295,7 +315,7 @@
           </div>
         </div>
         <pre class="code-block"><code># pin
-curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.7 bash
+curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.8 bash
 
 # keep GNU bare names
 curl -fsSL https://f00.sh/install.sh | F00_SUPERSEDE=0 bash
@@ -320,8 +340,8 @@ f00-config replace off</code></pre>
         <ul>
           <li><a href="https://github.com/theesfeld/f00/blob/main/docs/sop-f00tils-ops.pdf">Operator SOP (PDF)</a>
             · <a href="https://github.com/theesfeld/f00/blob/main/docs/sop-f00tils-ops.json">JSON</a></li>
-          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/memo-release-0.16.7.pdf">Release memo 0.16.7 (PDF)</a>
-            · <a href="https://github.com/theesfeld/f00/blob/main/docs/memo-release-0.16.7.json">JSON</a></li>
+          <li><a href="https://github.com/theesfeld/f00/blob/main/docs/memo-release-0.16.8.pdf">Release memo 0.16.8 (PDF)</a>
+            · <a href="https://github.com/theesfeld/f00/blob/main/docs/memo-release-0.16.8.json">JSON</a></li>
           <li><a href="https://github.com/theesfeld/f00/blob/main/CHANGELOG.md">CHANGELOG</a></li>
         </ul>
       </div>
@@ -330,7 +350,7 @@ f00-config replace off</code></pre>
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
-      <p>f00tils · freestanding ASM · MIT · <span data-version>v0.16.7</span></p>
+      <p>f00tils · freestanding ASM · MIT · <span data-version>v0.16.8</span></p>
       <p><a href="https://github.com/theesfeld/f00">GitHub</a> · <a href="#install">Install</a> · <a href="#documents">Docs</a></p>
     </div>
   </footer>

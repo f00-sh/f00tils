@@ -103,7 +103,7 @@ path_len:       resq 1
 stat_buf:       resb 256
 
 section .rodata
-v_grep:  db "f00-grep (f00) 0.16.7", 10, "License: MIT · https://f00.sh", 10, 0
+v_grep:  db "f00-grep (f00) 0.16.8", 10, "License: MIT · https://f00.sh", 10, 0
 
 h_grep:
     db "Usage: f00-grep [OPTION]... PATTERNS [FILE]...", 10
@@ -234,6 +234,13 @@ grep_main:
     mov byte [multi_file], 0
     mov byte [ctx_have_out], 0
     mov byte [ctx_file_out], 0
+
+    ; F00_CORE=1 / config core=true → same as --core (not auto on scripts/non-TTY)
+    cmp dword [g_json_core], 0
+    je .g_no_env_core
+    or dword [g_flags], GF_CORE
+    mov byte [g_color], 0
+.g_no_env_core:
 
     cmp byte [is_fgrep], 0
     je .go

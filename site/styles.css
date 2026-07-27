@@ -1693,3 +1693,26 @@ table.matrix.compact code.cmd {
   padding: 0.65rem 1rem 0.85rem;
   border-top: 1px solid var(--border);
 }
+.core-callout {
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem 1.15rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent, #3dff9a);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+.core-callout h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.05rem;
+}
+.core-callout p {
+  margin: 0 0 0.65rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.core-callout p:last-child {
+  margin-bottom: 0;
+}
+.core-callout .why-list {
+  margin: 0.35rem 0 0.75rem;
+}

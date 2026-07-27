@@ -19,7 +19,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>
 endobj
 7 0 obj
-<< /Length 3719 >>
+<< /Length 3595 >>
 stream
 0 g BT /F2 16.00 Tf 1 0 0 1 72.00 704.00 Tm (f00tils) Tj ET
 0 g BT /F3 10.00 Tf 1 0 0 1 72.00 689.00 Tm (Freestanding assembly GNU userland * https://f00.sh) Tj ET
@@ -31,7 +31,7 @@ stream
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 625.65 Tm (Date:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 625.65 Tm (2026-07-27) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 608.65 Tm (Version:) Tj ET
-0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.7) Tj ET
+0 g BT /F1 11.00 Tf 1 0 0 1 150.00 608.65 Tm (v0.16.8) Tj ET
 0 g BT /F2 11.00 Tf 1 0 0 1 72.00 591.65 Tm (Standard:) Tj ET
 0 g BT /F1 11.00 Tf 1 0 0 1 150.00 591.65 Tm (NASA NAII 1450.3 memorandum layout) Tj ET
 72.00 578.00 m 540.00 578.00 l S
@@ -44,26 +44,26 @@ stream
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 489.80 Tm (SUBJECT:) Tj ET
 0 g BT /F1 12.00 Tf 1 0 0 1 144.00 489.80 Tm (f00tils operator standard operating procedure \(clone, build, gates, install, release\)) Tj ET
 0 g BT /F2 12.00 Tf 1 0 0 1 72.00 469.80 Tm (REF:) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 144.00 469.80 Tm (AGENTS.md, README.md, asm/Makefile, install.sh,) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 144.00 455.80 Tm (scripts/render-brand-assets.py, .github/workflows/release.yml, v0.16.7) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 417.80 Tm (Bottom line: On Linux x86-64, from a clean tree, run cd asm && make && make check before) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 403.80 Tm (you merge. Run make hot / make speed before you claim a speed win. Ship with tarball +) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 389.80 Tm (install.sh as the primary path. Keep --core byte-identical to GNU and faster on wall time and) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 375.80 Tm (CPU. Every release regenerates color-PTY screenshots \(scripts/render-brand-assets.py\) and ships) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 361.80 Tm (NASA SOP + release memo on the GitHub Release.) Tj ET
-0 g BT /F2 12.00 Tf 1 0 0 1 72.00 340.80 Tm (1. Purpose) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 320.80 Tm (This memorandum is the living operator handbook for f00tils \(binary f00 / tools f00-*\). It states) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 306.80 Tm (how to clone the repository, build the freestanding multicall, run quality gates, install, and ship a) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 292.80 Tm (release.) Tj ET
-0 g BT /F2 12.00 Tf 1 0 0 1 72.00 265.80 Tm (2. Scope) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 245.80 Tm (This SOP covers full project operations. It does not replace man pages, README narrative, or) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 231.80 Tm (the scoreboard on https://f00.sh. Those remain the public ship surfaces.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 210.80 Tm (- repository layout and product laws) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 192.80 Tm (- host prerequisites) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 174.80 Tm (- x86-64 build and boring-solid gates) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 156.80 Tm (- hot-path and speed law) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 138.80 Tm (- aarch64 freestanding port) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 120.80 Tm (- local and end-user install) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 469.80 Tm (AGENTS.md, README.md, install.sh, docs/MODERN-FEATURES.md,) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 144.00 455.80 Tm (v0.16.8) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 417.80 Tm (Bottom line: --core is never auto-detected from scripts or non-TTY. Pipes only suppress chrome.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 403.80 Tm (For GNU-identical PATH drop-in use export F00_CORE=1, config core=true, or pass --core.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 389.80 Tm (Build with cd asm && make && make check. Regenerate screenshots every release with) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 375.80 Tm (scripts/render-brand-assets.py.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 354.80 Tm (1. Purpose) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 334.80 Tm (This memorandum is the living operator handbook for f00tils \(binary f00 / tools f00-*\). It states) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 320.80 Tm (how to clone the repository, build the freestanding multicall, run quality gates, install, and ship a) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 306.80 Tm (release.) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 279.80 Tm (2. Scope) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 259.80 Tm (This SOP covers full project operations. It does not replace man pages, README narrative, or) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 245.80 Tm (the scoreboard on https://f00.sh. Those remain the public ship surfaces.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 224.80 Tm (- repository layout and product laws) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 206.80 Tm (- host prerequisites) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 188.80 Tm (- x86-64 build and boring-solid gates) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 170.80 Tm (- hot-path and speed law) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 152.80 Tm (- aarch64 freestanding port) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 134.80 Tm (- local and end-user install) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 116.80 Tm (- release, packaging, and site install sync) Tj ET
 0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (1) Tj ET
 endstream
 endobj
@@ -71,102 +71,101 @@ endobj
 << /Type /Page /Parent 31 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R /F5 5 0 R /F6 6 0 R >> >> >>
 endobj
 9 0 obj
-<< /Length 4873 >>
+<< /Length 4777 >>
 stream
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (- release, packaging, and site install sync) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 691.80 Tm (- user-facing documentation rules) Tj ET
-0 g BT /F2 12.00 Tf 1 0 0 1 72.00 667.80 Tm (3. Product identity) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 709.80 Tm (- user-facing documentation rules) Tj ET
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 685.80 Tm (3. Product identity) Tj ET
 0.300 G 0.60 w
-72.00 658.00 m 540.00 658.00 l S
-72.00 658.00 m 72.00 638.50 l S
-0 g BT /F2 9.50 Tf 1 0 0 1 76.00 645.92 Tm (Item) Tj ET
-221.76 658.00 m 221.76 638.50 l S
-0 g BT /F2 9.50 Tf 1 0 0 1 225.76 645.92 Tm (Value) Tj ET
-540.00 658.00 m 540.00 638.50 l S
-72.00 638.50 m 540.00 638.50 l S
+72.00 676.00 m 540.00 676.00 l S
+72.00 676.00 m 72.00 656.50 l S
+0 g BT /F2 9.50 Tf 1 0 0 1 76.00 663.92 Tm (Item) Tj ET
+221.76 676.00 m 221.76 656.50 l S
+0 g BT /F2 9.50 Tf 1 0 0 1 225.76 663.92 Tm (Value) Tj ET
+540.00 676.00 m 540.00 656.50 l S
+72.00 656.50 m 540.00 656.50 l S
 0.300 G 0.60 w
-72.00 638.50 m 540.00 638.50 l S
-72.00 638.50 m 72.00 619.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 626.42 Tm (Product name) Tj ET
-221.76 638.50 m 221.76 619.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 626.42 Tm (f00tils) Tj ET
-540.00 638.50 m 540.00 619.00 l S
-72.00 619.00 m 540.00 619.00 l S
+72.00 656.50 m 540.00 656.50 l S
+72.00 656.50 m 72.00 637.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 644.42 Tm (Product name) Tj ET
+221.76 656.50 m 221.76 637.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 644.42 Tm (f00tils) Tj ET
+540.00 656.50 m 540.00 637.00 l S
+72.00 637.00 m 540.00 637.00 l S
 0.300 G 0.60 w
-72.00 619.00 m 540.00 619.00 l S
-72.00 619.00 m 72.00 599.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 606.92 Tm (Binary / multicall) Tj ET
-221.76 619.00 m 221.76 599.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 606.92 Tm (f00) Tj ET
-540.00 619.00 m 540.00 599.50 l S
-72.00 599.50 m 540.00 599.50 l S
+72.00 637.00 m 540.00 637.00 l S
+72.00 637.00 m 72.00 617.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 624.92 Tm (Binary / multicall) Tj ET
+221.76 637.00 m 221.76 617.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 624.92 Tm (f00) Tj ET
+540.00 637.00 m 540.00 617.50 l S
+72.00 617.50 m 540.00 617.50 l S
 0.300 G 0.60 w
-72.00 599.50 m 540.00 599.50 l S
-72.00 599.50 m 72.00 580.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 587.42 Tm (Tool names) Tj ET
-221.76 599.50 m 221.76 580.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 587.42 Tm (f00-* \(bare names when replace is on\)) Tj ET
-540.00 599.50 m 540.00 580.00 l S
-72.00 580.00 m 540.00 580.00 l S
+72.00 617.50 m 540.00 617.50 l S
+72.00 617.50 m 72.00 598.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 605.42 Tm (Tool names) Tj ET
+221.76 617.50 m 221.76 598.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 605.42 Tm (f00-* \(bare names when replace is on\)) Tj ET
+540.00 617.50 m 540.00 598.00 l S
+72.00 598.00 m 540.00 598.00 l S
 0.300 G 0.60 w
-72.00 580.00 m 540.00 580.00 l S
-72.00 580.00 m 72.00 560.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 567.92 Tm (Site) Tj ET
-221.76 580.00 m 221.76 560.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 567.92 Tm (https://f00.sh) Tj ET
-540.00 580.00 m 540.00 560.50 l S
-72.00 560.50 m 540.00 560.50 l S
+72.00 598.00 m 540.00 598.00 l S
+72.00 598.00 m 72.00 578.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 585.92 Tm (Site) Tj ET
+221.76 598.00 m 221.76 578.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 585.92 Tm (https://f00.sh) Tj ET
+540.00 598.00 m 540.00 578.50 l S
+72.00 578.50 m 540.00 578.50 l S
 0.300 G 0.60 w
-72.00 560.50 m 540.00 560.50 l S
-72.00 560.50 m 72.00 541.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 548.42 Tm (Repository) Tj ET
-221.76 560.50 m 221.76 541.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 548.42 Tm (github.com/theesfeld/f00) Tj ET
-540.00 560.50 m 540.00 541.00 l S
-72.00 541.00 m 540.00 541.00 l S
+72.00 578.50 m 540.00 578.50 l S
+72.00 578.50 m 72.00 559.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 566.42 Tm (Repository) Tj ET
+221.76 578.50 m 221.76 559.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 566.42 Tm (github.com/theesfeld/f00) Tj ET
+540.00 578.50 m 540.00 559.00 l S
+72.00 559.00 m 540.00 559.00 l S
 0.300 G 0.60 w
-72.00 541.00 m 540.00 541.00 l S
-72.00 541.00 m 72.00 521.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 528.92 Tm (License) Tj ET
-221.76 541.00 m 221.76 521.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 528.92 Tm (MIT only) Tj ET
-540.00 541.00 m 540.00 521.50 l S
-72.00 521.50 m 540.00 521.50 l S
+72.00 559.00 m 540.00 559.00 l S
+72.00 559.00 m 72.00 539.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 546.92 Tm (License) Tj ET
+221.76 559.00 m 221.76 539.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 546.92 Tm (MIT only) Tj ET
+540.00 559.00 m 540.00 539.50 l S
+72.00 539.50 m 540.00 539.50 l S
 0.300 G 0.60 w
-72.00 521.50 m 540.00 521.50 l S
-72.00 521.50 m 72.00 502.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 509.43 Tm (Primary target) Tj ET
-221.76 521.50 m 221.76 502.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 509.43 Tm (Linux x86-64 freestanding \(NASM, no libc\)) Tj ET
-540.00 521.50 m 540.00 502.00 l S
-72.00 502.00 m 540.00 502.00 l S
+72.00 539.50 m 540.00 539.50 l S
+72.00 539.50 m 72.00 520.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 527.42 Tm (Primary target) Tj ET
+221.76 539.50 m 221.76 520.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 527.42 Tm (Linux x86-64 freestanding \(NASM, no libc\)) Tj ET
+540.00 539.50 m 540.00 520.00 l S
+72.00 520.00 m 540.00 520.00 l S
 0.300 G 0.60 w
-72.00 502.00 m 540.00 502.00 l S
-72.00 502.00 m 72.00 482.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 489.93 Tm (Port path) Tj ET
-221.76 502.00 m 221.76 482.50 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 489.93 Tm (Linux aarch64 freestanding \(GNU as, asm/port/aarch64\)) Tj ET
-540.00 502.00 m 540.00 482.50 l S
-72.00 482.50 m 540.00 482.50 l S
+72.00 520.00 m 540.00 520.00 l S
+72.00 520.00 m 72.00 500.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 507.93 Tm (Port path) Tj ET
+221.76 520.00 m 221.76 500.50 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 507.93 Tm (Linux aarch64 freestanding \(GNU as, asm/port/aarch64\)) Tj ET
+540.00 520.00 m 540.00 500.50 l S
+72.00 500.50 m 540.00 500.50 l S
 0.300 G 0.60 w
-72.00 482.50 m 540.00 482.50 l S
-72.00 482.50 m 72.00 463.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 76.00 470.43 Tm (Surface) Tj ET
-221.76 482.50 m 221.76 463.00 l S
-0 g BT /F1 9.50 Tf 1 0 0 1 225.76 470.43 Tm (115 tools \(coreutils + grep + findutils + diffutils\)) Tj ET
-540.00 482.50 m 540.00 463.00 l S
-72.00 463.00 m 540.00 463.00 l S
-0 g BT /F2 12.00 Tf 1 0 0 1 72.00 436.80 Tm (4. Product laws \(non-negotiable\)) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 416.80 Tm (Language purity: no Rust, C application code, libc, or polyglot product dependencies in) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 402.80 Tm (first-party product code under asm/. Shell is allowed only for bootstrap, install, packaging, and) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 388.80 Tm (benches.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 367.80 Tm (4.1 Clone first \(--core\). Every covered GNU tool has a f00-* counterpart. Under --core, match) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 353.80 Tm (the GNU tool for scripts: flags, exit codes, and byte-identical stdout/stderr for the same inputs.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 332.80 Tm (4.2 --core must win on resources. On the core path, f00 must beat the GNU tool on wall time and) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 318.80 Tm (CPU \(user+sys\). Correct-but-slower is not done.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 297.80 Tm (4.3 Modern is amazing \(default\). Non--core is never a pale GNU subset: themed chrome, better) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 283.80 Tm (layout, icons where relevant, --json/--csv, and extra power.) Tj ET
-0 g BT /F1 12.00 Tf 1 0 0 1 72.00 262.80 Tm (4.4 One binary. Multicall by argv0 \(f00-grep, grep, ...\).) Tj ET
+72.00 500.50 m 540.00 500.50 l S
+72.00 500.50 m 72.00 481.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 76.00 488.43 Tm (Surface) Tj ET
+221.76 500.50 m 221.76 481.00 l S
+0 g BT /F1 9.50 Tf 1 0 0 1 225.76 488.43 Tm (115 tools \(coreutils + grep + findutils + diffutils\)) Tj ET
+540.00 500.50 m 540.00 481.00 l S
+72.00 481.00 m 540.00 481.00 l S
+0 g BT /F2 12.00 Tf 1 0 0 1 72.00 454.80 Tm (4. Product laws \(non-negotiable\)) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 434.80 Tm (Language purity: no Rust, C application code, libc, or polyglot product dependencies in) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 420.80 Tm (first-party product code under asm/. Shell is allowed only for bootstrap, install, packaging, and) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 406.80 Tm (benches.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 385.80 Tm (4.1 Clone first \(--core\). Every covered GNU tool has a f00-* counterpart. Under --core, match) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 371.80 Tm (the GNU tool for scripts: flags, exit codes, and byte-identical stdout/stderr for the same inputs.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 350.80 Tm (4.2 --core must win on resources. On the core path, f00 must beat the GNU tool on wall time and) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 336.80 Tm (CPU \(user+sys\). Correct-but-slower is not done.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 315.80 Tm (4.3 Modern is amazing \(default\). Non--core is never a pale GNU subset: themed chrome, better) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 301.80 Tm (layout, icons where relevant, --json/--csv, and extra power.) Tj ET
+0 g BT /F1 12.00 Tf 1 0 0 1 72.00 280.80 Tm (4.4 One binary. Multicall by argv0 \(f00-grep, grep, ...\).) Tj ET
 0 g BT /F1 10.00 Tf 1 0 0 1 303.50 40.00 Tm (2) Tj ET
 endstream
 endobj
@@ -1602,34 +1601,34 @@ xref
 0000000301 00000 n 
 0000000376 00000 n 
 0000000444 00000 n 
-0000004215 00000 n 
-0000004392 00000 n 
-0000009317 00000 n 
-0000009495 00000 n 
-0000017265 00000 n 
-0000017444 00000 n 
-0000019215 00000 n 
-0000019394 00000 n 
-0000024246 00000 n 
-0000024425 00000 n 
-0000031464 00000 n 
-0000031643 00000 n 
-0000034933 00000 n 
-0000035112 00000 n 
-0000040195 00000 n 
-0000040374 00000 n 
-0000041318 00000 n 
-0000041497 00000 n 
-0000046798 00000 n 
-0000046977 00000 n 
-0000052473 00000 n 
-0000052652 00000 n 
-0000054726 00000 n 
-0000054905 00000 n 
-0000055041 00000 n 
-0000055092 00000 n 
+0000004091 00000 n 
+0000004268 00000 n 
+0000009097 00000 n 
+0000009275 00000 n 
+0000017045 00000 n 
+0000017224 00000 n 
+0000018995 00000 n 
+0000019174 00000 n 
+0000024026 00000 n 
+0000024205 00000 n 
+0000031244 00000 n 
+0000031423 00000 n 
+0000034713 00000 n 
+0000034892 00000 n 
+0000039975 00000 n 
+0000040154 00000 n 
+0000041098 00000 n 
+0000041277 00000 n 
+0000046578 00000 n 
+0000046757 00000 n 
+0000052253 00000 n 
+0000052432 00000 n 
+0000054506 00000 n 
+0000054685 00000 n 
+0000054821 00000 n 
+0000054872 00000 n 
 trailer
 << /Size 34 /Root 32 0 R /Info 33 0 R >>
 startxref
-55272
+55052
 %%EOF

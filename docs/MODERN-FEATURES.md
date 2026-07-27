@@ -20,7 +20,9 @@ Ship truth is the binary. This matrix is the one-page map of **non-`--core`** ex
 ## Rules
 
 - **`--core`**: GNU-clone bytes; no theme chrome; machine flags do not replace clone output.
-- **Modern default**: TTY + no `NO_COLOR` → chrome on; scripts should pass `--core`.
+- **Modern default**: always unless `--core` / `F00_CORE=1` / config `core=true`. TTY + no `NO_COLOR` → chrome on.
+- **Not auto**: non-TTY / “running from a script” does **not** enable `--core`. Pipes only suppress chrome; modern semantics (e.g. find skips `.git`, grep smart-case) still apply.
+- **Drop-in**: for PATH/CI GNU-identical use, set `export F00_CORE=1` or pass `--core` (installer replace does not set this).
 - **f00/v1**: JSON objects include `"schema":"f00/v1"` where implemented (grep matches, find paths, suite tools).
 
 ## Gaps (honest)

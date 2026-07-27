@@ -5,7 +5,7 @@
 (() => {
   "use strict";
 
-  const FALLBACK_VERSION = "v0.16.7";
+  const FALLBACK_VERSION = "v0.16.8";
 
   function esc(s) {
     return String(s == null ? "" : s)

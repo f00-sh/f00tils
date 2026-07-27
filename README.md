@@ -8,14 +8,14 @@ Replaces **coreutils · grep · findutils · diffutils** — **115** tools. Bina
 curl -fsSL https://f00.sh/install.sh | bash
 ```
 
-[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.7`
+[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.8`
 
 ### Documents
 
 | Doc | Path |
 |-----|------|
 | Operator SOP (NASA) | [`docs/sop-f00tils-ops.pdf`](docs/sop-f00tils-ops.pdf) · [JSON source](docs/sop-f00tils-ops.json) |
-| Release memo 0.16.7 | [`docs/memo-release-0.16.7.pdf`](docs/memo-release-0.16.7.pdf) · [JSON source](docs/memo-release-0.16.7.json) |
+| Release memo 0.16.8 | [`docs/memo-release-0.16.8.pdf`](docs/memo-release-0.16.8.pdf) · [JSON source](docs/memo-release-0.16.8.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Site | [https://f00.sh](https://f00.sh) |
 
@@ -23,16 +23,42 @@ curl -fsSL https://f00.sh/install.sh | bash
 
 ## Two modes
 
-| | **`--core`** (scripts) | **Default modern** (TTY) |
-|--|------------------------|---------------------------|
+| | **`--core`** (GNU clone) | **Default modern** |
+|--|--------------------------|---------------------|
 | **Output** | Byte-identical to GNU (stdout / stderr / exit) | Themed chrome, icons, color, extras |
 | **Speed** | Must beat GNU **wall** and **CPU** (separate; per package) | Feels instant; not scored against GNU format |
-| **Who** | CI, shell scripts, drop-in PATH | Humans in a real terminal |
+| **Who** | CI, shell scripts, PATH drop-in | Humans in a real terminal |
 
 `--core` is the clone. Modern is why you stay.
 
-**Script-safe clone (not automatic):** non-TTY only turns chrome/color off. Full GNU bytes need explicit
-`--core`, or process-wide `F00_CORE=1`, or config `core=true` (`f00-config` / config file).
+### Drop-in / scripts — `--core` is **not** auto-detected
+
+Running from a script, cron, CI, or a pipe **does not** turn on `--core`.
+
+| Detected? | What happens |
+|-----------|----------------|
+| **stdout is a TTY** | Modern chrome can turn on (color/icons when allowed) |
+| **stdout is not a TTY** (pipe, file, most scripts) | Color/chrome **off** only |
+| **Full GNU clone** | **Never** inferred from “script vs human” |
+
+Modern still changes **behavior** even without color — e.g. `find` skips `.git`, `grep` smart-case. That is intentional (law 3) and **not** GNU-identical.
+
+**For actual PATH drop-in / CI / shell that must match GNU bytes**, pick one:
+
+```bash
+# per invocation
+ls --core -la
+find --core . -name '*.c'
+grep --core -n pattern file
+
+# process tree (install into ~/.profile / CI env)
+export F00_CORE=1
+
+# permanent (f00-config TUI or config file)
+# core = true
+```
+
+`F00_CORE=1` and config `core=true` are equivalent to passing `--core` on every tool. Installer `replace=true` puts bare names on PATH; it does **not** set `F00_CORE` for you.
 
 ### `--core` vs GNU (suite geos)
 
@@ -65,7 +91,7 @@ diff --core a b         # normal format, script-safe
 
 ```bash
 curl -fsSL https://f00.sh/install.sh | bash
-# pin: F00_VERSION=v0.16.7
+# pin: F00_VERSION=v0.16.8
 # side-by-side only: F00_SUPERSEDE=0
 ```
 
