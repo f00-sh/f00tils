@@ -249,6 +249,57 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Publish current channel to Cloudflare R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+          PREFIX="f00tils/current"
+          ASSET="f00-${VER}-linux-x86_64.tar.gz"
+          STAGE=$(mktemp -d)
+          cp "release-assets/${ASSET}" "$STAGE/"
+          cp "release-assets/SHA256SUMS" "$STAGE/"
+          cp "release-assets/${ASSET}" "$STAGE/f00-linux-x86_64.tar.gz"
+          printf '%s\n' "$VER" > "$STAGE/VERSION"
+          python3 - <<PY
+          import json
+          from pathlib import Path
+          ver = "${VER}"
+          dist = "https://dist.f00.sh/f00tils/current"
+          Path("${STAGE}/manifest.json").write_text(
+              json.dumps(
+                  {
+                      "product": "f00tils",
+                      "binary": "f00",
+                      "version": ver,
+                      "tag": f"v{ver}",
+                      "channel": "current",
+                      "download_base": dist,
+                      "assets": {
+                          "linux-x86_64": {
+                              "file": "f00-linux-x86_64.tar.gz",
+                              "url": f"{dist}/f00-linux-x86_64.tar.gz",
+                              "source_name": f"f00-{ver}-linux-x86_64.tar.gz",
+                          }
+                      },
+                      "github_repo": "f00-sh/f00tils",
+                  },
+                  indent=2,
+              )
+              + "\n"
+          )
+          PY
+          npm install -g wrangler@4
+          for f in VERSION manifest.json SHA256SUMS f00-linux-x86_64.tar.gz "$ASSET"; do
+            wrangler r2 object put "f00-releases/${PREFIX}/${f}" --file="$STAGE/$f" --remote
+          done
+          # also versioned snapshot
+          for f in VERSION manifest.json SHA256SUMS f00-linux-x86_64.tar.gz "$ASSET"; do
+            wrangler r2 object put "f00-releases/f00tils/${VER}/${f}" --file="$STAGE/$f" --remote
+          done
+
       - name: Publish Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

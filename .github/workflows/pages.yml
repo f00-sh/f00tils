@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Seed releases/current (latest channel)
+      - name: Seed releases/current metadata (packages live on R2)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -31,29 +31,26 @@ jobs:
           mkdir -p site/releases/current
           tag=$(gh api repos/f00-sh/f00tils/releases/latest --jq .tag_name)
           ver=${tag#v}
-          asset="f00-${ver}-linux-x86_64.tar.gz"
-          cd site/releases/current
-          if ! gh release download "$tag" -R f00-sh/f00tils -p "$asset" -p SHA256SUMS; then
-            asset="f00-${ver}-x86_64-linux.tar.gz"
-            gh release download "$tag" -R f00-sh/f00tils -p "$asset" -p SHA256SUMS || true
-          fi
-          ln -sfn "$asset" f00-linux-x86_64.tar.gz
-          printf '%s\n' "$ver" > VERSION
+          dist="https://dist.f00.sh/f00tils/current"
+          printf '%s\n' "$ver" > site/releases/current/VERSION
           python3 - <<PY
           import json
           from pathlib import Path
-          ver = Path("VERSION").read_text().strip()
-          Path("manifest.json").write_text(
+          ver = Path("site/releases/current/VERSION").read_text().strip()
+          dist = "https://dist.f00.sh/f00tils/current"
+          Path("site/releases/current/manifest.json").write_text(
               json.dumps(
                   {
                       "product": "f00tils",
+                      "binary": "f00",
                       "version": ver,
                       "tag": f"v{ver}",
                       "channel": "current",
+                      "download_base": dist,
                       "assets": {
                           "linux-x86_64": {
                               "file": "f00-linux-x86_64.tar.gz",
-                              "url": "https://coreutils.f00.sh/releases/current/f00-linux-x86_64.tar.gz",
+                              "url": f"{dist}/f00-linux-x86_64.tar.gz",
                           }
                       },
                       "github_repo": "f00-sh/f00tils",

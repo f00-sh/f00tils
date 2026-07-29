@@ -25,8 +25,9 @@
 set -euo pipefail
 
 REPO="${F00_REPO:-f00-sh/f00tils}"
-# Cloudflare Pages edge (install + /releases/current/* packages)
+# Install host (Cloudflare Pages) vs package host (Cloudflare R2)
 EDGE_BASE="${F00_EDGE_BASE:-https://coreutils.f00.sh}"
+DIST_BASE="${F00_DIST_BASE:-https://dist.f00.sh}"
 BINARY_NAME="f00"
 
 # Full multicall surface (must stay in sync with asm/Makefile UTILS)
@@ -62,9 +63,12 @@ resolve_tag() {
     return
   fi
   need curl
-  # Prefer edge current channel (Cloudflare Pages)
+  # Prefer R2 current channel, then product edge, then GitHub API
   local ver
-  ver="$(curl -fsSL "${EDGE_BASE}/releases/current/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  ver="$(curl -fsSL "${DIST_BASE}/f00tils/current/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -z "$ver" ]]; then
+    ver="$(curl -fsSL "${EDGE_BASE}/releases/current/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  fi
   if [[ -n "$ver" ]]; then
     echo "v${ver#v}"
     return
@@ -250,22 +254,27 @@ fetch_release() {
       ;;
   esac
 
-  # Prefer Cloudflare edge /releases/current (always latest channel)
-  url="${EDGE_BASE}/releases/current/f00-linux-x86_64.tar.gz"
+  # Prefer Cloudflare R2 current channel, then Pages mirror, then GitHub Releases
+  url="${DIST_BASE}/f00tils/current/f00-linux-x86_64.tar.gz"
   log "fetch ${url}"
   if curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
     :
   else
-    # Fallback: GitHub Releases (code/artifacts repo)
-    asset="f00-${tag#v}-linux-x86_64.tar.gz"
-    url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+    url="${EDGE_BASE}/releases/current/f00-linux-x86_64.tar.gz"
     log "retry ${url}"
-    if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
-      asset="f00-${tag#v}-x86_64-linux.tar.gz"
+    if curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
+      :
+    else
+      asset="f00-${tag#v}-linux-x86_64.tar.gz"
       url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
       log "retry ${url}"
       if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
-        die "download failed (set F00_VERSION=vX.Y.Z or F00_LOCAL=path/to/asm)"
+        asset="f00-${tag#v}-x86_64-linux.tar.gz"
+        url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+        log "retry ${url}"
+        if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
+          die "download failed (set F00_VERSION=vX.Y.Z or F00_LOCAL=path/to/asm)"
+        fi
       fi
     fi
   fi

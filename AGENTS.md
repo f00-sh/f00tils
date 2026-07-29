@@ -29,7 +29,7 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 | Path | Role |
 |------|------|
 | `asm/` | Product source, Makefile, man pages, benches |
-| `site/` | Cloudflare Pages `f00-coreutils` → https://coreutils.f00.sh + install.sh + `/releases/current` |
+| `site/` | Cloudflare Pages `f00-coreutils` → https://coreutils.f00.sh + install.sh + current metadata |
 | `install.sh` | Root installer (synced with `site/install.sh`) |
 | `packaging/` | AUR, nfpm (deb/rpm/arch) |
 | `Formula/` | Homebrew formula |
@@ -78,7 +78,8 @@ MIT only.
 ## Edge (Cloudflare)
 
 - Site + installer: https://coreutils.f00.sh (Pages project `f00-coreutils`)
-- Current packages: https://coreutils.f00.sh/releases/current/ (VERSION, manifest.json, tarball)
-- Installer prefers edge current, falls back to GitHub Releases
-- Deploy: `.github/workflows/pages.yml` → wrangler pages deploy
+- Package current channel (R2): https://dist.f00.sh/f00tils/current/ (bucket `f00-releases`)
+- Installer prefers R2 current, then product edge metadata, then GitHub Releases
+- Release workflow publishes `current/` (+ versioned snapshot) to R2; Pages hosts site/install only
+- Deploy site: `.github/workflows/pages.yml` → wrangler pages deploy
 - Do not use GitHub Pages for this product
