@@ -12,8 +12,8 @@
 █  MIT · 2026-07-27 · 115 tools · 4 GNU packages  █
 █  modern default · --core for scripts             █
 █  coreutils · grep · findutils · diffutils        █
-█  coreutils 2.5× · per-set totals (not blended)   █
-█  core 2.5× · grep 3.1× · find 4× · diff 2.9×     █
+█  coreutils 2.1× · per-set totals (not blended)   █
+█  core 2.1× · grep 2.3× · find 2.9× · diff 1.9×   █
 █  https://coreutils.f00.sh · github:theesfeld/f00tils █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    
