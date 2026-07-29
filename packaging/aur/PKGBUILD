@@ -24,7 +24,7 @@ provides=('coreutils' 'findutils' 'grep' 'diffutils')
 conflicts=('coreutils' 'findutils' 'grep' 'diffutils')
 replaces=('coreutils' 'findutils' 'grep' 'diffutils')
 options=('!strip')
-source=("https://github.com/f00-sh/f00tils/releases/download/v${pkgver}/f00-${pkgver}-linux-x86_64.tar.gz")
+source=("https://dist.f00.sh/f00tils/${pkgver}/f00-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
 
 package() {

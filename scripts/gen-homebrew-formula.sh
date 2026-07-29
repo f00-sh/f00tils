@@ -53,7 +53,7 @@ class F00 < Formula
 
   on_linux do
     on_intel do
-      url "https://github.com/f00-sh/f00tils/releases/download/v#{version}/${ASSET}"
+      url "https://dist.f00.sh/f00tils/#{version}/${ASSET}"
       sha256 "${SHA_X86_64_LINUX}"
     end
   end

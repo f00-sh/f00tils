@@ -79,7 +79,8 @@ MIT only.
 
 - Site + installer: https://coreutils.f00.sh (Pages project `f00-coreutils`)
 - Package current channel (R2): https://dist.f00.sh/f00tils/current/ (bucket `f00-releases`)
-- Installer prefers R2 current, then product edge metadata, then GitHub Releases
-- Release workflow publishes `current/` (+ versioned snapshot) to R2; Pages hosts site/install only
+- Versioned packages/docs: https://dist.f00.sh/f00tils/{ver}/ (tarball, deb, rpm, arch, PDFs, scene card)
+- Installer / brew / AUR prefer R2; GitHub Releases is archive + last-resort fallback only
+- Release workflow publishes full asset set to R2; Pages hosts site/install only
 - Deploy site: `.github/workflows/pages.yml` → wrangler pages deploy
 - Do not use GitHub Pages for this product

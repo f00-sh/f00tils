@@ -51,7 +51,7 @@ url="https://coreutils.f00.sh"
 license=('MIT')
 depends=()
 options=('!strip')
-source=("https://github.com/f00-sh/f00tils/releases/download/v\${pkgver}/${ASSET}")
+source=("https://dist.f00.sh/f00tils/\${pkgver}/${ASSET}")
 sha256sums=('${SHA}')
 
 package() {

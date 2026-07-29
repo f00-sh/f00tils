@@ -291,13 +291,25 @@ jobs:
               + "\n"
           )
           PY
-          npm install -g wrangler@4
-          for f in VERSION manifest.json SHA256SUMS f00-linux-x86_64.tar.gz "$ASSET"; do
-            wrangler r2 object put "f00-releases/${PREFIX}/${f}" --file="$STAGE/$f" --remote
+          # Optional distro packages + docs onto R2 so install/package channels never need GitHub
+          for f in \
+            "f00_${VER}_amd64.deb" \
+            "f00-${VER}-1.x86_64.rpm" \
+            "f00-${VER}-1-x86_64.pkg.tar.zst" \
+            "file_id.diz" \
+            "sop-f00tils-ops.pdf" \
+            "memo-release-${VER}.pdf" \
+            "f00-${VER}-x86_64-linux.tar.gz"; do
+            if [[ -f "release-assets/$f" ]]; then
+              cp "release-assets/$f" "$STAGE/"
+            fi
           done
-          # also versioned snapshot
-          for f in VERSION manifest.json SHA256SUMS f00-linux-x86_64.tar.gz "$ASSET"; do
-            wrangler r2 object put "f00-releases/f00tils/${VER}/${f}" --file="$STAGE/$f" --remote
+          npm install -g wrangler@4
+          shopt -s nullglob
+          for f in "$STAGE"/*; do
+            base=$(basename "$f")
+            wrangler r2 object put "f00-releases/${PREFIX}/${base}" --file="$f" --remote
+            wrangler r2 object put "f00-releases/f00tils/${VER}/${base}" --file="$f" --remote
           done
 
       - name: Publish Homebrew tap

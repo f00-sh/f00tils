@@ -18,7 +18,7 @@ curl -fsSL https://coreutils.f00.sh/install.sh | bash
 | Release memo 0.16.10 | [`docs/memo-release-0.16.10.pdf`](docs/memo-release-0.16.10.pdf) · [JSON source](docs/memo-release-0.16.10.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Site | [https://coreutils.f00.sh](https://coreutils.f00.sh) |
-| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/f00-sh/f00tils/releases/latest/download/file_id.diz) |
+| Release scene card | [`file_id.diz`](file_id.diz) · [current channel](https://dist.f00.sh/f00tils/current/file_id.diz) |
 
 ### Scene card
 

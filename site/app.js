@@ -24,12 +24,13 @@
 
   setVersionLabels(FALLBACK_VERSION);
   try {
-    fetch("https://api.github.com/repos/f00-sh/f00tils/releases/latest", {
-      headers: { Accept: "application/vnd.github+json" },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && data.tag_name) setVersionLabels(data.tag_name);
+    // Cloudflare R2 current channel (not GitHub Releases API)
+    fetch("https://dist.f00.sh/f00tils/current/VERSION", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.text() : null))
+      .then((text) => {
+        if (!text) return;
+        const ver = String(text).trim().replace(/^v/i, "");
+        if (ver) setVersionLabels(`v${ver}`);
       })
       .catch(() => {});
   } catch (_) {}
