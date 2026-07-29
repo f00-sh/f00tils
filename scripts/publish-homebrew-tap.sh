@@ -33,7 +33,7 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
 if [[ -z "$(git rev-parse --verify HEAD 2>/dev/null || true)" ]]; then
   git checkout -B "${BRANCH}"
-  printf '# Homebrew tap for theesfeld projects\n\n```bash\nbrew install theesfeld/tap/f00\n```\n' > README.md
+  printf '# Homebrew tap for theesfeld projects\n\n```bash\nbrew install f00-sh/tap/f00\n```\n' > README.md
   git add README.md Formula/f00.rb
   git commit -m "feat: add f00 formula"
   git push -u origin "${BRANCH}"

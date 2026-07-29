@@ -227,7 +227,7 @@ jobs:
             #   deb:  f00_${{ steps.meta.outputs.version }}_amd64.deb
             #   rpm:  f00-${{ steps.meta.outputs.version }}-1.x86_64.rpm
             #   arch: f00-${{ steps.meta.outputs.version }}-1-x86_64.pkg.tar.zst
-            #   brew: brew install theesfeld/tap/f00
+            #   brew: brew install f00-sh/tap/f00
             #   AUR:  yay -S f00
             # source
             git checkout ${{ steps.meta.outputs.tag }} && cd asm && make && make install

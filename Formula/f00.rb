@@ -1,7 +1,7 @@
 # Homebrew formula for f00 (pure assembly multicall coreutils suite).
 #
 # Install:
-#   brew install theesfeld/tap/f00
+#   brew install f00-sh/tap/f00
 #
 # Official installer:
 #   curl -fsSL https://coreutils.f00.sh/install.sh | bash
