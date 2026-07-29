@@ -171,26 +171,26 @@ cd asm && make speed    # wall+CPU law (optional on every commit)
 4. One multicall binary.
 
 <!-- bench-table:start -->
-_CI / suite bench · `2026-07-27T20:34:20Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_ · **totals are per package set, not blended**
+_CI / suite bench · `2026-07-29T12:45:17Z` · N=15 median · x86_64 · Linux 6.17.0-1020-azure_ · **totals are per package set, not blended**
 
 | Package | Tool | Command | GNU wall | f00 wall | Speed | CPU × |
 |---------|------|---------|---------:|---------:|------:|------:|
-| coreutils | `true` | `f00-true --core` | 0.53 ms | **0.26 ms** | **~2.0×** | **~2.4×** |
-| coreutils | `basename` | `f00-basename --core /usr/bin/ls` | 0.77 ms | **0.27 ms** | **~2.9×** | **~3.4×** |
-| coreutils | `nproc` | `f00-nproc --core` | 0.79 ms | **0.27 ms** | **~3.0×** | **~3.6×** |
-| coreutils | `whoami` | `f00-whoami --core` | 0.85 ms | **0.27 ms** | **~3.2×** | **~3.8×** |
-| coreutils | `cat` | `f00-cat --core fixture.txt` | 0.81 ms | **0.30 ms** | **~2.7×** | **~3.1×** |
-| coreutils | `wc` | `f00-wc --core -l fixture.txt` | 0.81 ms | **0.38 ms** | **~2.1×** | **~2.3×** |
-| coreutils | `md5sum` | `f00-md5sum --core fixture.txt` | 1.20 ms | **0.41 ms** | **~2.9×** | **~3.3×** |
-| coreutils | `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.19 ms | **0.47 ms** | **~2.5×** | **~2.7×** |
-| coreutils | `sort` | `f00-sort --core fixture.txt` | 1.29 ms | **1.01 ms** | **~1.3×** | **~1.3×** |
-| coreutils | `ls` | `f00-ls --core -1 dir` | 0.97 ms | **0.43 ms** | **~2.2×** | **~2.4×** |
-| grep | `grep` | `f00-grep --core -F hello fixture.txt` | 1.02 ms | **0.42 ms** | **~2.4×** | **~2.7×** |
-| findutils | `find` | `f00-find --core -maxdepth 1 -name '*.txt' /tmp/f00-suite-bench.0ci_57pa/dir` | 1.06 ms | **0.46 ms** | **~2.3×** | **~2.5×** |
-| diffutils | `diff` | `f00-diff --core -u a.txt b.txt` | 0.93 ms | **0.55 ms** | **~1.7×** | **~1.8×** |
-| diffutils | `cmp` | `f00-cmp --core fixture.txt fixture.txt` | 0.87 ms | **0.42 ms** | **~2.1×** | **~2.3×** |
+| coreutils | `true` | `f00-true --core` | 0.61 ms | **0.32 ms** | **~1.9×** | **~2.0×** |
+| coreutils | `basename` | `f00-basename --core /usr/bin/ls` | 0.89 ms | **0.26 ms** | **~3.4×** | **~3.8×** |
+| coreutils | `nproc` | `f00-nproc --core` | 0.83 ms | **0.26 ms** | **~3.2×** | **~3.6×** |
+| coreutils | `whoami` | `f00-whoami --core` | 0.91 ms | **0.27 ms** | **~3.4×** | **~3.9×** |
+| coreutils | `cat` | `f00-cat --core fixture.txt` | 0.86 ms | **0.31 ms** | **~2.8×** | **~3.2×** |
+| coreutils | `wc` | `f00-wc --core -l fixture.txt` | 0.86 ms | **0.36 ms** | **~2.4×** | **~2.6×** |
+| coreutils | `md5sum` | `f00-md5sum --core fixture.txt` | 1.27 ms | **0.40 ms** | **~3.1×** | **~3.5×** |
+| coreutils | `sha256sum` | `f00-sha256sum --core fixture.txt` | 1.25 ms | **0.47 ms** | **~2.7×** | **~2.9×** |
+| coreutils | `sort` | `f00-sort --core fixture.txt` | 1.35 ms | **1.00 ms** | **~1.4×** | **~1.4×** |
+| coreutils | `ls` | `f00-ls --core -1 dir` | 1.06 ms | **0.45 ms** | **~2.4×** | **~2.5×** |
+| grep | `grep` | `f00-grep --core -F hello fixture.txt` | 1.09 ms | **0.42 ms** | **~2.6×** | **~2.9×** |
+| findutils | `find` | `f00-find --core -maxdepth 1 -name '*.txt' /tmp/f00-suite-bench.arqbqeg5/dir` | 1.12 ms | **0.44 ms** | **~2.5×** | **~2.7×** |
+| diffutils | `diff` | `f00-diff --core -u a.txt b.txt` | 0.98 ms | **0.48 ms** | **~2.0×** | **~2.2×** |
+| diffutils | `cmp` | `f00-cmp --core fixture.txt fixture.txt` | 0.90 ms | **0.44 ms** | **~2.0×** | **~2.2×** |
 <!-- bench-table:end -->
 
 <!-- bench-headline:start -->
-**GNU coreutils:** wall 2.3× · CPU 2.6× (91/91 wall wins · 91/91 CPU wins) · **GNU grep:** wall 2.9× · CPU 3.2× (3/3 wall wins · 3/3 CPU wins) · **GNU findutils:** wall 3.6× · CPU 4.1× (2/2 wall wins · 2/2 CPU wins) · **GNU diffutils:** wall 2.6× · CPU 2.8× (4/4 wall wins · 4/4 CPU wins)
+**GNU coreutils:** wall 2.5× · CPU 2.8× (91/91 wall wins · 91/91 CPU wins) · **GNU grep:** wall 3.1× · CPU 3.3× (3/3 wall wins · 3/3 CPU wins) · **GNU findutils:** wall 4× · CPU 4.4× (2/2 wall wins · 2/2 CPU wins) · **GNU diffutils:** wall 2.9× · CPU 3.1× (4/4 wall wins · 4/4 CPU wins)
 <!-- bench-headline:end -->
