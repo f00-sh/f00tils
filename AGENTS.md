@@ -29,7 +29,7 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 | Path | Role |
 |------|------|
 | `asm/` | Product source, Makefile, man pages, benches |
-| `site/` | Cloudflare Pages `f00-coreutils` → https://coreutils.f00.sh + install.sh + current metadata. Brand tokens/fonts from hub only: `https://f00.sh/theme/f00-theme-14.css` (Heartbox palette, Onyx). Do not redefine brand colors in `site/styles.css`. Source: heartbox.f00.sh. |
+| `site/` | Cloudflare Pages `f00-coreutils` → https://coreutils.f00.sh + install.sh + current metadata. Brand tokens/fonts from hub only: `https://f00.sh/theme/f00-theme.css` (Heartbox palette, Onyx). Do not redefine brand colors in `site/styles.css`. Source: heartbox.f00.sh. |
 | `install.sh` | Root installer (synced with `site/install.sh`) |
 | `packaging/` | AUR, nfpm (deb/rpm/arch) |
 | `Formula/` | Homebrew formula |
@@ -89,5 +89,5 @@ MIT only.
 
 - **Contrasts:** Nirvana *Heart-Shaped Box* video / Heartbox palette — hospital-night bg, cream fg, poppy accent, verse sky, silver metal.
 - **Text & boxes:** Nirvana *Bleach* album — hard square frames, catalog mono labels, no rounded glass, thin rules, raw liner-note density.
-- Theme CSS: `https://f00.sh/theme/f00-theme-14.css` (do not invent brand hex or soft UI radii).
+- **ONE shared org CSS:** `https://f00.sh/theme/f00-theme.css` (hub domain; all subdomains). Product CSS = layout only (do not invent brand hex or soft UI radii).
 
