@@ -29,7 +29,7 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 | Path | Role |
 |------|------|
 | `asm/` | Product source, Makefile, man pages, benches |
-| `site/` | https://coreutils.f00.sh (GitHub Pages) + `install.sh` (hub: https://f00.sh) |
+| `site/` | Cloudflare Pages `f00-coreutils` → https://coreutils.f00.sh + install.sh + `/releases/current` |
 | `install.sh` | Root installer (synced with `site/install.sh`) |
 | `packaging/` | AUR, nfpm (deb/rpm/arch) |
 | `Formula/` | Homebrew formula |
@@ -51,7 +51,7 @@ make aarch64 && make aarch64-smoke
 
 Release story: **tarball + `install.sh`** (`make sync-install` keeps site copy identical). deb/rpm/AUR/brew secondary.
 
-Ship narrative: **README + https://coreutils.f00.sh only.** Docs under `docs/` are optional depth.
+Ship narrative: **README + https://coreutils.f00.sh only** (Cloudflare edge). GitHub is code/releases only. Docs under `docs/` are optional depth.
 
 ## Language purity
 
@@ -73,3 +73,12 @@ Follow house rules in `~/.grok/rules/10-user-facing-language.md` (STE for proced
 ## License
 
 MIT only.
+
+
+## Edge (Cloudflare)
+
+- Site + installer: https://coreutils.f00.sh (Pages project `f00-coreutils`)
+- Current packages: https://coreutils.f00.sh/releases/current/ (VERSION, manifest.json, tarball)
+- Installer prefers edge current, falls back to GitHub Releases
+- Deploy: `.github/workflows/pages.yml` → wrangler pages deploy
+- Do not use GitHub Pages for this product

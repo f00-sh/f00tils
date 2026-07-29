@@ -1,4 +1,4 @@
-name: Deploy site
+name: Deploy site (Cloudflare Pages)
 
 on:
   push:
@@ -6,48 +6,67 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
-  # GITHUB_TOKEN bench auto-commits do not re-trigger path filters for other
-  # workflows; redeploy after CI so suite.json from publish-bench goes live.
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+  release:
+    types: [published]
 
 concurrency:
-  group: pages
+  group: pages-cloudflare
   cancel-in-progress: true
 
 jobs:
   deploy:
-    name: GitHub Pages
+    name: Cloudflare Pages
     runs-on: ubuntu-latest
-    # For workflow_run: only deploy successful CI on main
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
+
+      - name: Seed releases/current (latest channel)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p site/releases/current
+          tag=$(gh api repos/f00-sh/f00tils/releases/latest --jq .tag_name)
+          ver=${tag#v}
+          asset="f00-${ver}-linux-x86_64.tar.gz"
+          cd site/releases/current
+          if ! gh release download "$tag" -R f00-sh/f00tils -p "$asset" -p SHA256SUMS; then
+            asset="f00-${ver}-x86_64-linux.tar.gz"
+            gh release download "$tag" -R f00-sh/f00tils -p "$asset" -p SHA256SUMS || true
+          fi
+          ln -sfn "$asset" f00-linux-x86_64.tar.gz
+          printf '%s\n' "$ver" > VERSION
+          python3 - <<PY
+          import json
+          from pathlib import Path
+          ver = Path("VERSION").read_text().strip()
+          Path("manifest.json").write_text(
+              json.dumps(
+                  {
+                      "product": "f00tils",
+                      "version": ver,
+                      "tag": f"v{ver}",
+                      "channel": "current",
+                      "assets": {
+                          "linux-x86_64": {
+                              "file": "f00-linux-x86_64.tar.gz",
+                              "url": "https://coreutils.f00.sh/releases/current/f00-linux-x86_64.tar.gz",
+                          }
+                      },
+                      "github_repo": "f00-sh/f00tils",
+                  },
+                  indent=2,
+              )
+              + "\n"
+          )
+          PY
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          # workflow_run defaults to workflow file SHA; take latest main for bench data
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
-
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=f00-coreutils --branch=main

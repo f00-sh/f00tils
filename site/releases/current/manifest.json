@@ -1,0 +1,15 @@
+{
+  "product": "f00tils",
+  "binary": "f00",
+  "version": "0.16.10",
+  "tag": "v0.16.10",
+  "channel": "current",
+  "assets": {
+    "linux-x86_64": {
+      "file": "f00-linux-x86_64.tar.gz",
+      "url": "https://coreutils.f00.sh/releases/current/f00-linux-x86_64.tar.gz",
+      "source_name": "f00-0.16.10-linux-x86_64.tar.gz"
+    }
+  },
+  "github_repo": "f00-sh/f00tils"
+}

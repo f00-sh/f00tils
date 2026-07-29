@@ -25,6 +25,8 @@
 set -euo pipefail
 
 REPO="${F00_REPO:-f00-sh/f00tils}"
+# Cloudflare Pages edge (install + /releases/current/* packages)
+EDGE_BASE="${F00_EDGE_BASE:-https://coreutils.f00.sh}"
 BINARY_NAME="f00"
 
 # Full multicall surface (must stay in sync with asm/Makefile UTILS)
@@ -60,6 +62,13 @@ resolve_tag() {
     return
   fi
   need curl
+  # Prefer edge current channel (Cloudflare Pages)
+  local ver
+  ver="$(curl -fsSL "${EDGE_BASE}/releases/current/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ -n "$ver" ]]; then
+    echo "v${ver#v}"
+    return
+  fi
   local tag
   tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
@@ -241,17 +250,23 @@ fetch_release() {
       ;;
   esac
 
-  # Preferred asset names for ASM multicall releases
-  asset="f00-${tag#v}-linux-x86_64.tar.gz"
-  url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
-
+  # Prefer Cloudflare edge /releases/current (always latest channel)
+  url="${EDGE_BASE}/releases/current/f00-linux-x86_64.tar.gz"
   log "fetch ${url}"
-  if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
-    asset="f00-${tag#v}-x86_64-linux.tar.gz"
+  if curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
+    :
+  else
+    # Fallback: GitHub Releases (code/artifacts repo)
+    asset="f00-${tag#v}-linux-x86_64.tar.gz"
     url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
     log "retry ${url}"
     if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
-      die "download failed (set F00_VERSION=vX.Y.Z or F00_LOCAL=path/to/asm)"
+      asset="f00-${tag#v}-x86_64-linux.tar.gz"
+      url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+      log "retry ${url}"
+      if ! curl -fsSL "$url" -o "${tmp}/f00.tgz"; then
+        die "download failed (set F00_VERSION=vX.Y.Z or F00_LOCAL=path/to/asm)"
+      fi
     fi
   fi
   tar -xzf "${tmp}/f00.tgz" -C "$tmp"
