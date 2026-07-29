@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="f00 prompt logo light">
   <title>f00 — option A · prompt (light)</title>
-  <rect width="512" height="512" rx="96" fill="#f4f6f8"/>
+  <rect width="512" height="512" rx="96" fill="#FFF8F0"/>
   <text x="88" y="310"
         font-family="ui-monospace, 'IBM Plex Mono', Menlo, monospace"
         font-size="168" font-weight="600" fill="#0d9f6e">$</text>

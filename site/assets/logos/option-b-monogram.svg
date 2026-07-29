@@ -3,15 +3,15 @@
   <desc>Geometric f + two zeros as linked rings. Strong favicon and app icon.</desc>
   <rect width="512" height="512" rx="96" fill="#0e1218"/>
   <!-- Outer frame -->
-  <rect x="48" y="48" width="416" height="416" rx="72" fill="none" stroke="#1c2430" stroke-width="8"/>
+  <rect x="48" y="48" width="416" height="416" rx="72" fill="none" stroke="#4A3A3E" stroke-width="8"/>
   <!-- Left stem of f -->
   <path d="M148 360 V168 c0-28 18-44 48-44 h72"
-        fill="none" stroke="#e8edf4" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+        fill="none" stroke="#F4EBE0" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- f crossbar -->
   <path d="M128 248 H248" fill="none" stroke="#3ecf8e" stroke-width="36" stroke-linecap="round"/>
   <!-- Zero 1 -->
   <ellipse cx="300" cy="268" rx="58" ry="72"
-           fill="none" stroke="#e8edf4" stroke-width="32"/>
+           fill="none" stroke="#F4EBE0" stroke-width="32"/>
   <!-- Zero 2 -->
   <ellipse cx="392" cy="268" rx="58" ry="72"
            fill="none" stroke="#5eead4" stroke-width="32"/>

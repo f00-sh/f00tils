@@ -2,36 +2,36 @@
   <title>f00tils</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0a0c0f"/>
+      <stop offset="0%" stop-color="#1A1214"/>
       <stop offset="100%" stop-color="#121820"/>
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <circle cx="1040" cy="90" r="220" fill="#3dff9a" opacity="0.06"/>
+  <circle cx="1040" cy="90" r="220" fill="#E02030" opacity="0.06"/>
   <circle cx="160" cy="560" r="180" fill="#7dffe0" opacity="0.05"/>
   <!-- mark -->
   <g transform="translate(96,150)">
-    <rect width="200" height="200" rx="44" fill="#11161e" stroke="#1e2633" stroke-width="4"/>
-    <circle cx="48" cy="48" r="9" fill="#5c6778"/>
-    <circle cx="76" cy="48" r="9" fill="#5c6778"/>
-    <circle cx="104" cy="48" r="9" fill="#3dff9a"/>
-    <rect x="40" y="88" width="72" height="14" rx="5" fill="#2a3544"/>
-    <rect x="40" y="118" width="110" height="14" rx="5" fill="#2a3544"/>
-    <rect x="34" y="142" width="132" height="28" rx="8" fill="#3dff9a" opacity="0.16"/>
-    <rect x="40" y="150" width="64" height="14" rx="5" fill="#3dff9a"/>
-    <rect x="40" y="188" width="90" height="14" rx="5" fill="#2a3544"/>
+    <rect width="200" height="200" rx="44" fill="#22181B" stroke="#1e2633" stroke-width="4"/>
+    <circle cx="48" cy="48" r="9" fill="#8A6E78"/>
+    <circle cx="76" cy="48" r="9" fill="#8A6E78"/>
+    <circle cx="104" cy="48" r="9" fill="#E02030"/>
+    <rect x="40" y="88" width="72" height="14" rx="5" fill="#3A2428"/>
+    <rect x="40" y="118" width="110" height="14" rx="5" fill="#3A2428"/>
+    <rect x="34" y="142" width="132" height="28" rx="8" fill="#E02030" opacity="0.16"/>
+    <rect x="40" y="150" width="64" height="14" rx="5" fill="#E02030"/>
+    <rect x="40" y="188" width="90" height="14" rx="5" fill="#3A2428"/>
   </g>
   <text x="340" y="230"
         font-family="ui-monospace, 'IBM Plex Mono', Menlo, monospace"
-        font-size="92" font-weight="700" fill="#e8edf4" letter-spacing="-2">f00tils</text>
+        font-size="92" font-weight="700" fill="#F4EBE0" letter-spacing="-2">f00tils</text>
   <text x="348" y="290"
         font-family="ui-sans-serif, 'IBM Plex Sans', system-ui, sans-serif"
-        font-size="36" font-weight="500" fill="#8b95a8">coreutils → pure freestanding assembly</text>
+        font-size="36" font-weight="500" fill="#8A6E78">coreutils → pure freestanding assembly</text>
   <text x="348" y="360"
         font-family="ui-monospace, 'IBM Plex Mono', Menlo, monospace"
-        font-size="28" fill="#3dff9a">modern by default · --core for scripts · faster always</text>
+        font-size="28" fill="#E02030">modern by default · --core for scripts · faster always</text>
   <text x="348" y="430"
         font-family="ui-sans-serif, system-ui, sans-serif"
-        font-size="26" fill="#5c6678">coreutils.f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
-  <rect x="96" y="520" width="1008" height="4" rx="2" fill="#3dff9a" opacity="0.5"/>
+        font-size="26" fill="#8A6E78">coreutils.f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
+  <rect x="96" y="520" width="1008" height="4" rx="2" fill="#E02030" opacity="0.5"/>
 </svg>

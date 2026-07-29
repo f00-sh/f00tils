@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="f00 glyph favicon">
   <title>f00 — option E · glyph (favicon-first)</title>
   <desc>Ultra-simple mark: f with double ring. Designed to stay legible at 16–32px favicon size.</desc>
-  <rect width="512" height="512" rx="112" fill="#07090c"/>
+  <rect width="512" height="512" rx="112" fill="#1A1214"/>
   <!-- f as bold path, tight -->
   <path d="M150 390 V150 h140"
-        fill="none" stroke="#e8edf4" stroke-width="56" stroke-linecap="square"/>
+        fill="none" stroke="#F4EBE0" stroke-width="56" stroke-linecap="square"/>
   <path d="M120 250 H280"
         fill="none" stroke="#3ecf8e" stroke-width="56" stroke-linecap="square"/>
   <!-- double zero as concentric arcs (reads at small size) -->
-  <circle cx="360" cy="270" r="88" fill="none" stroke="#e8edf4" stroke-width="48"/>
+  <circle cx="360" cy="270" r="88" fill="none" stroke="#F4EBE0" stroke-width="48"/>
   <circle cx="360" cy="270" r="36" fill="none" stroke="#5eead4" stroke-width="28"/>
 </svg>
