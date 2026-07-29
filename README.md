@@ -8,7 +8,7 @@ Replaces **coreutils · grep · findutils · diffutils** — **115** tools. Bina
 curl -fsSL https://coreutils.f00.sh/install.sh | bash
 ```
 
-[coreutils.f00.sh](https://coreutils.f00.sh) · [github.com/theesfeld/f00tils](https://github.com/theesfeld/f00tils) · `v0.16.10`
+[coreutils.f00.sh](https://coreutils.f00.sh) · [github.com/f00-sh/f00tils](https://github.com/f00-sh/f00tils) · `v0.16.10`
 
 ### Documents
 
@@ -18,7 +18,7 @@ curl -fsSL https://coreutils.f00.sh/install.sh | bash
 | Release memo 0.16.10 | [`docs/memo-release-0.16.10.pdf`](docs/memo-release-0.16.10.pdf) · [JSON source](docs/memo-release-0.16.10.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Site | [https://coreutils.f00.sh](https://coreutils.f00.sh) |
-| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/theesfeld/f00tils/releases/latest/download/file_id.diz) |
+| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/f00-sh/f00tils/releases/latest/download/file_id.diz) |
 
 ### Scene card
 
@@ -41,7 +41,7 @@ Release identity (`file_id.diz` — ACiD / 16colo.rs style). Ships on every GitH
 █  coreutils · grep · findutils · diffutils        █
 █  coreutils 2.6× · per-set totals (not blended)   █
 █  core 2.6× · grep 3.2× · find 4.1× · diff 2.9×   █
-█  https://coreutils.f00.sh · github:theesfeld/f00tils           █
+█  https://coreutils.f00.sh · github:f00-sh/f00tils           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    
 ```

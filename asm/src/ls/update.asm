@@ -13,7 +13,7 @@ curl_name:      db "curl", 0
 msg_upd:        db "f00-asm: fetching https://coreutils.f00.sh/install.sh via curl...", 10, 0
 msg_no_curl:    db "f00-asm: curl not found; install curl or update manually", 10, 0
 msg_chk:        db "f00-asm: version 0.12.0-asm (local pure-assembly port)", 10
-                db "upstream f00: https://github.com/theesfeld/f00tils/releases/latest", 10
+                db "upstream f00: https://github.com/f00-sh/f00tils/releases/latest", 10
                 db "This binary is the freestanding assembly suite release channel.", 10, 0
 arg0:           db "curl", 0
 arg1:           db "-fsSL", 0

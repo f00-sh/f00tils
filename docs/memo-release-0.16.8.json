@@ -61,6 +61,6 @@
   },
   "cc": [
     "https://coreutils.f00.sh",
-    "github.com/theesfeld/f00tils"
+    "github.com/f00-sh/f00tils"
   ]
 }

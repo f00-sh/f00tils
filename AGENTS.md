@@ -6,7 +6,7 @@
 
 - Product / narrative name: **f00tils**
 - Binary / multicall: **`f00`**, tools **`f00-*`**
-- Site: https://coreutils.f00.sh · Hub: https://f00.sh · Repo: theesfeld/f00tils (org target: f00-sh/f00tils)
+- Site: https://coreutils.f00.sh · Hub: https://f00.sh · Repo: f00-sh/f00tils (org: f00-sh/f00tils)
 
 ## Declared language
 

@@ -56,7 +56,7 @@
           ],
           [
             "Repository",
-            "github.com/theesfeld/f00tilstils"
+            "github.com/f00-sh/f00tilstils"
           ],
           [
             "License",
@@ -235,7 +235,7 @@
         {
           "n": "7.1",
           "text": "Clone or update the repository.",
-          "code": "git clone git@github.com:theesfeld/f00tils.git\ncd f00\ngit checkout main\ngit pull --ff-only"
+          "code": "git clone git@github.com:f00-sh/f00tils.git\ncd f00\ngit checkout main\ngit pull --ff-only"
         },
         {
           "n": "7.2",

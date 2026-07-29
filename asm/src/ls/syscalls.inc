@@ -1,4 +1,4 @@
-; f00-asm — Linux x86-64 freestanding port of theesfeld/f00tils
+; f00-asm — Linux x86-64 freestanding port of f00-sh/f00tils
 %ifndef F00_SYSCALLS_INC
 %define F00_SYSCALLS_INC
 

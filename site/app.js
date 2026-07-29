@@ -24,7 +24,7 @@
 
   setVersionLabels(FALLBACK_VERSION);
   try {
-    fetch("https://api.github.com/repos/theesfeld/f00tils/releases/latest", {
+    fetch("https://api.github.com/repos/f00-sh/f00tils/releases/latest", {
       headers: { Accept: "application/vnd.github+json" },
     })
       .then((r) => (r.ok ? r.json() : null))

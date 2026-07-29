@@ -245,7 +245,7 @@ jobs:
             - `memo-release-${{ steps.meta.outputs.version }}.pdf` (NASA release memo)
             - `SHA256SUMS`
 
-            See [README](https://github.com/theesfeld/f00tils#readme) · https://coreutils.f00.sh · [Documents](https://coreutils.f00.sh/#documents)
+            See [README](https://github.com/f00-sh/f00tils#readme) · https://coreutils.f00.sh · [Documents](https://coreutils.f00.sh/#documents)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

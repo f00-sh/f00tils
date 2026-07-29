@@ -12,7 +12,7 @@
 # Env:
 #   INSTALL_DIR      default ~/.local/bin
 #   F00_VERSION      release tag (default: latest; default: latest / v0.16.10)
-#   F00_REPO         GitHub owner/repo (default: theesfeld/f00tils)
+#   F00_REPO         GitHub owner/repo (default: f00-sh/f00tils)
 #   F00_LOCAL        path to a local build directory containing ./f00
 #                    (e.g. /path/to/f00/asm) — skips download
 #   F00_TOOLS        comma list or "all" (default: all shipped tools)
@@ -24,7 +24,7 @@
 #
 set -euo pipefail
 
-REPO="${F00_REPO:-theesfeld/f00tils}"
+REPO="${F00_REPO:-f00-sh/f00tils}"
 BINARY_NAME="f00"
 
 # Full multicall surface (must stay in sync with asm/Makefile UTILS)
