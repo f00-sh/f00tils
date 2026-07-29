@@ -27,7 +27,7 @@ section .rodata
 s_core_sec:  db "Coreutils flags:", 0
 s_mod_sec:   db "Modern flags:", 0
 s_ex_sec:    db "Examples:", 0
-s_footer:    db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
+s_footer:    db "f00tils · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 s_rule:      db "────────────────────────────────────────────────────────────", 10, 0
 s_hdr_pre:   db "╭─ ", 0
 s_hdr_mid:   db " ", 0

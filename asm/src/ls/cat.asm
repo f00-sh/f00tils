@@ -120,13 +120,13 @@ cat_help:
     db 10
     db "Modern TTY (not --core): bat-class chrome — title block, line gutter,", 10
     db "colored fringe, content paint. Use --core for plain GNU cat.", 10
-    db "f00tils · pure assembly · MIT · https://f00.sh", 10
+    db "f00tils · pure assembly · MIT · https://coreutils.f00.sh", 10
 cat_help_len equ $-cat_help
 
 cat_version:
     db "f00-cat (f00) 0.16.10", 10
     db "GNU coreutils cat drop-in + modern chrome — pure assembly", 10
-    db "License: MIT · https://f00.sh", 10
+    db "License: MIT · https://coreutils.f00.sh", 10
 cat_version_len equ $-cat_version
 
 ; bat-class gutter: light vertical bar + space

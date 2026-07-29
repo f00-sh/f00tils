@@ -5,10 +5,10 @@ Freestanding **ASM** multicall (no libc). Primary: **Linux x86-64**. Port: **Lin
 Replaces **coreutils · grep · findutils · diffutils** — **115** tools. Binary: `f00` / `f00-*`. Bare names on PATH when replace is on.
 
 ```bash
-curl -fsSL https://f00.sh/install.sh | bash
+curl -fsSL https://coreutils.f00.sh/install.sh | bash
 ```
 
-[f00.sh](https://f00.sh) · [github.com/theesfeld/f00](https://github.com/theesfeld/f00) · `v0.16.10`
+[coreutils.f00.sh](https://coreutils.f00.sh) · [github.com/theesfeld/f00tils](https://github.com/theesfeld/f00tils) · `v0.16.10`
 
 ### Documents
 
@@ -17,8 +17,8 @@ curl -fsSL https://f00.sh/install.sh | bash
 | Operator SOP (NASA) | [`docs/sop-f00tils-ops.pdf`](docs/sop-f00tils-ops.pdf) · [JSON source](docs/sop-f00tils-ops.json) |
 | Release memo 0.16.10 | [`docs/memo-release-0.16.10.pdf`](docs/memo-release-0.16.10.pdf) · [JSON source](docs/memo-release-0.16.10.json) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
-| Site | [https://f00.sh](https://f00.sh) |
-| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/theesfeld/f00/releases/latest/download/file_id.diz) |
+| Site | [https://coreutils.f00.sh](https://coreutils.f00.sh) |
+| Release scene card | [`file_id.diz`](file_id.diz) · [latest Release asset](https://github.com/theesfeld/f00tils/releases/latest/download/file_id.diz) |
 
 ### Scene card
 
@@ -41,7 +41,7 @@ Release identity (`file_id.diz` — ACiD / 16colo.rs style). Ships on every GitH
 █  coreutils · grep · findutils · diffutils        █
 █  coreutils 2.6× · per-set totals (not blended)   █
 █  core 2.6× · grep 3.2× · find 4.1× · diff 2.9×   █
-█  https://f00.sh · github:theesfeld/f00           █
+█  https://coreutils.f00.sh · github:theesfeld/f00tils           █
 ████████████████████████████████████████████████████
   ░▒▓  no libc · Linux x86-64 · curl | bash  ▓▒░    
 ```
@@ -119,7 +119,7 @@ diff --core a b         # normal format, script-safe
 **Primary:** tarball + [`install.sh`](install.sh) (site copy must match — `make sync-install`).
 
 ```bash
-curl -fsSL https://f00.sh/install.sh | bash
+curl -fsSL https://coreutils.f00.sh/install.sh | bash
 # pin: F00_VERSION=v0.16.10
 # side-by-side only: F00_SUPERSEDE=0
 ```
@@ -152,7 +152,7 @@ cd asm && make hot   # sort 200k lines + ls 500 files: wall+CPU vs GNU
 | findutils | 2 | full common track |
 | diffutils | 4 | full common track |
 
-Live scoreboard + benches: [f00.sh](https://f00.sh/#scoreboard) · data [`site/bench/suite.json`](site/bench/suite.json).
+Live scoreboard + benches: [f00.sh](https://coreutils.f00.sh/#scoreboard) · data [`site/bench/suite.json`](site/bench/suite.json).
 
 ### Boring-solid (x86-64)
 

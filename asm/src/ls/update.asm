@@ -10,20 +10,20 @@ extern g_exit
 
 section .rodata
 curl_name:      db "curl", 0
-msg_upd:        db "f00-asm: fetching https://f00.sh/install.sh via curl...", 10, 0
+msg_upd:        db "f00-asm: fetching https://coreutils.f00.sh/install.sh via curl...", 10, 0
 msg_no_curl:    db "f00-asm: curl not found; install curl or update manually", 10, 0
 msg_chk:        db "f00-asm: version 0.12.0-asm (local pure-assembly port)", 10
-                db "upstream f00: https://github.com/theesfeld/f00/releases/latest", 10
+                db "upstream f00: https://github.com/theesfeld/f00tils/releases/latest", 10
                 db "This binary is the freestanding assembly suite release channel.", 10, 0
 arg0:           db "curl", 0
 arg1:           db "-fsSL", 0
-arg2:           db "https://f00.sh/install.sh", 0
+arg2:           db "https://coreutils.f00.sh/install.sh", 0
 sh_name:        db "sh", 0
 sh0:            db "sh", 0
 sh1:            db "-c", 0
 ; run: curl ... | sh  — simplified: exec curl to stdout and tell user
 msg_pipe:       db "f00-asm: run manually:", 10
-                db "  curl -fsSL https://f00.sh/install.sh | bash", 10
+                db "  curl -fsSL https://coreutils.f00.sh/install.sh | bash", 10
                 db "(self-update uses the assembly release channel only)", 10, 0
 
 section .bss

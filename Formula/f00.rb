@@ -4,17 +4,17 @@
 #   brew install theesfeld/tap/f00
 #
 # Official installer:
-#   curl -fsSL https://f00.sh/install.sh | bash
+#   curl -fsSL https://coreutils.f00.sh/install.sh | bash
 
 class F00 < Formula
   desc "f00tils — pure assembly coreutils replacement (multicall, freestanding)"
-  homepage "https://f00.sh"
+  homepage "https://coreutils.f00.sh"
   version "0.16.10"
   license "MIT"
 
   on_linux do
     on_intel do
-      url "https://github.com/theesfeld/f00/releases/download/v#{version}/f00-0.16.10-linux-x86_64.tar.gz"
+      url "https://github.com/theesfeld/f00tils/releases/download/v#{version}/f00-0.16.10-linux-x86_64.tar.gz"
       sha256 "c34866ac7dd1de7e79e661fb9dc038ef31dbbbaec210ccea8e15e6263109b8b9"
     end
   end

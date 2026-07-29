@@ -664,7 +664,7 @@ def write_svg_og(path: Path) -> None:
         font-size="28" fill="#3dff9a">modern by default · --core for scripts · faster always</text>
   <text x="348" y="430"
         font-family="ui-sans-serif, system-ui, sans-serif"
-        font-size="26" fill="#5c6678">f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
+        font-size="26" fill="#5c6678">coreutils.f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
   <rect x="96" y="520" width="1008" height="4" rx="2" fill="#3dff9a" opacity="0.5"/>
 </svg>
 ''',
@@ -785,13 +785,13 @@ def main() -> int:
         out_ls_la = run_f00(["f00-ls", "-la", *ls_common, str(demo)])
         hero_body = session_body(
             [
-                ("$ f00-ls --version", f"\x1b[1;32m{ver}\x1b[0m\n\x1b[2mLicense: MIT · https://f00.sh\x1b[0m"),
+                ("$ f00-ls --version", f"\x1b[1;32m{ver}\x1b[0m\n\x1b[2mLicense: MIT · https://coreutils.f00.sh\x1b[0m"),
                 (f"$ f00-ls --no-git {icon} {rel}/", out_ls_short),
             ]
         )
         write_shot(
             "hero.png",
-            "f00tils · https://f00.sh",
+            "f00tils · https://coreutils.f00.sh",
             [],
             hero_body,
             triple("hero.png"),

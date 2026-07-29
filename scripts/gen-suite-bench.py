@@ -993,7 +993,7 @@ def update_file_id_diz(packages: dict, meta: dict) -> None:
         # Keep the logo block / MIT line / modern line / URL
         if body.startswith("mit ·") or "modern default" in body or "pretty json" in body:
             return False
-        if "https://f00.sh" in body or "github:" in body:
+        if "https://coreutils.f00.sh" in body or "github:" in body:
             return False
         if any(k in body for k in keys):
             return True
@@ -1015,7 +1015,7 @@ def update_file_id_diz(packages: dict, meta: dict) -> None:
     inserted = False
     for ln in out:
         if (not inserted) and (
-            "https://f00.sh" in ln or "github:theesfeld" in ln
+            "https://coreutils.f00.sh" in ln or "github:theesfeld" in ln
         ):
             final.append(sets_line)
             final.append(speed_line)

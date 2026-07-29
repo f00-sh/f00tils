@@ -32,6 +32,6 @@
         font-size="28" fill="#3dff9a">modern by default · --core for scripts · faster always</text>
   <text x="348" y="430"
         font-family="ui-sans-serif, system-ui, sans-serif"
-        font-size="26" fill="#5c6678">f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
+        font-size="26" fill="#5c6678">coreutils.f00.sh · multicall binary f00 · MIT · Linux x86-64</text>
   <rect x="96" y="520" width="1008" height="4" rx="2" fill="#3dff9a" opacity="0.5"/>
 </svg>

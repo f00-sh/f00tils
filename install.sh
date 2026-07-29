@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# f00tils installer (binary: f00) — https://f00.sh
-#   curl -fsSL https://f00.sh/install.sh | bash
+# f00tils installer (binary: f00) — https://coreutils.f00.sh
+#   curl -fsSL https://coreutils.f00.sh/install.sh | bash
 #
 # f00tils: pure-assembly multicall GNU userland (coreutils+grep+findutils+diffutils).
 # Default: REPLACE bare names — multicall `f00` + all f00-* + bare names (ls, cat, grep, find, …)
 # in INSTALL_DIR (must win on PATH). Opt out: F00_SUPERSEDE=0 or config replace=false.
 #
 # Beta pin example:
-#   curl -fsSL https://f00.sh/install.sh | F00_VERSION=v0.16.10 bash
+#   curl -fsSL https://coreutils.f00.sh/install.sh | F00_VERSION=v0.16.10 bash
 #
 # Env:
 #   INSTALL_DIR      default ~/.local/bin
 #   F00_VERSION      release tag (default: latest; default: latest / v0.16.10)
-#   F00_REPO         GitHub owner/repo (default: theesfeld/f00)
+#   F00_REPO         GitHub owner/repo (default: theesfeld/f00tilstils)
 #   F00_LOCAL        path to a local build directory containing ./f00
 #                    (e.g. /path/to/f00/asm) — skips download
 #   F00_TOOLS        comma list or "all" (default: all shipped tools)
@@ -24,7 +24,7 @@
 #
 set -euo pipefail
 
-REPO="${F00_REPO:-theesfeld/f00}"
+REPO="${F00_REPO:-theesfeld/f00tils}"
 BINARY_NAME="f00"
 
 # Full multicall surface (must stay in sync with asm/Makefile UTILS)
@@ -331,7 +331,7 @@ seed_xdg_config() {
   mkdir -p "${themes_dir}"
   if [[ ! -f "${cfg_root}/config" ]]; then
     cat >"${cfg_root}/config" <<'EOF'
-# f00tils — https://f00.sh  (docs/CONFIG.md)
+# f00tils — https://coreutils.f00.sh  (docs/CONFIG.md)
 # replace = true  → bare names (ls/cat/…) via installer PATH or /usr/lib/f00/bin
 # replace = false → f00-* only (side-by-side with GNU coreutils)
 replace = true

@@ -1,6 +1,6 @@
 # Roadmap
 
-Ship truth: [README](../README.md) · [f00.sh](https://f00.sh)
+Ship truth: [README](../README.md) · [f00.sh](https://coreutils.f00.sh)
 
 ## Shipped
 - 115 tools · `--core` + modern · freestanding x86-64

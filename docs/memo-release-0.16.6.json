@@ -1,6 +1,6 @@
 {
   "org": "f00tils",
-  "org_sub": "Freestanding assembly GNU userland \u00b7 https://f00.sh",
+  "org_sub": "Freestanding assembly GNU userland \u00b7 https://coreutils.f00.sh",
   "reply_to": "REL/F00",
   "to": "Maintainers and Users",
   "from": "Project Engineering",
@@ -49,7 +49,7 @@
     },
     {
       "heading": "5. Install",
-      "body": "curl -fsSL https://f00.sh/install.sh | bash  (pin with F00_VERSION=v0.16.6)."
+      "body": "curl -fsSL https://coreutils.f00.sh/install.sh | bash  (pin with F00_VERSION=v0.16.6)."
     }
   ],
   "signature": {
@@ -57,6 +57,6 @@
     "title": "f00tils release"
   },
   "cc": [
-    "https://f00.sh \u00b7 github.com/theesfeld/f00"
+    "https://coreutils.f00.sh \u00b7 github.com/theesfeld/f00tils"
   ]
 }

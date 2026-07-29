@@ -209,7 +209,7 @@ f00 contributors. License MIT.
 .BR ${u} (1),
 .BR f00 (1)
 .PP
-https://f00.sh
+https://coreutils.f00.sh
 EOF
 }
 
@@ -287,7 +287,7 @@ f00 contributors. License MIT.
 .BR f00-cat (1),
 .BR ls (1)
 .PP
-https://f00.sh
+https://coreutils.f00.sh
 .PP
 .I file_id.diz
 \\(em release scene card / archive description on GitHub Releases.

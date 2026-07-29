@@ -39,21 +39,21 @@ tmp_u64:      resq 1
 %define T_SILENT 64
 
 section .rodata
-v_true:  db "f00-true (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_true:  db "f00-true (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_true_len equ $-v_true
-v_false: db "f00-false (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_false: db "f00-false (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_false_len equ $-v_false
-v_yes:   db "f00-yes (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_yes:   db "f00-yes (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_yes_len equ $-v_yes
-v_nproc: db "f00-nproc (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_nproc: db "f00-nproc (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_nproc_len equ $-v_nproc
-v_tty:   db "f00-tty (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_tty:   db "f00-tty (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_tty_len equ $-v_tty
-v_who:   db "f00-whoami (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_who:   db "f00-whoami (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_who_len equ $-v_who
-v_base:  db "f00-basename (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_base:  db "f00-basename (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_base_len equ $-v_base
-v_dir:   db "f00-dirname (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10
+v_dir:   db "f00-dirname (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10
 v_dir_len equ $-v_dir
 
 y_default: db "y", 0
@@ -160,7 +160,7 @@ h_true:
     db "      --core     strict coreutils-compatible presentation", 10
     db "      --json     detailed JSON (schema f00/v1)", 10
     db "      --csv      CSV result", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_false:
     db "Usage: f00-false [ignored command line arguments]", 10
     db "  or:  f00-false OPTION", 10
@@ -172,7 +172,7 @@ h_false:
     db "      --core     strict coreutils-compatible presentation", 10
     db "      --json     detailed JSON (schema f00/v1)", 10
     db "      --csv      CSV result", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_yes:
     db "Usage: f00-yes [STRING]...", 10
     db "  or:  f00-yes OPTION", 10
@@ -187,7 +187,7 @@ h_yes:
     db "Examples:", 10
     db "  f00-yes", 10
     db "  f00-yes hello world", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_nproc:
     db "Usage: f00-nproc [OPTION]...", 10
     db "Print the number of processing units available to the current process,", 10
@@ -205,7 +205,7 @@ h_nproc:
     db "  f00-nproc", 10
     db "  f00-nproc --all", 10
     db "  f00-nproc --ignore=2", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_tty:
     db "Usage: f00-tty [OPTION]...", 10
     db "Print the file name of the terminal connected to standard input.", 10, 10
@@ -219,7 +219,7 @@ h_tty:
     db "      --csv      CSV result", 10, 10
     db "Examples:", 10
     db "  f00-tty", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_who:
     db "Usage: f00-whoami [OPTION]...", 10
     db "Print the user name associated with the current effective user ID.", 10
@@ -233,7 +233,7 @@ h_who:
     db "      --csv      CSV result", 10, 10
     db "Examples:", 10
     db "  f00-whoami", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_base:
     db "Usage: f00-basename NAME [SUFFIX]", 10
     db "  or:  f00-basename OPTION... NAME...", 10
@@ -254,7 +254,7 @@ h_base:
     db "  f00-basename include/stdio.h .h     -> stdio", 10
     db "  f00-basename -s .h include/stdio.h  -> stdio", 10
     db "  f00-basename -a any/str1 any/str2   -> str1 / str2", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 h_dirn:
     db "Usage: f00-dirname [OPTION] NAME...", 10
     db "Output each NAME with its last non-slash component and trailing slashes", 10
@@ -271,7 +271,7 @@ h_dirn:
     db "  f00-dirname /usr/bin/          -> /usr", 10
     db "  f00-dirname dir1/str dir2/str  -> dir1 then dir2", 10
     db "  f00-dirname stdio.h            -> .", 10, 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10, 0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
 
 section .text
 

@@ -29,10 +29,10 @@ s_csv: db "csv",0
 s_core: db "core",0
 s_help: db "help",0
 s_ver: db "version",0
-v_chroot: db "f00-chroot (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_stty: db "f00-stty (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_stdbuf: db "f00-stdbuf (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_runcon: db "f00-runcon (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
+v_chroot: db "f00-chroot (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_stty: db "f00-stty (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_stdbuf: db "f00-stdbuf (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_runcon: db "f00-runcon (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
 nm_chroot: db "chroot",0
 nm_stty: db "stty",0
 nm_stdbuf: db "stdbuf",0
@@ -53,7 +53,7 @@ h_chroot:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-chroot /mnt/sysimage /bin/sh",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_stty:
     db "Usage: f00-stty [-F DEVICE | --file=DEVICE] [SETTING]...",10
     db "  or:  f00-stty [-F DEVICE | --file=DEVICE] [-a|--all]",10
@@ -71,7 +71,7 @@ h_stty:
     db "Examples:",10
     db "  f00-stty",10
     db "  f00-stty -a",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_stdbuf:
     db "Usage: f00-stdbuf OPTION... COMMAND",10
     db "Run COMMAND, with modified buffering operations for its standard streams.",10,10
@@ -91,7 +91,7 @@ h_stdbuf:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-stdbuf -oL ./filter",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_runcon:
     db "Usage: f00-runcon CONTEXT COMMAND [ARGS]",10
     db "  or:  f00-runcon [ -c ] [-u USER] [-r ROLE] [-t TYPE] [-l RANGE] COMMAND [ARGS]",10
@@ -111,7 +111,7 @@ h_runcon:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-runcon unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 id",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_chroot_fail: db "f00-chroot: failed",10,0
 msg_exec_fail: db "f00: exec failed",10,0
 msg_stty_size: db "speed 38400 baud; rows ",0
@@ -669,7 +669,7 @@ runcon_main:
 ; ===================== CHCON (SELinux; best-effort freestanding) =====================
 section .rodata
 nm_chcon: db "chcon",0
-v_chcon: db "f00-chcon (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
+v_chcon: db "f00-chcon (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
 h_chcon:
     db "Usage: f00-chcon [OPTION]... CONTEXT FILE...",10
     db "  or:  f00-chcon [OPTION]... [-u USER] [-r ROLE] [-l RANGE] [-t TYPE] FILE...",10
@@ -693,7 +693,7 @@ h_chcon:
     db "      --csv             CSV metadata",10,10
     db "Note: freestanding builds without SELinux report an error when applying",10
     db "contexts (same class of failure as coreutils without SELinux support).",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_chcon_noselinux: db "chcon: failed to change context of '",0
 msg_chcon_noselinux2: db "' to '",0
 msg_chcon_noselinux3: db "': Operation not supported",10,0

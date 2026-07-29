@@ -57,8 +57,8 @@ usage:
     db "(no network). Drop custom .theme files there or use the TUI.", 10
     db "Default theme 'terminal' = ANSI 16 colors (your palette).", 10
     db 10
-    db "f00tils · pure assembly · MIT · https://f00.sh", 10, 0
-v_cfg: db "f00-config (f00) 0.16.10", 10, "License: MIT · https://f00.sh", 10, 0
+    db "f00tils · pure assembly · MIT · https://coreutils.f00.sh", 10, 0
+v_cfg: db "f00-config (f00) 0.16.10", 10, "License: MIT · https://coreutils.f00.sh", 10, 0
 s_theme: db "theme", 0
 s_themes: db "themes", 0
 s_show: db "show", 0
@@ -127,7 +127,7 @@ suf_dot_f00: db "/.config/f00", 0
 suf_dot_cfg: db "/.config/f00/config", 0
 suf_dot_th:  db "/.config/f00/themes", 0
 starter:
-    db "# f00tils config — https://f00.sh  (docs/CONFIG.md)", 10
+    db "# f00tils config — https://coreutils.f00.sh  (docs/CONFIG.md)", 10
     db "# replace = true  → bare ls/cat/… via /usr/lib/f00/bin (or curl INSTALL_DIR)", 10
     db "# replace = false → f00-* only (side-by-side with GNU)", 10
     db "replace = true", 10

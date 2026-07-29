@@ -47,11 +47,11 @@ pkgver=${VERSION}
 pkgrel=1
 pkgdesc="f00tils — freestanding ASM multicall (coreutils+grep+findutils+diffutils)"
 arch=('x86_64')
-url="https://f00.sh"
+url="https://coreutils.f00.sh"
 license=('MIT')
 depends=()
 options=('!strip')
-source=("https://github.com/theesfeld/f00/releases/download/v\${pkgver}/${ASSET}")
+source=("https://github.com/theesfeld/f00tils/releases/download/v\${pkgver}/${ASSET}")
 sha256sums=('${SHA}')
 
 package() {

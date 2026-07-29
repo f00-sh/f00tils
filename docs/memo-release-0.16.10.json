@@ -1,6 +1,6 @@
 {
   "org": "f00tils",
-  "org_sub": "Freestanding assembly GNU userland \u00b7 https://f00.sh",
+  "org_sub": "Freestanding assembly GNU userland \u00b7 https://coreutils.f00.sh",
   "reply_to": "REL/F00",
   "to": "Maintainers and Users",
   "from": "Project Engineering",
@@ -48,6 +48,6 @@
     "title": "f00tils release"
   },
   "cc": [
-    "https://f00.sh"
+    "https://coreutils.f00.sh"
   ]
 }

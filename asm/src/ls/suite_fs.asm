@@ -296,7 +296,7 @@ msg_usage_cp:
     db "  f00-cp file.txt /tmp/",10
     db "  f00-cp -r src/ dest/",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_mv:
     db "Usage: f00-mv [OPTION]... [-T] SOURCE DEST",10
     db "  or:  f00-mv [OPTION]... SOURCE... DIRECTORY",10
@@ -323,7 +323,7 @@ msg_usage_mv:
     db "  f00-mv a.txt b.txt",10
     db "  f00-mv *.log /tmp/",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_rm:
     db "Usage: f00-rm [OPTION]... [FILE]...",10
     db "Remove (unlink) the FILE(s).",10
@@ -350,7 +350,7 @@ msg_usage_rm:
     db "  f00-rm file.txt",10
     db "  f00-rm -rf dir/",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_ln:
     db "Usage: f00-ln [OPTION]... [-T] TARGET LINK_NAME",10
     db "  or:  f00-ln [OPTION]... TARGET",10
@@ -373,7 +373,7 @@ msg_usage_ln:
     db "Examples:",10
     db "  f00-ln -s /usr/bin/python3 py",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_chown:
     db "Usage: f00-chown [OPTION]... OWNER[:GROUP] FILE...",10
     db "Change the owner and/or group of each FILE to OWNER and/or GROUP.",10
@@ -391,7 +391,7 @@ msg_usage_chown:
     db "Examples:",10
     db "  f00-chown 1000:1000 file.txt",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_chgrp:
     db "Usage: f00-chgrp [OPTION]... GROUP FILE...",10
     db "Change the group of each FILE to GROUP (numeric ID).",10
@@ -408,7 +408,7 @@ msg_usage_chgrp:
     db "Examples:",10
     db "  f00-chgrp 1000 file.txt",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_stat:
     db "Usage: f00-stat [OPTION]... FILE...",10
     db "Display file or file system status.",10
@@ -428,7 +428,7 @@ msg_usage_stat:
     db "  f00-stat file.txt",10
     db "  f00-stat -c %s file.txt",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_df:
     db "Usage: f00-df [OPTION]... [FILE]...",10
     db "Show information about the file system on which each FILE resides,",10
@@ -448,7 +448,7 @@ msg_usage_df:
     db "Examples:",10
     db "  f00-df -h",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_du:
     db "Usage: f00-du [OPTION]... [FILE]...",10
     db "Summarize disk usage of each FILE, recursively for directories.",10
@@ -469,7 +469,7 @@ msg_usage_du:
     db "Examples:",10
     db "  f00-du -sh .",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_install:
     db "Usage: f00-install [OPTION]... [-T] SOURCE DEST",10
     db "  or:  f00-install [OPTION]... SOURCE... DIRECTORY",10
@@ -495,7 +495,7 @@ msg_usage_install:
     db "  f00-install -D -m 644 src.txt /var/lib/app/cfg.txt",10
     db "  f00-install -t /usr/local/bin tool1 tool2",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_mkfifo:
     db "Usage: f00-mkfifo [OPTION]... NAME...",10
     db "Create named pipes (FIFOs) with the given NAMEs.",10
@@ -512,7 +512,7 @@ msg_usage_mkfifo:
     db "Examples:",10
     db "  f00-mkfifo /tmp/pipe",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_mknod:
     db "Usage: f00-mknod [OPTION]... NAME TYPE [MAJOR MINOR]",10
     db "Create the special file NAME of the given TYPE.",10
@@ -530,7 +530,7 @@ msg_usage_mknod:
     db "Examples:",10
     db "  f00-mknod /tmp/pipe p",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_shred:
     db "Usage: f00-shred [OPTION]... FILE...",10
     db "Overwrite the specified FILE(s) repeatedly, to make recovery harder.",10
@@ -550,7 +550,7 @@ msg_usage_shred:
     db "Examples:",10
     db "  f00-shred -n 1 -u secret.bin",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_dd:
     db "Usage: f00-dd [OPERAND]...",10
     db "Copy a file, converting and formatting according to the operands.",10
@@ -575,7 +575,7 @@ msg_usage_dd:
     db "Examples:",10
     db "  f00-dd if=in.bin of=out.bin bs=4k count=1",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_dir:
     db "Usage: f00-dir [DIR...]",10
     db "List directory contents (like ls -C -b).",10
@@ -589,7 +589,7 @@ msg_usage_dir:
     db "      --json     detailed JSON (schema f00/v1 + result metadata)",10
     db "      --csv      CSV result",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_usage_vdir:
     db "Usage: f00-vdir [DIR...]",10
     db "List directory contents (like ls -l -b).",10
@@ -603,23 +603,23 @@ msg_usage_vdir:
     db "      --json     detailed JSON (schema f00/v1 + result metadata)",10
     db "      --csv      CSV result",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
-v_cp: db "f00-cp (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_mv: db "f00-mv (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_rm: db "f00-rm (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_ln: db "f00-ln (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_chown: db "f00-chown (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_chgrp: db "f00-chgrp (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_stat: db "f00-stat (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_df: db "f00-df (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_du: db "f00-du (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_install: db "f00-install (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_mkfifo: db "f00-mkfifo (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_mknod: db "f00-mknod (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_shred: db "f00-shred (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_dd: db "f00-dd (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_dir: db "f00-dir (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_vdir: db "f00-vdir (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
+v_cp: db "f00-cp (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_mv: db "f00-mv (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_rm: db "f00-rm (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_ln: db "f00-ln (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_chown: db "f00-chown (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_chgrp: db "f00-chgrp (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_stat: db "f00-stat (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_df: db "f00-df (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_du: db "f00-du (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_install: db "f00-install (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_mkfifo: db "f00-mkfifo (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_mknod: db "f00-mknod (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_shred: db "f00-shred (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_dd: db "f00-dd (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_dir: db "f00-dir (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_vdir: db "f00-vdir (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
 arrow: db " -> ",0
 copied: db "'",0
 moved: db "renamed '",0

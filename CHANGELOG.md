@@ -43,7 +43,7 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 
 ### Changed
 - `scripts/render-brand-assets.py`: real PTY capture (no shell), truecolor ANSI, forced color env; regen every ship
-- README + https://f00.sh Documents links for this release memo; press-kit screenshot table
+- README + https://coreutils.f00.sh Documents links for this release memo; press-kit screenshot table
 
 ### Documents
 - Operator SOP updated (screenshot regen on every release); NASA release memo for 0.16.7
@@ -91,7 +91,7 @@ Full history: git tags / `git log`. This file is the **live face** only (Elon pa
 - `grep -F` multi-MiB hot path: mmap + SSE2 first-byte scan + zero-copy emit (simple `--core` fixed, case-sensitive)
 - aarch64 freestanding multicall (`asm/port/aarch64`, qemu smoke): true/false/echo/pwd/cat/**basename**/grep
 - `diff -r` recursive directory compare
-- Ship truth: README + https://f00.sh (long docs essays stubbed)
+- Ship truth: README + https://coreutils.f00.sh (long docs essays stubbed)
 - Primary install story: tarball + `install.sh` (`make sync-install`); packages secondary
 
 ### Fixed

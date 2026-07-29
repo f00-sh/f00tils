@@ -1,6 +1,6 @@
 # Completeness (gate checklist)
 
-Contract: [README](../README.md) · site: [f00.sh](https://f00.sh)
+Contract: [README](../README.md) · site: [f00.sh](https://coreutils.f00.sh)
 
 | Gate | Command |
 |------|---------|

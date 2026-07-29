@@ -60,7 +60,7 @@ section .rodata
 version_msg:
     db "f00-ls (f00) 0.16.10", 10
     db "GNU coreutils ls drop-in + modern listing — pure assembly", 10
-    db "License: MIT · https://f00.sh", 10
+    db "License: MIT · https://coreutils.f00.sh", 10
 version_len equ $-version_msg
 
 help_msg:
@@ -130,7 +130,7 @@ help_msg:
     db "  f00 theme set NAME         same as f00-config theme set", 10
     db "      --list-utils           list all multicall utility names", 10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh", 10
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh", 10
 help_len equ $-help_msg
 
 msg_unknown_util:

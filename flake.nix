@@ -37,7 +37,7 @@
             '';
             meta = with pkgs.lib; {
               description = "f00tils — pure assembly GNU coreutils replacement suite (multicall)";
-              homepage = "https://f00.sh";
+              homepage = "https://coreutils.f00.sh";
               license = licenses.mit;
               platforms = [ "x86_64-linux" ];
               mainProgram = "f00";

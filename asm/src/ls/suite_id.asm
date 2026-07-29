@@ -186,7 +186,7 @@ h_modern:
     db "      --json     detailed JSON (schema f00/v1)",10
     db "      --csv      CSV result",10
     db 10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 
 h_id:
     db "Usage: f00-id [OPTION]... [USER]...",10
@@ -211,7 +211,7 @@ h_id:
     db "Examples:",10
     db "  f00-id",10
     db "  f00-id -un",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_groups:
     db "Usage: f00-groups [OPTION]... [USERNAME]...",10
     db "Print group memberships for each USERNAME or the current process.",10,10
@@ -225,7 +225,7 @@ h_groups:
     db "Examples:",10
     db "  f00-groups",10
     db "  f00-groups root",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_uname:
     db "Usage: f00-uname [OPTION]...",10
     db "Print certain system information.  With no OPTION, same as -s.",10,10
@@ -249,7 +249,7 @@ h_uname:
     db "Examples:",10
     db "  f00-uname -a",10
     db "  f00-uname -srm",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_arch:
     db "Usage: f00-arch [OPTION]...",10
     db "Print machine architecture (uname -m).",10,10
@@ -262,7 +262,7 @@ h_arch:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-arch",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_date:
     db "Usage: f00-date [OPTION]... [+FORMAT]",10
     db "Display the current time in the given FORMAT.",10
@@ -288,7 +288,7 @@ h_date:
     db "  f00-date -u +%Y-%m-%d",10
     db "  f00-date -d @0 -u",10
     db "  f00-date -Iseconds",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_users:
     db "Usage: f00-users [OPTION]... [FILE]",10
     db "Output who is currently logged in according to FILE.",10
@@ -302,7 +302,7 @@ h_users:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-users",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_who:
     db "Usage: f00-who [OPTION]... [FILE]",10
     db "Print information about users who are currently logged in.",10,10
@@ -315,7 +315,7 @@ h_who:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-who",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_pinky:
     db "Usage: f00-pinky [OPTION]... [USER]...",10
     db "A lightweight finger.  Print user information.",10,10
@@ -328,7 +328,7 @@ h_pinky:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-pinky",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_uptime:
     db "Usage: f00-uptime [OPTION]... [FILE]",10
     db "Print the current time, the length of time the system has been up,",10
@@ -343,7 +343,7 @@ h_uptime:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-uptime",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_hostname:
     db "Usage: f00-hostname [OPTION]... [NAME]",10
     db "Show or set the system's host name.",10,10
@@ -356,7 +356,7 @@ h_hostname:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-hostname",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_nice:
     db "Usage: f00-nice [OPTION] [COMMAND [ARG]...]",10
     db "Run COMMAND with an adjusted niceness, which affects process scheduling.",10
@@ -373,7 +373,7 @@ h_nice:
     db "Examples:",10
     db "  f00-nice",10
     db "  f00-nice -n 5 sleep 10",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_nohup:
     db "Usage: f00-nohup COMMAND [ARG]...",10
     db "  or:  f00-nohup OPTION",10
@@ -387,7 +387,7 @@ h_nohup:
     db "      --csv      CSV result",10,10
     db "Examples:",10
     db "  f00-nohup make &",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_timeout:
     db "Usage: f00-timeout [OPTION] DURATION COMMAND [ARG]...",10
     db "  or:  f00-timeout [OPTION]",10
@@ -413,7 +413,7 @@ h_timeout:
     db "Examples:",10
     db "  f00-timeout 5 sleep 10",10
     db "  f00-timeout -s TERM -k 2 1.5 sleep 30",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 msg_to_send1: db "timeout: sending signal ",0
 msg_to_send2: db " to command ",0
 ; opening/closing single quotes (UTF-8 ‘ ’) match GNU coreutils
@@ -443,7 +443,7 @@ h_kill:
     db "  f00-kill -l",10
     db "  f00-kill -TERM 1234",10
     db "  f00-kill -s HUP 1234",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_test:
     db "Usage: f00-test EXPRESSION",10
     db "  or:  f00-test",10
@@ -465,7 +465,7 @@ h_test:
     db "Examples:",10
     db "  f00-test -f /etc/passwd && echo yes",10
     db '  f00-[ -n "$HOME" ]',10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 h_printf:
     db "Usage: f00-printf FORMAT [ARGUMENT]...",10
     db "  or:  f00-printf OPTION",10
@@ -482,24 +482,24 @@ h_printf:
     db "Examples:",10
     db "  f00-printf '%s\\n' 'hello'",10
     db "  f00-printf '%04d' 42",10,10
-    db "f00 suite · pure assembly · MIT · https://f00.sh",10,0
+    db "f00 suite · pure assembly · MIT · https://coreutils.f00.sh",10,0
 
-v_id: db "f00-id (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_groups: db "f00-groups (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_uname: db "f00-uname (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_arch: db "f00-arch (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_date: db "f00-date (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_users: db "f00-users (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_who: db "f00-who (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_pinky: db "f00-pinky (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_uptime: db "f00-uptime (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_hostname: db "f00-hostname (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_nice: db "f00-nice (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_nohup: db "f00-nohup (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_timeout: db "f00-timeout (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_kill: db "f00-kill (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_test: db "f00-test (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
-v_printf: db "f00-printf (f00) 0.16.10",10,"License: MIT · https://f00.sh",10,0
+v_id: db "f00-id (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_groups: db "f00-groups (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_uname: db "f00-uname (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_arch: db "f00-arch (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_date: db "f00-date (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_users: db "f00-users (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_who: db "f00-who (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_pinky: db "f00-pinky (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_uptime: db "f00-uptime (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_hostname: db "f00-hostname (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_nice: db "f00-nice (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_nohup: db "f00-nohup (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_timeout: db "f00-timeout (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_kill: db "f00-kill (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_test: db "f00-test (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
+v_printf: db "f00-printf (f00) 0.16.10",10,"License: MIT · https://coreutils.f00.sh",10,0
 
 ; util names for err_missing_operand / json_meta_open
 nm_id: db "id",0

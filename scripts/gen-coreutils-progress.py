@@ -239,8 +239,8 @@ Legend — **speed:** `win` = faster than coreutils under `--core` (full-speed-g
           </table>
         </div>
         <p class="muted small">Extras also shipped: <code>hostname</code>, <code>kill</code>, <code>rev</code>. Per-flag detail:
-          <a href="https://github.com/theesfeld/f00/blob/main/docs/GNU-COMPLIANCE.md">GNU-COMPLIANCE.md</a> ·
-          <a href="https://github.com/theesfeld/f00/blob/main/docs/COREUTILS-PROGRESS.md">COREUTILS-PROGRESS.md</a></p>
+          <a href="https://github.com/theesfeld/f00tils/blob/main/docs/GNU-COMPLIANCE.md">GNU-COMPLIANCE.md</a> ·
+          <a href="https://github.com/theesfeld/f00tils/blob/main/docs/COREUTILS-PROGRESS.md">COREUTILS-PROGRESS.md</a></p>
       </div>
     </section>
 """

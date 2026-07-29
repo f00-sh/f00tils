@@ -16,7 +16,7 @@ description: |
   Conflicts with GNU packages (provides the same names).
   --core / F00_CORE=1 for script-safe GNU-identical presentation.
   Side-by-side only: use f00-* names or curl install with F00_SUPERSEDE=0.
-homepage: https://f00.sh
+homepage: https://coreutils.f00.sh
 license: MIT
 # Own /usr/bin/ls find grep diff … like a real userland replacement.
 replaces:

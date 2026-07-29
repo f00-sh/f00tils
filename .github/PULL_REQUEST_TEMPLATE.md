@@ -10,7 +10,7 @@ User-facing changes must keep README, site, roadmap, and install scripts aligned
 - [ ] Site does not advertise unshipped features as done
 - [ ] ROADMAP status bits match open/closed milestones
 - [ ] `install.sh` and `site/install.sh` are byte-identical (or intentionally generated from one source)
-- [ ] No broken badge/repo links (`theesfeld/f00`, `https://f00.sh`)
+- [ ] No broken badge/repo links (`theesfeld/f00`, `https://coreutils.f00.sh`)
 
 ## When you change user-facing behavior
 

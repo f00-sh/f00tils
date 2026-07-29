@@ -220,9 +220,9 @@ jobs:
 
             ```bash
             # primary
-            curl -fsSL https://f00.sh/install.sh | bash
+            curl -fsSL https://coreutils.f00.sh/install.sh | bash
             # pin
-            curl -fsSL https://f00.sh/install.sh | F00_VERSION=${{ steps.meta.outputs.tag }} bash
+            curl -fsSL https://coreutils.f00.sh/install.sh | F00_VERSION=${{ steps.meta.outputs.tag }} bash
             # packages
             #   deb:  f00_${{ steps.meta.outputs.version }}_amd64.deb
             #   rpm:  f00-${{ steps.meta.outputs.version }}-1.x86_64.rpm
@@ -245,7 +245,7 @@ jobs:
             - `memo-release-${{ steps.meta.outputs.version }}.pdf` (NASA release memo)
             - `SHA256SUMS`
 
-            See [README](https://github.com/theesfeld/f00#readme) · https://f00.sh · [Documents](https://f00.sh/#documents)
+            See [README](https://github.com/theesfeld/f00tils#readme) · https://coreutils.f00.sh · [Documents](https://coreutils.f00.sh/#documents)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

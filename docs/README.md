@@ -1,6 +1,6 @@
 # docs/
 
-**Ship truth lives in [README.md](../README.md) and [https://f00.sh](https://f00.sh).**
+**Ship truth lives in [README.md](../README.md) and [https://coreutils.f00.sh](https://coreutils.f00.sh).**
 
 Everything here is optional depth or machine-generated. Prefer not to add new essays.
 

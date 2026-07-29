@@ -6,7 +6,7 @@
 
 - Product / narrative name: **f00tils**
 - Binary / multicall: **`f00`**, tools **`f00-*`**
-- Site: https://f00.sh · Repo: theesfeld/f00
+- Site: https://coreutils.f00.sh · Hub: https://f00.sh · Repo: theesfeld/f00tils (org target: f00-sh/f00tils)
 
 ## Declared language
 
@@ -29,7 +29,7 @@ Shell is allowed only for bootstrap, install, packaging, and benches. Do not add
 | Path | Role |
 |------|------|
 | `asm/` | Product source, Makefile, man pages, benches |
-| `site/` | https://f00.sh (GitHub Pages) + `install.sh` |
+| `site/` | https://coreutils.f00.sh (GitHub Pages) + `install.sh` (hub: https://f00.sh) |
 | `install.sh` | Root installer (synced with `site/install.sh`) |
 | `packaging/` | AUR, nfpm (deb/rpm/arch) |
 | `Formula/` | Homebrew formula |
@@ -51,7 +51,7 @@ make aarch64 && make aarch64-smoke
 
 Release story: **tarball + `install.sh`** (`make sync-install` keeps site copy identical). deb/rpm/AUR/brew secondary.
 
-Ship narrative: **README + https://f00.sh only.** Docs under `docs/` are optional depth.
+Ship narrative: **README + https://coreutils.f00.sh only.** Docs under `docs/` are optional depth.
 
 ## Language purity
 

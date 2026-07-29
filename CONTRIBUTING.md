@@ -22,7 +22,7 @@ make check          # boring-solid: smoke + parity
 make speed          # wall+CPU law (optional on every commit)
 ```
 
-Ship narrative: **README + https://f00.sh**.
+Ship narrative: **README + https://coreutils.f00.sh**.
 
 Install a local build:
 

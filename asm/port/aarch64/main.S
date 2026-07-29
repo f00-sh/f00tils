@@ -166,7 +166,7 @@ n_grep:		.asciz "grep"
 n_f00:		.asciz "f00"
 n_version:	.asciz "version"
 opt_core:	.asciz "--core"
-ver_msg:	.asciz "f00 (f00tils) aarch64 freestanding · MIT · https://f00.sh"
+ver_msg:	.asciz "f00 (f00tils) aarch64 freestanding · MIT · https://coreutils.f00.sh"
 spc:		.byte 32
 nl:		.byte 10
 	.align 3

@@ -43,17 +43,17 @@ cat > "${OUT}" <<EOF
 #   brew install theesfeld/tap/f00
 #
 # Official installer:
-#   curl -fsSL https://f00.sh/install.sh | bash
+#   curl -fsSL https://coreutils.f00.sh/install.sh | bash
 
 class F00 < Formula
   desc "f00tils — pure assembly coreutils replacement (multicall, freestanding)"
-  homepage "https://f00.sh"
+  homepage "https://coreutils.f00.sh"
   version "${VERSION}"
   license "MIT"
 
   on_linux do
     on_intel do
-      url "https://github.com/theesfeld/f00/releases/download/v#{version}/${ASSET}"
+      url "https://github.com/theesfeld/f00tils/releases/download/v#{version}/${ASSET}"
       sha256 "${SHA_X86_64_LINUX}"
     end
   end

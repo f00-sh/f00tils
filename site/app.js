@@ -1,5 +1,5 @@
 /**
- * f00tils (f00.sh) — progressive enhancement.
+ * f00tils (coreutils.f00.sh) — progressive enhancement.
  * Version labels, copy buttons, Bun-style bench widgets, scoreboard.
  */
 (() => {
@@ -24,7 +24,7 @@
 
   setVersionLabels(FALLBACK_VERSION);
   try {
-    fetch("https://api.github.com/repos/theesfeld/f00/releases/latest", {
+    fetch("https://api.github.com/repos/theesfeld/f00tils/releases/latest", {
       headers: { Accept: "application/vnd.github+json" },
     })
       .then((r) => (r.ok ? r.json() : null))

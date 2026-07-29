@@ -3699,7 +3699,7 @@
       "command_gnu": "yes --version",
       "command_f00": "f00-yes --core --version",
       "output_gnu": "yes (GNU coreutils) 9.4 Copyright (C) 2023 Free Software Foundation, Inc. License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>. This \u2026",
-      "output_f00": "f00-yes (f00) 0.16.10 License: MIT \u00b7 https://f00.sh",
+      "output_f00": "f00-yes (f00) 0.16.10 License: MIT \u00b7 https://coreutils.f00.sh",
       "time_gnu_ms": 0.792,
       "time_f00_ms": 0.267,
       "cpu_gnu_ms": 0.735,
