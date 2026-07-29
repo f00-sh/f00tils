@@ -16,9 +16,10 @@ Ops note. Not product surface.
 | `www.f00.sh` | Apex alias | CNAME → `f00-be0.pages.dev` (proxied) |
 | `coreutils.f00.sh` | **f00tils** product site + installer | CNAME → `f00-coreutils.pages.dev` (proxied) |
 | `clun.f00.sh` | **clun** product site + installer | CNAME → `f00-clun.pages.dev` (proxied) |
+| `cel.f00.sh` | **Cel Index** web app | CNAME → `f00-cel.pages.dev` (proxied) |
 | `dist.f00.sh` | Package current channel (R2) | R2 custom domain → bucket `f00-releases` (proxied) |
 
-Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only. Other non-product hosts (e.g. `cel.f00.sh`) stay as previously configured.
+Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only.
 
 ## Product mapping
 
@@ -27,6 +28,7 @@ Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only. Other non-product hosts (e.
 | Landing | `f00-sh/f00` | https://f00.sh | n/a | n/a |
 | f00tils | `f00-sh/f00tils` | https://coreutils.f00.sh | https://dist.f00.sh/f00tils/current/ | `curl -fsSL https://coreutils.f00.sh/install.sh \| bash` |
 | clun | `f00-sh/clun` | https://clun.f00.sh | https://dist.f00.sh/clun/current/ | `curl -fsSL https://clun.f00.sh/install \| sh` |
+| Cel Index | `f00-sh/cel` | https://cel.f00.sh | n/a | web app |
 
 ## R2
 
@@ -42,5 +44,6 @@ Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only. Other non-product hosts (e.
 | `f00` | f00.sh, www.f00.sh | `site/` | `.github/workflows/pages.yml` → wrangler |
 | `f00-coreutils` | coreutils.f00.sh | `site/` | same |
 | `f00-clun` | clun.f00.sh | `site/` | same |
+| `f00-cel` | cel.f00.sh | `site/` + `functions/` | same |
 
 GitHub Pages is **off**. Do not re-enable. Native Pages↔GitHub source connect is optional; Actions + wrangler is the supported path.
