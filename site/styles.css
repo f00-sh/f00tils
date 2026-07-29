@@ -1,6 +1,6 @@
 /* coreutils.f00.sh — f00tils */
 
-/* Brand tokens: https://f00.sh/theme/f00-theme.css */
+/* Brand: https://f00.sh/theme/f00-theme-11.css — Onyx brand · zine body · chip headers */
 :root {
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
   --radius: 10px;
@@ -243,7 +243,7 @@ pre,
   gap: 0.45rem;
   padding: 0.65rem 1.1rem;
   border-radius: var(--radius);
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: 0.95rem;
   font-weight: 550;
   border: 1px solid transparent;
