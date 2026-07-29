@@ -7,20 +7,20 @@
     <rect width="112" height="112" rx="28" fill="#11161e" stroke="#1c2430" stroke-width="3"/>
     <circle cx="28" cy="28" r="5" fill="#5c6778"/>
     <circle cx="44" cy="28" r="5" fill="#5c6778"/>
-    <circle cx="60" cy="28" r="5" fill="#3dff9a"/>
+    <circle cx="60" cy="28" r="5" fill="#ffffff"/>
     <rect x="24" y="48" width="40" height="8" rx="3" fill="#2a3544"/>
     <rect x="24" y="64" width="58" height="8" rx="3" fill="#2a3544"/>
-    <rect x="20" y="76" width="72" height="16" rx="4" fill="#3dff9a" opacity="0.18"/>
-    <rect x="24" y="80" width="36" height="8" rx="3" fill="#3dff9a"/>
+    <rect x="20" y="76" width="72" height="16" rx="4" fill="#ffffff" opacity="0.18"/>
+    <rect x="24" y="80" width="36" height="8" rx="3" fill="#ffffff"/>
     <rect x="24" y="96" width="48" height="8" rx="3" fill="#2a3544"/>
   </g>
   <text x="160" y="78"
-        font-family="ui-monospace, 'IBM Plex Mono', Menlo, monospace"
+        font-family="Onyx, 'Times New Roman', Times, serif"
         font-size="52" font-weight="700" fill="#e8edf4" letter-spacing="-1">f00tils</text>
   <text x="164" y="118"
-        font-family="ui-sans-serif, 'IBM Plex Sans', system-ui, sans-serif"
+        font-family="Onyx, 'Times New Roman', Times, serif"
         font-size="20" font-weight="500" fill="#8b95a8">coreutils → freestanding assembly</text>
   <text x="620" y="78"
-        font-family="ui-monospace, 'IBM Plex Mono', Menlo, monospace"
-        font-size="22" font-weight="600" fill="#3dff9a">f00</text>
+        font-family="Onyx, 'Times New Roman', Times, serif"
+        font-size="22" font-weight="600" fill="#ffffff">f00</text>
 </svg>
