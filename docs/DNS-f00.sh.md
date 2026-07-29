@@ -2,27 +2,45 @@
 
 Ops note. Not product surface.
 
-## Domains (Porkbun)
+## Authority
+
+- **Registrar:** Porkbun (domain registration only)
+- **DNS + edge:** Cloudflare zone `f00.sh`
+- **NS:** `brett.ns.cloudflare.com`, `gracie.ns.cloudflare.com`
+
+## Host map
 
 | Host | Role | Target |
 |------|------|--------|
-| `f00.sh` | Brand landing (hub) | GitHub Pages (A/AAAA → GitHub) |
-| `www.f00.sh` | Apex alias | CNAME → `f00-sh.github.io` (or `f00-sh.github.io` after org transfer) |
-| `coreutils.f00.sh` | **f00tils** product site + installer | CNAME → GitHub Pages owner |
-| `clun.f00.sh` | **clun** product (dual with `clun.sh`) | CNAME / URL → clun Pages |
+| `f00.sh` | Brand landing (hub) | CNAME → `f00-be0.pages.dev` (proxied) |
+| `www.f00.sh` | Apex alias | CNAME → `f00-be0.pages.dev` (proxied) |
+| `coreutils.f00.sh` | **f00tils** product site + installer | CNAME → `f00-coreutils.pages.dev` (proxied) |
+| `clun.f00.sh` | **clun** product site + installer | CNAME → `f00-clun.pages.dev` (proxied) |
+| `dist.f00.sh` | Package current channel (R2) | R2 custom domain → bucket `f00-releases` (proxied) |
 
-Apex `f00.sh` keeps GitHub Pages A/AAAA records. Product sites are subdomains.
-
-Mail (Proton) TXT/MX/DKIM on apex is unchanged.
+Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only. Other non-product hosts (e.g. `cel.f00.sh`) stay as previously configured.
 
 ## Product mapping
 
-| Product | Repo (target org) | Site | Install |
-|---------|-------------------|------|---------|
-| Landing | `f00-sh/f00` (planned) | https://f00.sh | n/a |
-| f00tils | `f00-sh/f00tils` (temp: `f00-sh/f00tils`) | https://coreutils.f00.sh | `curl -fsSL https://coreutils.f00.sh/install.sh \| bash` |
-| clun | `f00-sh/clun` (temp: `f00-sh/clun`) | https://clun.sh · https://clun.f00.sh | `curl -fsSL https://clun.sh/install \| sh` |
+| Product | Repo | Site | Packages | Install |
+|---------|------|------|----------|---------|
+| Landing | `f00-sh/f00` | https://f00.sh | n/a | n/a |
+| f00tils | `f00-sh/f00tils` | https://coreutils.f00.sh | https://dist.f00.sh/f00tils/current/ | `curl -fsSL https://coreutils.f00.sh/install.sh \| bash` |
+| clun | `f00-sh/clun` | https://clun.f00.sh | https://dist.f00.sh/clun/current/ | `curl -fsSL https://clun.f00.sh/install \| sh` |
 
-## GitHub Pages
+## R2
 
-Each product repo ships `site/CNAME` with its primary host. After org transfer, update DNS CNAME targets from `f00-sh.github.io` → `f00-sh.github.io`.
+- Bucket: `f00-releases`
+- Public custom domain: `dist.f00.sh` (SSL active)
+- Layout: `{product}/current/*` plus versioned `{product}/{ver}/*` on release
+- Release workflows upload on publish; installers prefer R2, then product edge metadata, then GitHub Releases
+
+## Cloudflare Pages
+
+| Project | Domain(s) | Source tree | Deploy |
+|---------|-----------|-------------|--------|
+| `f00` | f00.sh, www.f00.sh | `site/` | `.github/workflows/pages.yml` → wrangler |
+| `f00-coreutils` | coreutils.f00.sh | `site/` | same |
+| `f00-clun` | clun.f00.sh | `site/` | same |
+
+GitHub Pages is **off**. Do not re-enable. Native Pages↔GitHub source connect is optional; Actions + wrangler is the supported path.
