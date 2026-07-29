@@ -19,7 +19,27 @@ Ops note. Not product surface.
 | `cel.f00.sh` | **Cel Index** web app | CNAME → `f00-cel.pages.dev` (proxied) |
 | `dist.f00.sh` | Package current channel (R2) | R2 custom domain → bucket `f00-releases` (proxied) |
 
-Mail (Proton) TXT/MX/DKIM/DMARC on apex is DNS-only.
+Mail (Proton) TXT/MX/DKIM/DMARC/BIMI on apex is DNS-only.
+
+## Mail auth (apex)
+
+| Record | Value |
+|--------|--------|
+| MX | `10 mail.protonmail.ch` · `20 mailsec.protonmail.ch` |
+| SPF | `v=spf1 include:_spf.protonmail.ch ~all` |
+| DKIM | Proton CNAMEs `protonmail[2,3]._domainkey` |
+| DMARC | `v=DMARC1; p=quarantine; sp=quarantine; adkim=s; aspf=s; pct=100; rua=mailto:dmarc@f00.sh` |
+| BIMI | `default._bimi` → `v=BIMI1; l=https://f00.sh/assets/bimi.svg;` (self-asserted; VMC/CMC optional for Gmail logo) |
+
+Create Proton alias **dmarc@f00.sh** so aggregate reports land somewhere.
+
+## DNSSEC
+
+Enable in Cloudflare zone DNS settings, then add the DS record at **Porkbun** (Algorithm 13 / ECDSA P-256 SHA-256). Workflow: `f00` repo → Actions → **Enable DNSSEC**. Do not fill Porkbun keyData.
+
+## CAA
+
+Apex CAA allows Cloudflare Universal SSL issuers: `letsencrypt.org`, `pki.goog`, `ssl.com`, `digicert.com` (issue + issuewild).
 
 ## Product mapping
 
