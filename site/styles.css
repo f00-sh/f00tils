@@ -483,7 +483,7 @@ pre,
 }
 
 .term-bar i:nth-child(1) {
-  background: #ffffff;
+  background: #E4E8ED;
 }
 .term-bar i:nth-child(2) {
   background: #b3b3b3;
@@ -536,7 +536,7 @@ pre,
   color: #5ad4e6;
 }
 .term-body .jk {
-  color: #ffffff;
+  color: #EDE6DE;
 }
 .term-body .js {
   color: #f0c14a;
@@ -1104,7 +1104,7 @@ section {
 }
 
 .bar.fluid.f00 {
-  background: linear-gradient(90deg, #ffffff, var(--accent-hot));
+  background: linear-gradient(90deg, #D0D5DB, var(--accent-hot));
   box-shadow: 0 0 16px rgba(224, 32, 48, 0.35);
 }
 
@@ -1684,7 +1684,7 @@ table.matrix.compact code.cmd {
   margin-top: 1.5rem;
   padding: 1.1rem 1.25rem 1.15rem;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent, #ffffff);
+  border-left: 3px solid var(--accent, #D0D5DB);
   border-radius: 0;
   background: transparent;
 }
