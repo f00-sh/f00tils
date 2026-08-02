@@ -459,11 +459,12 @@ pre,
 /* ── terminal ───────────────────────────────────────────── */
 
 .term {
-  background: var(--code-bg);
-  border: 1px solid var(--border-strong);
+  background: var(--f00-code-bg, #050404);
+  border: 1px solid #C8CED4;
   border-radius: 0;
   box-shadow: var(--shadow);
   overflow: hidden;
+  color: #EDE6DE;
 }
 
 .term-bar {
@@ -510,40 +511,22 @@ pre,
   white-space: pre;
 }
 
-/* ANSI-ish sample colors */
-.term-body .c {
-  color: var(--accent);
-}
-.term-body .w {
-  color: var(--text);
-}
-.term-body .d {
-  color: #6ea8fe;
-}
-.term-body .y {
-  color: #f0c14a;
-}
-.term-body .x {
-  color: #e8a0bf;
-}
-.term-body .g {
-  color: var(--accent);
-}
-.term-body .m {
-  color: var(--text-mute);
-}
-.term-body .cy {
-  color: #5ad4e6;
-}
-.term-body .jk {
+/* Heartbox dye on terminal samples (not generic ANSI web toys) */
+.term-body {
+  background: var(--f00-code-bg, #050404);
   color: #EDE6DE;
 }
-.term-body .js {
-  color: #f0c14a;
-}
-.term-body .jn {
-  color: #6ea8fe;
-}
+.term-body .c { color: #8A7874; }       /* comment dust */
+.term-body .w { color: #EDE6DE; }       /* cream light */
+.term-body .d { color: #1E78C8; }       /* sky */
+.term-body .y { color: #C49A3C; }       /* string ochre */
+.term-body .x { color: #C47A72; }       /* flesh keyword */
+.term-body .g { color: #3D8A48; }       /* stem */
+.term-body .m { color: #C45A20; }       /* number heat */
+.term-body .cy { color: #3A94D8; }      /* bright sky fn */
+.term-body .jk { color: #454B93; }      /* violet const */
+.term-body .js { color: #C49A3C; }
+.term-body .jn { color: #3A94D8; }
 
 /* ── sections ───────────────────────────────────────────── */
 
@@ -1344,18 +1327,19 @@ section {
 .code-block {
   margin: 0;
   padding: 1rem 1.1rem;
-  background: var(--code-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--f00-code-bg, #050404);
+  border: 1px solid #C8CED4;
+  border-radius: 0;
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: var(--text-dim);
+  color: #EDE6DE;
 }
 
 .code-block code {
   color: inherit;
   white-space: pre;
+  background: transparent;
 }
 
 /* ACiD / 16colo.rs-style release scene card (file_id.diz) */
@@ -1545,8 +1529,10 @@ table.matrix tr.shipped td {
   font-size: 0.9em;
 }
 pre.code {
-  background: transparent;
+  background: var(--f00-code-bg, #050404);
+  color: #EDE6DE;
   padding: 1rem 1.1rem;
+  border: 1px solid #C8CED4;
   border-radius: 0;
   overflow-x: auto;
 }
